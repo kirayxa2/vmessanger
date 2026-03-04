@@ -578,10 +578,16 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         {/* ── Input area ── */}
         {!isSystemChat && (
           <div className="px-3 pb-4 pt-2">
-            {/* Hidden file input */}
-            <input ref={fileInputRef} type="file" className="hidden"
+            {/* Hidden file input — id привязан к label для работы в WebView */}
+            <input
+              ref={fileInputRef}
+              id="file-upload-input"
+              type="file"
+              className="hidden"
+              style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
               accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,.rar,.7z,.xls,.xlsx,.ppt,.pptx,.json,.csv"
-              onChange={handleFileSelect} />
+              onChange={handleFileSelect}
+            />
 
             {/* Upload error */}
             <AnimatePresence>
@@ -623,20 +629,17 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
             {/* Main input row */}
             <div className="flex items-end gap-2">
-              {/* Paperclip — СЛЕВА от поля ввода, отдельная кнопка */}
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.85 }}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 text-gray-400 hover:text-white transition-colors"
-                style={{ backgroundColor: "var(--input-bg)" }}
+              {/* Paperclip — label напрямую активирует input (работает в WebView/Android) */}
+              <label
+                htmlFor={isUploading ? undefined : "file-upload-input"}
+                style={{ backgroundColor: "var(--input-bg)", cursor: isUploading ? 'not-allowed' : 'pointer' }}
+                className="w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 text-gray-400 hover:text-white transition-colors select-none"
               >
                 {isUploading
                   ? <Loader2 size={20} className="animate-spin text-[#7e85e1]" />
                   : <Paperclip size={22} />
                 }
-              </motion.button>
+              </label>
 
               {/* Text input bubble */}
               <div
