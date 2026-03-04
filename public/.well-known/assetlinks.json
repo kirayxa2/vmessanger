@@ -3,8 +3,6 @@
   "target": {
     "namespace": "android_app",
     "package_name": "com.vortexmessenger.app",
-    "sha256_cert_fingerprints": [
-      "A2:BA:FB:7A:D7:E6:69:CA:B5:45:22:FA:C5:4E:9D:4C:4E:60:52:3A:CB:F1:FF:AE:4D:5B:01:8B:CC:C6:97:D8"
-    ]
+    "sha256_cert_fingerprints": ["48:37:56:ED:8D:98:8D:A0:B7:E2:45:7E:33:16:0A:94:F4:A7:34:55:12:5B:49:FA:AD:2C:9D:83:CA:DE:65:5B"]
   }
 }]
