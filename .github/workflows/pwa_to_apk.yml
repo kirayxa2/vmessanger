@@ -159,24 +159,16 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-      - name: Download Gradle wrapper jar
-        run: |
-          curl -sL \
-            "https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar" \
-            -o android/gradle/wrapper/gradle-wrapper.jar
+      - name: Install Gradle 8.2
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
 
-      - name: Create gradlew
+      - name: Create gradlew shim
         run: |
           cat > android/gradlew << 'GRADLEW'
           #!/bin/sh
-          APP_HOME=$(cd "$(dirname "$0")" && pwd)
-          CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
-          if [ -n "$JAVA_HOME" ]; then
-            JAVACMD="$JAVA_HOME/bin/java"
-          else
-            JAVACMD="java"
-          fi
-          exec "$JAVACMD" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+          exec gradle "$@"
           GRADLEW
           chmod +x android/gradlew
 
