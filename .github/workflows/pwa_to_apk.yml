@@ -20,18 +20,24 @@ jobs:
       - name: Build PWA
         run: npm run build
         
-      - name: Build APK with Bubblewrap
-        uses: vikas-tiwari/bubblewrap-action@v1.1.0
+      - name: Setup Android SDK & Java
+        uses: actions/setup-java@v4
         with:
-          # URL твоего живого сайта на Railway
-          webManifestUrl: https://vmessanger-production.up.railway.app/manifest.json
-          # Название приложения
-          appName: "VMessenger"
-          # Имя пакета
-          appId: "com.vortex.messenger"
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Initialize and Build APK
+        # Мы создаем конфиг "на лету", чтобы не вводить данные вручную
+        run: |
+          bubblewrap init --manifest=https://vmessanger-production.up.railway.app/manifest.json
+          bubblewrap build --skipSigning
+        # --skipSigning создаст нам отладочный APK (debug), который можно сразу ставить
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
+          name: app-debug-apk
           path: ./*.apk
