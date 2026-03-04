@@ -566,8 +566,7 @@ export default function ChatSidebar({
 
   // ── CHATS SCREEN ─────────────────────────────────────────────
   return (
-  <div className="w-full h-full flex flex-col bg-[#0f1721] p-2 pb-0">
-    <div className="w-full h-full flex flex-col relative bg-[#1c242f] overflow-hidden rounded-[28px] border border-white/5 shadow-2xl">
+    <div className="w-full h-full flex flex-col relative bg-[#1c242f]">
       <motion.div className="px-3 flex items-center gap-2 relative bg-[#1c242f] overflow-hidden"
         layout style={{ height: 56 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
         <div className="relative w-10 h-10 shrink-0">
@@ -732,7 +731,5 @@ export default function ChatSidebar({
         )}
       </div>
     </div>
-    <div className="h-[2px] w-full shrink-0" />
-  </div>
-)
+  )
 }
