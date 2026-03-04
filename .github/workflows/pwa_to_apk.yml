@@ -1,0 +1,37 @@
+name: Build Android APK (TWA)
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          
+      - name: Install dependencies
+        run: npm install
+        
+      - name: Build PWA
+        run: npm run build
+        
+      - name: Build APK with Bubblewrap
+        uses: vikas-tiwari/bubblewrap-action@v1.1.0
+        with:
+          # URL твоего живого сайта на Railway
+          webManifestUrl: https://vmessanger-production.up.railway.app/manifest.json
+          # Название приложения
+          appName: "VMessenger"
+          # Имя пакета
+          appId: "com.vortex.messenger"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: ./*.apk
