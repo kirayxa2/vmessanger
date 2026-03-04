@@ -578,16 +578,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         {/* ── Input area ── */}
         {!isSystemChat && (
           <div className="px-3 pb-4 pt-2">
-            {/* Hidden file input — id привязан к label для работы в WebView */}
-            <input
-              ref={fileInputRef}
-              id="file-upload-input"
-              type="file"
-              className="hidden"
-              style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
-              accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,.rar,.7z,.xls,.xlsx,.ppt,.pptx,.json,.csv"
-              onChange={handleFileSelect}
-            />
+            {/* File input — НЕ hidden, просто невидимый, позиция absolute поверх label */}
+            {/* hidden/display:none ломает выбор файла в Android WebView */}
 
             {/* Upload error */}
             <AnimatePresence>
@@ -629,17 +621,35 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
             {/* Main input row */}
             <div className="flex items-end gap-2">
-              {/* Paperclip — label напрямую активирует input (работает в WebView/Android) */}
-              <label
-                htmlFor={isUploading ? undefined : "file-upload-input"}
-                style={{ backgroundColor: "var(--input-bg)", cursor: isUploading ? 'not-allowed' : 'pointer' }}
-                className="w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 text-gray-400 hover:text-white transition-colors select-none"
+              {/* Paperclip — relative контейнер, поверх него прозрачный input */}
+              <div
+                className="relative w-[46px] h-[46px] rounded-full shrink-0 flex items-center justify-center text-gray-400"
+                style={{ backgroundColor: "var(--input-bg)" }}
               >
                 {isUploading
                   ? <Loader2 size={20} className="animate-spin text-[#7e85e1]" />
                   : <Paperclip size={22} />
                 }
-              </label>
+                {/* Прозрачный input поверх кнопки — не hidden, просто opacity:0 */}
+                {/* Это единственный надёжный способ открыть файловый диалог в Android WebView */}
+                {!isUploading && (
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,.rar,.7z,.xls,.xlsx,.ppt,.pptx,.json,.csv"
+                    onChange={handleFileSelect}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      opacity: 0,
+                      cursor: 'pointer',
+                      fontSize: 0,
+                    }}
+                  />
+                )}
+              </div>
 
               {/* Text input bubble */}
               <div
