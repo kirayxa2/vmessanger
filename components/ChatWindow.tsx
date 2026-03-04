@@ -389,7 +389,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   }
 
   return (
-    <motion.div className="flex-1 flex flex-row h-full bg-[#1c242f]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
+    <motion.div className="flex-1 flex flex-row h-full bg-[#1c242f] relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
       <div className="flex-1 flex flex-col h-full min-w-0 tg-bg">
 
         {/* ── Header (без border-b разделителя) ── */}
@@ -577,102 +577,119 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
         {/* ── Input area ── */}
         {!isSystemChat && (
-          <div className="px-4 pb-8 pt-3 flex justify-center items-end">
+          <div className="px-3 pb-4 pt-2">
             {/* Hidden file input */}
             <input ref={fileInputRef} type="file" className="hidden"
               accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,.rar,.7z,.xls,.xlsx,.ppt,.pptx,.json,.csv"
               onChange={handleFileSelect} />
 
-            <div className="flex gap-2 w-full max-w-[800px] items-end">
-              <div className="flex-1 flex flex-col min-w-0">
+            {/* Upload error */}
+            <AnimatePresence>
+              {uploadError && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                  className="px-3 py-1.5 text-red-400 text-[12px] flex items-center gap-2 mb-1">
+                  <X size={12} /> {uploadError}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                {/* Upload error */}
-                <AnimatePresence>
-                  {uploadError && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                      className="px-3 py-1.5 text-red-400 text-[12px] flex items-center gap-2">
-                      <X size={12} /> {uploadError}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            {/* Reply/Edit bar */}
+            <AnimatePresence>
+              {(editingMessageId || replyingTo) && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                  style={{ backgroundColor: "var(--input-bg)", borderRadius: "0.9375rem 0.9375rem 0 0" }}
+                  className="overflow-hidden px-3 pt-2 pb-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-[3px] h-9 rounded-full shrink-0" style={{ backgroundColor: ACCENT }} />
+                    <div className="flex-1 min-w-0">
+                      {editingMessageId ? (
+                        <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{t('editing_message')}</p>
+                          <p className="text-[12px] text-gray-400 truncate leading-tight">{input}</p></>
+                      ) : replyingTo ? (
+                        <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{replyingTo.senderName}</p>
+                          <p className="text-[12px] text-gray-400 truncate leading-tight">{replyingTo.content}</p></>
+                      ) : null}
+                    </div>
+                    <motion.button onClick={editingMessageId ? cancelEdit : cancelReply} whileTap={{ scale: 0.88 }}
+                      className="p-1 rounded-full hover:bg-white/10 text-gray-500 hover:text-white transition-colors shrink-0">
+                      <X size={16} />
+                    </motion.button>
+                  </div>
+                  <div className="mt-1 mx-1 border-t border-white/8" />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                {/* Reply/Edit bar */}
-                <AnimatePresence>
-                  {(editingMessageId || replyingTo) && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                      transition={{ type: "spring", stiffness: 420, damping: 36 }}
-                      style={{ backgroundColor: "var(--input-bg)", borderRadius: "0.9375rem 0.9375rem 0 0" }}
-                      className="overflow-hidden px-3 pt-2 pb-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-[3px] h-9 rounded-full shrink-0" style={{ backgroundColor: ACCENT }} />
-                        <div className="flex-1 min-w-0">
-                          {editingMessageId ? (
-                            <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{t('editing_message')}</p>
-                              <p className="text-[12px] text-gray-400 truncate leading-tight">{input}</p></>
-                          ) : replyingTo ? (
-                            <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{replyingTo.senderName}</p>
-                              <p className="text-[12px] text-gray-400 truncate leading-tight">{replyingTo.content}</p></>
-                          ) : null}
-                        </div>
-                        <motion.button onClick={editingMessageId ? cancelEdit : cancelReply} whileTap={{ scale: 0.88 }}
-                          className="p-1 rounded-full hover:bg-white/10 text-gray-500 hover:text-white transition-colors shrink-0">
-                          <X size={16} />
-                        </motion.button>
-                      </div>
-                      <div className="mt-1 mx-1 border-t border-white/8" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            {/* Main input row */}
+            <div className="flex items-end gap-2">
+              {/* Paperclip — СЛЕВА от поля ввода, отдельная кнопка */}
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.85 }}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 text-gray-400 hover:text-white transition-colors"
+                style={{ backgroundColor: "var(--input-bg)" }}
+              >
+                {isUploading
+                  ? <Loader2 size={20} className="animate-spin text-[#7e85e1]" />
+                  : <Paperclip size={22} />
+                }
+              </motion.button>
 
-                {/* Input box */}
-                <div style={{
+              {/* Text input bubble */}
+              <div
+                style={{
                   backgroundColor: "var(--input-bg)",
                   borderTopLeftRadius: (editingMessageId || replyingTo) ? "0" : "0.9375rem",
                   borderTopRightRadius: (editingMessageId || replyingTo) ? "0" : "0.9375rem",
-                  borderBottomLeftRadius: "0.9375rem", borderBottomRightRadius: "0",
-                }} className="relative flex items-center px-3 py-1 min-h-[55px] shadow-lg">
-                  <motion.button type="button" whileTap={{ scale: 0.85, rotate: 15 }} className="text-gray-400 hover:text-white transition-colors shrink-0">
-                    <Smile size={26} />
-                  </motion.button>
-                  <input ref={inputRef} type="text" placeholder={t('message_placeholder')} value={input}
-                    onChange={e => {
-                      setInput(e.target.value)
-                      const now = Date.now()
-                      if (socket && session?.user?.id && now - lastTypingEmitRef.current > 1500) {
-                        lastTypingEmitRef.current = now
-                        socket.emit("typing", { conversationId: String(apiId), userId: session.user.id })
-                      }
-                    }}
-                    onKeyDown={handleKeyDown}
-                    className="flex-1 bg-transparent border-none outline-none text-white text-[16px] px-3 py-2 placeholder-gray-500"
-                  />
-                  {/* Paperclip — file upload */}
-                  <motion.button type="button" whileTap={{ scale: 0.85 }} onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="text-gray-400 hover:text-white transition-colors mr-1 shrink-0 relative">
-                    {isUploading
-                      ? <Loader2 size={22} className="animate-spin text-[#7e85e1]" />
-                      : <Paperclip size={24} />
+                  borderBottomLeftRadius: "0.9375rem",
+                  borderBottomRightRadius: "0",
+                }}
+                className="relative flex items-center flex-1 min-w-0 px-2 py-1 min-h-[46px] shadow-lg"
+              >
+                <motion.button type="button" whileTap={{ scale: 0.85, rotate: 15 }} className="text-gray-400 hover:text-white transition-colors shrink-0 p-1">
+                  <Smile size={24} />
+                </motion.button>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  placeholder={t('message_placeholder')}
+                  value={input}
+                  onChange={e => {
+                    setInput(e.target.value)
+                    const now = Date.now()
+                    if (socket && session?.user?.id && now - lastTypingEmitRef.current > 1500) {
+                      lastTypingEmitRef.current = now
+                      socket.emit("typing", { conversationId: String(apiId), userId: session.user.id })
                     }
-                  </motion.button>
-                  <div className="absolute bottom-px -right-2 w-2 h-4">
-                    <svg width="9" height="20"><g fill="#212121" fillRule="evenodd">
-                      <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill="#212121" />
-                    </g></svg>
-                  </div>
+                  }}
+                  onKeyDown={handleKeyDown}
+                  className="flex-1 bg-transparent border-none outline-none text-white text-[15px] px-2 py-2 placeholder-gray-500 min-w-0"
+                />
+                <div className="absolute bottom-px -right-2 w-2 h-4 pointer-events-none">
+                  <svg width="9" height="20"><g fill="#212121" fillRule="evenodd">
+                    <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill="#212121" />
+                  </g></svg>
                 </div>
               </div>
 
-              {/* Send button */}
-              <motion.button onClick={() => sendMessage()} whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.88 }}
-                className="text-white w-[50px] h-[50px] rounded-full flex items-center justify-center shrink-0 shadow-lg" style={{ backgroundColor: ACCENT }}>
+              {/* Send / Mic button */}
+              <motion.button
+                onClick={() => sendMessage()}
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.88 }}
+                className="text-white w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 shadow-lg"
+                style={{ backgroundColor: ACCENT }}
+              >
                 <AnimatePresence mode="wait">
                   {editingMessageId ? (
-                    <motion.div key="check" initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><CheckCircle size={24} /></motion.div>
+                    <motion.div key="check" initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><CheckCircle size={22} /></motion.div>
                   ) : input.trim() ? (
-                    <motion.div key="send" initial={{ scale: 0, rotate: 20 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Send size={24} /></motion.div>
+                    <motion.div key="send" initial={{ scale: 0, rotate: 20 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Send size={22} /></motion.div>
                   ) : (
-                    <motion.div key="mic" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Mic size={24} /></motion.div>
+                    <motion.div key="mic" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Mic size={22} /></motion.div>
                   )}
                 </AnimatePresence>
               </motion.button>
