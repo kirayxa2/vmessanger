@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
-import { Reply, Pencil, Copy, Forward, Trash2, Check } from "lucide-react";
+import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 
@@ -23,6 +23,9 @@ interface ChatMessageProps {
   hasAbove: boolean;
   replyTo?: ReplyTo | null;
   isForwarded?: boolean;
+  isRead?: boolean;
+  voiceUrl?: string | null;
+  voiceDuration?: number | null;
   onDelete?: (id: string) => void;
   onEdit?: (id: string, content: string) => void;
   onReply?: (msg: { id: string; content: string; senderName: string }) => void;
@@ -38,16 +41,21 @@ interface ChatMessageProps {
 
 export default function ChatMessage({
   id, content, createdAt, isSender, isFirstInGroup, isLastInGroup, hasAbove,
-  replyTo, isForwarded, isTemp,
+  replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp,
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
-  openMenuId, onMenuOpen, onMenuClose, menuPos,
-  senderName,
+  openMenuId, onMenuOpen, onMenuClose, menuPos, senderName,
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const messageId = id.toString();
   const showMenu = openMenuId === messageId;
   const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Voice player state
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(voiceDuration || 0);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -73,9 +81,39 @@ export default function ChatMessage({
     setTimeout(() => onDelete?.(messageId), 900);
   }, [messageId, onDelete, onMenuClose]);
 
+  const toggleAudio = useCallback(() => {
+    if (!voiceUrl) return;
+    if (!audioRef.current) {
+      audioRef.current = new Audio(voiceUrl);
+      audioRef.current.ontimeupdate = () => {
+        const dur = audioRef.current!.duration || audioDuration || 1;
+        setAudioProgress((audioRef.current!.currentTime / dur) * 100);
+      };
+      audioRef.current.onloadedmetadata = () => {
+        setAudioDuration(Math.round(audioRef.current!.duration));
+      };
+      audioRef.current.onended = () => {
+        setIsPlaying(false);
+        setAudioProgress(0);
+      };
+    }
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  }, [voiceUrl, isPlaying, audioDuration]);
+
+  const formatDuration = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
   const bubbleColor = isSender ? SENDER_COLOR : RECIPIENT_COLOR;
 
-  // Particles for delete animation
   const particleData = useMemo(() => {
     const num = typeof id === "number" ? id : parseInt(id.replace(/\D/g, "") || "0");
     return Array.from({ length: 24 }).map((_, i) => {
@@ -93,29 +131,29 @@ export default function ChatMessage({
 
   const timeStr = new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const bubbleRef = useRef<HTMLDivElement>(null);
-
-  // Smart position + transform origin so menu grows out of the click point
   const { menuStyle, transformOrigin } = useMemo(() => {
     if (typeof window === "undefined") return { menuStyle: { top: menuPos.y, left: menuPos.x }, transformOrigin: "top left" };
     const menuW = 208;
     const menuH = 280;
     const margin = 8;
-    // Decide vertical direction: grow down or up?
     const growUp = menuPos.y + menuH > window.innerHeight - margin;
     let top = growUp ? menuPos.y - menuH - 4 : menuPos.y + 4;
     let left = menuPos.x - menuW / 2;
     if (top < margin) top = margin;
     if (left < margin) left = margin;
     if (left + menuW > window.innerWidth - margin) left = window.innerWidth - menuW - margin;
-    // Origin: where the menu grows FROM (the click point relative to menu)
     const originX = Math.round(Math.min(Math.max(menuPos.x - left, 16), menuW - 16));
     const originY = growUp ? menuH : 0;
-    return {
-      menuStyle: { top, left },
-      transformOrigin: `${originX}px ${originY}px`,
-    };
+    return { menuStyle: { top, left }, transformOrigin: `${originX}px ${originY}px` };
   }, [menuPos]);
+
+  // Read indicator for sender messages
+  const ReadIndicator = () => {
+    if (!isSender) return null;
+    if (isTemp) return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-60" />;
+    if (isRead) return <CheckCheck size={13} strokeWidth={2.5} className="ml-0.5" style={{ color: "#a8d8f0" }} />;
+    return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-70" />;
+  };
 
   return (
     <motion.div
@@ -152,7 +190,7 @@ export default function ChatMessage({
             </div>
           )}
 
-          {/* Reply preview inside bubble */}
+          {/* Reply preview */}
           {replyTo && (
             <motion.div
               onClick={(e) => { e.stopPropagation(); onScrollToMessage?.(replyTo.id.toString()); }}
@@ -161,7 +199,6 @@ export default function ChatMessage({
               whileHover={{ backgroundColor: "rgba(0,0,0,0.28)" }}
             >
               <div className="flex">
-                {/* Accent bar */}
                 <div className="w-[3px] rounded-l-lg shrink-0" style={{ backgroundColor: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
                 <div className="px-2 py-1.5 min-w-0">
                   <p className="text-[12px] font-semibold truncate" style={{ color: isSender ? "rgba(255,255,255,0.85)" : ACCENT }}>
@@ -173,14 +210,66 @@ export default function ChatMessage({
             </motion.div>
           )}
 
-          {/* Message content + time */}
-          <div className="flex items-end gap-x-2 flex-wrap">
-            <span className="leading-[1.4] text-[15px] break-words flex-1">{content}</span>
-            <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
-              {timeStr}
-              {isSender && <Check size={12} strokeWidth={2.5} className="ml-0.5" />}
-            </span>
-          </div>
+          {/* Voice message player */}
+          {voiceUrl ? (
+            <div className="flex items-center gap-2 min-w-[180px]">
+              <motion.button
+                whileTap={{ scale: 0.85 }}
+                onClick={(e) => { e.stopPropagation(); toggleAudio(); }}
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
+              >
+                {isPlaying ? (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                    <rect x="2" y="1" width="4" height="12" rx="1.5" />
+                    <rect x="8" y="1" width="4" height="12" rx="1.5" />
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                    <path d="M3 2l9 5-9 5V2z" />
+                  </svg>
+                )}
+              </motion.button>
+
+              <div className="flex-1 min-w-0">
+                {/* Waveform progress bar */}
+                <div className="relative h-[28px] flex items-center gap-[2px]">
+                  {Array.from({ length: 28 }).map((_, i) => {
+                    const heights = [3,5,8,12,16,20,18,14,10,7,5,8,14,20,18,12,8,5,7,11,17,20,16,11,7,5,4,3];
+                    const h = heights[i % heights.length];
+                    const filled = (i / 28) * 100 < audioProgress;
+                    return (
+                      <div
+                        key={i}
+                        className="rounded-full flex-1 transition-all duration-100"
+                        style={{
+                          height: `${h}px`,
+                          backgroundColor: filled
+                            ? "rgba(255,255,255,0.9)"
+                            : "rgba(255,255,255,0.3)",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+                <span className="text-[10px] opacity-60">{formatDuration(audioDuration)}</span>
+              </div>
+
+              <span className="text-[10px] opacity-60 whitespace-nowrap flex items-center gap-0.5 shrink-0 self-end pb-0.5">
+                {timeStr}
+                <ReadIndicator />
+              </span>
+            </div>
+          ) : (
+            /* Regular text message */
+            <div className="flex items-end gap-x-2 flex-wrap">
+              <span className="leading-[1.4] text-[15px] break-words flex-1">{content}</span>
+              <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
+                {timeStr}
+                <ReadIndicator />
+              </span>
+            </div>
+          )}
         </motion.div>
 
         {/* Bubble tail */}
@@ -213,7 +302,7 @@ export default function ChatMessage({
         </AnimatePresence>
       </div>
 
-      {/* Context menu — grows from exact click point on message */}
+      {/* Context menu */}
       <AnimatePresence>
         {showMenu && (
           <motion.div
@@ -245,9 +334,7 @@ export default function ChatMessage({
             <div className="mx-3 my-1 border-t border-white/8" />
             <MenuItem icon={<Trash2 size={17} />} label={t('delete')} color="text-red-400" onClick={handleDelete} />
             <div className="px-4 py-1.5">
-              <span className="text-[11px] text-gray-600">
-                {isSender ? "✓ " : ""}{timeStr}
-              </span>
+              <span className="text-[11px] text-gray-600">{timeStr}</span>
             </div>
           </motion.div>
         )}

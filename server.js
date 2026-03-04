@@ -36,14 +36,11 @@ app.prepare().then(() => {
   const io = new Server(server, {
     path: "/api/socket/io",
     addTrailingSlash: false,
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
-    },
+    cors: { origin: "*", methods: ["GET", "POST"] },
     transports: ["websocket", "polling"],
   })
 
-  // userId (string) -> Set<socketId>
+  // userId -> Set<socketId>
   const userSockets = new Map()
 
   function addUserSocket(userId, socketId) {
@@ -69,9 +66,7 @@ app.prepare().then(() => {
     const uid = String(userId)
     const sockets = userSockets.get(uid)
     if (sockets && sockets.size > 0) {
-      sockets.forEach(socketId => {
-        io.to(socketId).emit(event, data)
-      })
+      sockets.forEach(socketId => io.to(socketId).emit(event, data))
       return true
     }
     return false
@@ -97,11 +92,7 @@ app.prepare().then(() => {
     socket.on("send-message", (data) => {
       const roomId = String(data.conversationId)
       const payload = { ...data, conversationId: roomId }
-
-      // 1. Room broadcast (excludes sender socket)
       socket.to(roomId).emit("new-message", payload)
-
-      // 2. Direct to each participant by userId (backup if they missed join)
       if (Array.isArray(data.participantIds)) {
         data.participantIds.forEach(uid => {
           if (String(uid) !== String(currentUserId)) {
@@ -109,8 +100,6 @@ app.prepare().then(() => {
           }
         })
       }
-
-      // 3. Sidebar unread counts
       io.emit("new-message-global", payload)
     })
 
@@ -128,6 +117,59 @@ app.prepare().then(() => {
 
     socket.on("avatar-update", (data) => {
       io.emit("user-avatar-updated", data)
+    })
+
+    // ── Read receipts ──────────────────────────────────────────
+    // Client emits this when user opens a chat and sees messages
+    socket.on("messages-read", (data) => {
+      // data: { conversationId, readByUserId, messageIds }
+      // Notify everyone in the room that these messages were read
+      socket.to(String(data.conversationId)).emit("messages-read", data)
+      // Also direct to participants
+      if (Array.isArray(data.participantIds)) {
+        data.participantIds.forEach(uid => {
+          if (String(uid) !== String(currentUserId)) {
+            emitToUser(uid, "messages-read", data)
+          }
+        })
+      }
+    })
+
+    // ── WebRTC Signaling ───────────────────────────────────────
+    // call-invite: initiator -> receiver
+    socket.on("call-invite", (data) => {
+      // data: { callId, callType, conversationId, receiverId, initiatorId, initiatorName, initiatorAvatar }
+      emitToUser(data.receiverId, "call-incoming", data)
+    })
+
+    // call-answer: receiver sends WebRTC answer back to initiator
+    socket.on("call-answer", (data) => {
+      // data: { callId, initiatorId, sdp }
+      emitToUser(data.initiatorId, "call-answered", data)
+    })
+
+    // call-declined: receiver declines
+    socket.on("call-declined", (data) => {
+      // data: { callId, initiatorId }
+      emitToUser(data.initiatorId, "call-declined", data)
+    })
+
+    // call-ended: either side hangs up
+    socket.on("call-ended", (data) => {
+      // data: { callId, otherUserId }
+      emitToUser(data.otherUserId, "call-ended", data)
+    })
+
+    // call-offer: WebRTC SDP offer from initiator
+    socket.on("call-offer", (data) => {
+      // data: { callId, receiverId, sdp }
+      emitToUser(data.receiverId, "call-offer", data)
+    })
+
+    // call-ice: ICE candidate relay
+    socket.on("call-ice", (data) => {
+      // data: { callId, targetUserId, candidate }
+      emitToUser(data.targetUserId, "call-ice", data)
     })
 
     socket.on("disconnect", () => {

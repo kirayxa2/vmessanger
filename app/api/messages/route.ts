@@ -25,12 +25,13 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json()
-    const { content, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType } = body
+    const { content, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType, voiceUrl, voiceDuration } = body
 
     // ── Validate input ──
     const hasText = content && typeof content === "string" && content.trim().length > 0
     const hasFile = fileUrl && typeof fileUrl === "string"
-    if (!hasText && !hasFile) {
+    const hasVoice = voiceUrl && typeof voiceUrl === "string"
+    if (!hasText && !hasFile && !hasVoice) {
       return NextResponse.json({ error: "Content or file is required" }, { status: 400 })
     }
     if (hasText && content.length > 4096) {
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
         ...(replyToId ? { replyToId: Number(replyToId) } : {}),
         ...(forwardFromId ? { forwardFromId: Number(forwardFromId) } : {}),
         ...(fileUrl ? { fileUrl, fileName: fileName || "file", fileSize: fileSize || 0, fileType: fileType || "application/octet-stream" } : {}),
+        ...(voiceUrl ? { voiceUrl, voiceDuration: voiceDuration || 0 } : {}),
       },
       include: messageInclude
     })

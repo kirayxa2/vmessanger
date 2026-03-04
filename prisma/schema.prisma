@@ -21,22 +21,22 @@ model User {
   receivedMessages Message[]                 @relation("ReceivedMessages")
   sentMessages     Message[]                 @relation("SentMessages")
   drafts           Draft[]
+  callsInitiated   Call[]                    @relation("CallInitiator")
+  callsReceived    Call[]                    @relation("CallReceiver")
+  messageReads     MessageRead[]
 }
 
-// Conversation types:
-// 'private'  — обычный чат между двумя пользователями
-// 'saved'    — Избранное (только один участник — сам пользователь)
-// 'system'   — Системный чат Vortex (уведомления безопасности)
 model Conversation {
   id           Int                       @id @default(autoincrement())
   isGroup      Boolean                   @default(false)
   name         String?
-  type         String                    @default("private") // 'private' | 'saved' | 'system'
+  type         String                    @default("private")
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
   messages     Message[]
   drafts       Draft[]
+  calls        Call[]
 }
 
 model ConversationParticipant {
@@ -51,25 +51,53 @@ model ConversationParticipant {
 }
 
 model Message {
-  id              Int       @id @default(autoincrement())
-  content         String    @default("")
-  createdAt       DateTime  @default(now())
-  isRead          Boolean   @default(false)
-  senderId        Int
-  receiverId      Int?
-  conversationId  Int
-  replyToId       Int?
-  forwardFromId   Int?
-  fileUrl         String?
-  fileName        String?
-  fileSize        Int?
-  fileType        String?
+  id             Int           @id @default(autoincrement())
+  content        String        @default("")
+  createdAt      DateTime      @default(now())
+  isRead         Boolean       @default(false)
+  senderId       Int
+  receiverId     Int?
+  conversationId Int
+  replyToId      Int?
+  forwardFromId  Int?
+  fileUrl        String?
+  fileName       String?
+  fileSize       Int?
+  fileType       String?
+  voiceUrl       String?
+  voiceDuration  Int?
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  receiver        User?        @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
-  sender          User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  replyTo         Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies         Message[]    @relation("MessageReplies")
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  receiver       User?         @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender         User          @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo        Message?      @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]     @relation("MessageReplies")
+  readBy         MessageRead[]
+}
+
+model MessageRead {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  userId    Int
+  readAt    DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+}
+
+model Call {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  initiatorId    Int
+  receiverId     Int
+  type           String       // 'audio' | 'video'
+  status         String       // 'calling' | 'accepted' | 'declined' | 'ended' | 'missed'
+  startedAt      DateTime     @default(now())
+  endedAt        DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  initiator      User         @relation("CallInitiator", fields: [initiatorId], references: [id], onDelete: Cascade)
+  receiver       User         @relation("CallReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
 }
 
 model Draft {

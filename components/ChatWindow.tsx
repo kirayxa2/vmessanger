@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark } from "lucide-react"
+import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video } from "lucide-react"
 import ChatMessage from "./ChatMessage"
 import FileMessage from "./FileMessage"
+import CallModal from "./CallModal"
 import { AnimatePresence, motion } from "framer-motion"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
@@ -18,13 +19,32 @@ interface Message {
   content: string
   createdAt: string
   conversationId?: string | number
+  isRead?: boolean
   replyTo?: { id: number; content: string; sender: { id: number; username: string; avatar?: string } } | null
   forwardFromId?: number | null
   fileUrl?: string | null
   fileName?: string | null
   fileSize?: number | null
   fileType?: string | null
+  voiceUrl?: string | null
+  voiceDuration?: number | null
   sender: { id: string | number; username: string; avatar?: string }
+}
+
+interface IncomingCall {
+  callId: number
+  callType: "audio" | "video"
+  initiatorId: string
+  initiatorName: string
+  initiatorAvatar?: string
+}
+
+interface OutgoingCall {
+  callId: number
+  callType: "audio" | "video"
+  receiverId: string
+  receiverName: string
+  receiverAvatar?: string
 }
 
 interface ChatWindowProps {
@@ -74,6 +94,18 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [conversations, setConversations] = useState<any[]>([])
   const [forwardSearch, setForwardSearch] = useState("")
 
+  // ── Voice recording ──────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // ── Calls ────────────────────────────────────────────────────
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null)
+  const [outgoingCall, setOutgoingCall] = useState<OutgoingCall | null>(null)
+  const showCallModal = !!(incomingCall || outgoingCall)
+
   const convType: string = conversation?.type || "private"
   const isSavedChat = convType === "saved"
   const isSystemChat = convType === "system"
@@ -91,6 +123,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
   useEffect(() => { if (otherUser?.avatar) setOtherUserAvatar(otherUser.avatar) }, [otherUser])
 
+  // Online status
   useEffect(() => {
     if (!socket || !otherUser?.id) return
     socket.emit("check-online", otherUser.id)
@@ -105,6 +138,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     return () => { socket.off("user-status", handleUserStatus) }
   }, [socket, otherUser?.id])
 
+  // Avatar updates
   useEffect(() => {
     if (!socket) return
     const handleAvatarUpdate = (data: { userId: number; avatar: string }) => {
@@ -118,6 +152,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     return () => { socket.off("user-avatar-updated", handleAvatarUpdate) }
   }, [socket, otherUser?.id])
 
+  // Load messages
   useEffect(() => {
     setLoading(true)
     isInitialLoad.current = true
@@ -137,6 +172,30 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       .catch(() => { isInitialLoad.current = false })
   }, [apiId])
 
+  // Mark messages as read when chat opens
+  useEffect(() => {
+    if (loading || !session?.user?.id) return
+    fetch("/api/messages/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId: apiId })
+    }).then(r => r.json()).then(data => {
+      if (data.count > 0) {
+        setMessages(prev => prev.map(m => ({
+          ...m,
+          isRead: m.sender.id?.toString() !== session.user!.id?.toString() ? true : m.isRead
+        })))
+        socket?.emit("messages-read", {
+          conversationId: String(apiId),
+          readByUserId: session.user.id,
+          messageIds: data.messageIds,
+          participantIds,
+        })
+      }
+    }).catch(() => {})
+  }, [loading, apiId, session?.user?.id])
+
+  // Draft save
   useEffect(() => {
     if (isInitialLoad.current) return
     const timer = setTimeout(async () => {
@@ -147,10 +206,12 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     return () => clearTimeout(timer)
   }, [input, apiId])
 
+  // Socket listeners
   useEffect(() => {
     if (!socket) return
     const roomId = String(apiId)
     socket.emit("join-conversation", roomId)
+
     const handleNewMessage = (message: Message) => {
       const msgConvId = message.conversationId?.toString()
       if (msgConvId && msgConvId !== roomId) return
@@ -159,9 +220,35 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         newMsgIds.current.add(message.id.toString())
         return [...prev, message]
       })
+      // Auto-mark as read if chat is visible
+      if (message.sender.id?.toString() !== session?.user?.id?.toString()) {
+        fetch("/api/messages/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversationId: apiId })
+        }).then(r => r.json()).then(data => {
+          if (data.count > 0) {
+            socket.emit("messages-read", {
+              conversationId: roomId,
+              readByUserId: session?.user?.id,
+              messageIds: data.messageIds,
+              participantIds,
+            })
+          }
+        }).catch(() => {})
+      }
     }
+
     const handleMessageDeleted = (id: string) => setMessages(prev => prev.filter(m => m.id?.toString() !== String(id)))
     const handleMessageEdited = (updated: Message) => setMessages(prev => prev.map(m => m.id?.toString() === updated.id?.toString() ? updated : m))
+
+    const handleMessagesRead = (data: { readByUserId: string; messageIds: number[] }) => {
+      if (data.readByUserId?.toString() === session?.user?.id?.toString()) return
+      setMessages(prev => prev.map(m =>
+        data.messageIds?.includes(Number(m.id)) ? { ...m, isRead: true } : m
+      ))
+    }
+
     const handleTyping = (data: { userId: string; conversationId: string }) => {
       if (data.conversationId !== roomId) return
       if (data.userId?.toString() === session?.user?.id?.toString()) return
@@ -175,20 +262,32 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       setIsOtherTyping(false)
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     }
+
     socket.on("new-message", handleNewMessage)
     socket.on("message-deleted", handleMessageDeleted)
     socket.on("message-edited", handleMessageEdited)
+    socket.on("messages-read", handleMessagesRead)
     socket.on("user-typing", handleTyping)
     socket.on("user-stop-typing", handleStopTyping)
     return () => {
       socket.off("new-message", handleNewMessage)
       socket.off("message-deleted", handleMessageDeleted)
       socket.off("message-edited", handleMessageEdited)
+      socket.off("messages-read", handleMessagesRead)
       socket.off("user-typing", handleTyping)
       socket.off("user-stop-typing", handleStopTyping)
     }
-  }, [apiId, socket])
+  }, [apiId, socket, session?.user?.id])
 
+  // Incoming call listener
+  useEffect(() => {
+    if (!socket) return
+    const handleIncoming = (data: IncomingCall) => setIncomingCall(data)
+    socket.on("call-incoming", handleIncoming)
+    return () => { socket.off("call-incoming", handleIncoming) }
+  }, [socket])
+
+  // Auto scroll
   useEffect(() => {
     if (loading) return
     const container = scrollContainerRef.current
@@ -239,6 +338,100 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const cancelReply = useCallback(() => setReplyingTo(null), [])
   const handleForwardOpen = useCallback((msg: { id: string; content: string }) => { setForwardingMsg(msg); setForwardSearch("") }, [])
 
+  // ── Voice recording ──────────────────────────────────────────
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream, { mimeType: "audio/webm" })
+      audioChunksRef.current = []
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      mr.start()
+      mediaRecorderRef.current = mr
+      setIsRecording(true)
+      setRecordingSeconds(0)
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
+    } catch { alert("Нет доступа к микрофону") }
+  }, [])
+
+  const cancelRecording = useCallback(() => {
+    mediaRecorderRef.current?.stream.getTracks().forEach(t => t.stop())
+    mediaRecorderRef.current?.stop()
+    mediaRecorderRef.current = null
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+    setIsRecording(false)
+    setRecordingSeconds(0)
+    audioChunksRef.current = []
+  }, [])
+
+  const sendVoiceMessage = useCallback(async () => {
+    if (!mediaRecorderRef.current || !session?.user) return
+    const mr = mediaRecorderRef.current
+    const duration = recordingSeconds
+
+    mr.onstop = async () => {
+      const blob = new Blob(audioChunksRef.current, { type: "audio/webm" })
+      mr.stream.getTracks().forEach(t => t.stop())
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+      setIsRecording(false)
+      setRecordingSeconds(0)
+
+      const formData = new FormData()
+      formData.append("file", blob, `voice-${Date.now()}.webm`)
+      setIsUploading(true)
+      try {
+        const uploadRes = await fetch("/api/upload", { method: "POST", body: formData })
+        if (!uploadRes.ok) return
+        const uploaded = await uploadRes.json()
+
+        const res = await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: "",
+            conversationId: apiId,
+            voiceUrl: uploaded.url,
+            voiceDuration: duration,
+          })
+        })
+        if (res.ok) {
+          const saved = await res.json()
+          setMessages(prev => [...prev, saved])
+          socket?.emit("send-message", { ...saved, conversationId: String(apiId), participantIds })
+        }
+      } finally { setIsUploading(false) }
+    }
+    mr.stop()
+    mediaRecorderRef.current = null
+  }, [mediaRecorderRef, recordingSeconds, session, apiId, socket, participantIds])
+
+  // ── Calls ────────────────────────────────────────────────────
+  const startCall = useCallback(async (type: "audio" | "video") => {
+    if (!otherUser?.id || !session?.user) return
+    const res = await fetch("/api/calls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId: apiId, receiverId: otherUser.id, type })
+    })
+    if (!res.ok) return
+    const call = await res.json()
+    socket?.emit("call-invite", {
+      callId: call.id,
+      callType: type,
+      conversationId: String(apiId),
+      receiverId: String(otherUser.id),
+      initiatorId: String(session.user.id),
+      initiatorName: session.user.name || session.user.email || "User",
+      initiatorAvatar: session.user.image || undefined,
+    })
+    setOutgoingCall({
+      callId: call.id,
+      callType: type,
+      receiverId: String(otherUser.id),
+      receiverName: otherUser.username || "",
+      receiverAvatar: otherUserAvatar || otherUser.avatar || undefined,
+    })
+  }, [otherUser, session, apiId, socket, otherUserAvatar])
+
   // ── File upload ──────────────────────────────────────────────
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -254,7 +447,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       if (!uploadRes.ok) { setUploadError(t('upload_error')); return }
       const uploaded = await uploadRes.json()
 
-      // Send message with file
       const tempId = "temp-file-" + Date.now()
       const optimistic: Message = {
         id: tempId, content: input || "", conversationId: String(apiId),
@@ -315,7 +507,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     const tempId = "temp-" + Date.now()
     const optimisticMsg: Message = {
       id: tempId, content: input, conversationId: String(apiId),
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(), isRead: false,
       replyTo: replyingTo ? { id: parseInt(replyingTo.id), content: replyingTo.content, sender: { id: parseInt(replyingTo.id), username: replyingTo.senderName } } : null,
       sender: { id: session.user.id, username: session.user.name || "Me", avatar: session.user.image || undefined }
     }
@@ -392,7 +584,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     <motion.div className="flex-1 flex flex-row h-full bg-[#1c242f] relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
       <div className="flex-1 flex flex-col h-full min-w-0 tg-bg">
 
-        {/* ── Header (без border-b разделителя) ── */}
+        {/* ── Header ── */}
         <div
           className="px-4 flex items-center justify-between h-[63px] bg-[#1c242f] relative z-10 cursor-pointer"
           onClick={() => setShowProfile(p => !p)}
@@ -468,7 +660,28 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
             </div>
           </div>
 
+          {/* Header right buttons */}
           <div className="flex gap-1 text-gray-400 shrink-0" onClick={e => e.stopPropagation()}>
+            {!isSpecialChat && (
+              <>
+                <motion.button
+                  whileTap={{ scale: 0.88 }}
+                  onClick={() => startCall("audio")}
+                  className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
+                  title="Аудиозвонок"
+                >
+                  <Phone size={20} />
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.88 }}
+                  onClick={() => startCall("video")}
+                  className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
+                  title="Видеозвонок"
+                >
+                  <Video size={20} />
+                </motion.button>
+              </>
+            )}
             <motion.button whileTap={{ scale: 0.88 }} className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"><Search size={20} /></motion.button>
             <motion.button whileTap={{ scale: 0.88 }} className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"><EllipsisVertical size={20} /></motion.button>
           </div>
@@ -519,7 +732,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               return (
                 <div key={sk} ref={el => { messageRefs.current[msg.id.toString()] = el }} className="rounded-lg">
                   {msg.fileUrl ? (
-                    // File message — wrapped in bubble-like alignment
                     <div className={`flex mb-1 ${isSender ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[80%] ${isSender ? "items-end" : "items-start"} flex flex-col`}>
                         <FileMessage
@@ -540,6 +752,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                       id={msg.id} content={msg.content} createdAt={msg.createdAt}
                       isSender={isSender} isFirstInGroup={isFirstInGroup} isLastInGroup={isLastInGroup}
                       hasAbove={!isFirstInGroup} replyTo={msg.replyTo} isForwarded={!!msg.forwardFromId}
+                      isRead={msg.isRead} voiceUrl={msg.voiceUrl} voiceDuration={msg.voiceDuration}
                       senderName={msg.sender.username} isTemp={isNew}
                       onDelete={handleDeleteMessage} onEdit={handleStartEdit}
                       onReply={handleReply} onForward={handleForwardOpen} onScrollToMessage={scrollToMessage}
@@ -578,10 +791,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         {/* ── Input area ── */}
         {!isSystemChat && (
           <div className="px-3 pb-4 pt-2">
-            {/* File input — НЕ hidden, просто невидимый, позиция absolute поверх label */}
-            {/* hidden/display:none ломает выбор файла в Android WebView */}
-
-            {/* Upload error */}
             <AnimatePresence>
               {uploadError && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
@@ -591,7 +800,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               )}
             </AnimatePresence>
 
-            {/* Reply/Edit bar */}
             <AnimatePresence>
               {(editingMessageId || replyingTo) && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
@@ -619,9 +827,30 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               )}
             </AnimatePresence>
 
+            {/* Voice recording UI */}
+            <AnimatePresence>
+              {isRecording && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-3 px-3 py-2 mb-2 rounded-xl"
+                  style={{ backgroundColor: "var(--input-bg)" }}
+                >
+                  <motion.div className="w-3 h-3 rounded-full bg-red-500"
+                    animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 1, repeat: Infinity }} />
+                  <span className="text-white text-[14px] flex-1">
+                    {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, "0")}
+                  </span>
+                  <motion.button whileTap={{ scale: 0.88 }} onClick={cancelRecording}
+                    className="text-gray-400 hover:text-red-400 p-1 transition-colors">
+                    <X size={18} />
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Main input row */}
             <div className="flex items-end gap-2">
-              {/* Paperclip — relative контейнер, поверх него прозрачный input */}
+              {/* Paperclip */}
               <div
                 className="relative w-[46px] h-[46px] rounded-full shrink-0 flex items-center justify-center text-gray-400"
                 style={{ backgroundColor: "var(--input-bg)" }}
@@ -630,22 +859,15 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                   ? <Loader2 size={20} className="animate-spin text-[#7e85e1]" />
                   : <Paperclip size={22} />
                 }
-                {/* Прозрачный input поверх кнопки — не hidden, просто opacity:0 */}
-                {/* Это единственный надёжный способ открыть файловый диалог в Android WebView */}
-                {!isUploading && (
+                {!isUploading && !isRecording && (
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept="video/*,audio/*,image/*,.pdf,.doc,.docx,.txt,.zip,.rar,.7z,.xls,.xlsx,.ppt,.pptx,.json,.csv"
                     onChange={handleFileSelect}
                     style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      opacity: 0,
-                      cursor: 'pointer',
-                      fontSize: 0,
+                      position: 'absolute', inset: 0, width: '100%', height: '100%',
+                      opacity: 0, cursor: 'pointer', fontSize: 0,
                     }}
                   />
                 )}
@@ -668,8 +890,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                 <input
                   ref={inputRef}
                   type="text"
-                  placeholder={t('message_placeholder')}
+                  placeholder={isRecording ? "Запись голоса..." : t('message_placeholder')}
                   value={input}
+                  disabled={isRecording}
                   onChange={e => {
                     setInput(e.target.value)
                     const now = Date.now()
@@ -679,7 +902,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                     }
                   }}
                   onKeyDown={handleKeyDown}
-                  className="flex-1 bg-transparent border-none outline-none text-white text-[15px] px-2 py-2 placeholder-gray-500 min-w-0"
+                  className="flex-1 bg-transparent border-none outline-none text-white text-[15px] px-2 py-2 placeholder-gray-500 min-w-0 disabled:opacity-50"
                 />
                 <div className="absolute bottom-px -right-2 w-2 h-4 pointer-events-none">
                   <svg width="9" height="20"><g fill="#212121" fillRule="evenodd">
@@ -690,14 +913,26 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
               {/* Send / Mic button */}
               <motion.button
-                onClick={() => sendMessage()}
+                onClick={() => {
+                  if (isRecording) {
+                    sendVoiceMessage()
+                  } else if (input.trim() || editingMessageId) {
+                    sendMessage()
+                  } else {
+                    startRecording()
+                  }
+                }}
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.88 }}
                 className="text-white w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 shadow-lg"
-                style={{ backgroundColor: ACCENT }}
+                style={{ backgroundColor: isRecording ? "#e53935" : ACCENT }}
               >
                 <AnimatePresence mode="wait">
-                  {editingMessageId ? (
+                  {isRecording ? (
+                    <motion.div key="stop" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
+                      <Send size={22} />
+                    </motion.div>
+                  ) : editingMessageId ? (
                     <motion.div key="check" initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><CheckCircle size={22} /></motion.div>
                   ) : input.trim() ? (
                     <motion.div key="send" initial={{ scale: 0, rotate: 20 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Send size={22} /></motion.div>
@@ -760,6 +995,28 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Call modal ── */}
+      <AnimatePresence>
+        {showCallModal && (
+          <CallModal
+            incomingCall={incomingCall}
+            outgoingCall={outgoingCall}
+            socket={socket}
+            currentUserId={session?.user?.id || ""}
+            onAccept={() => {
+              setIncomingCall(null)
+            }}
+            onDecline={() => {
+              setIncomingCall(null)
+            }}
+            onHangup={() => {
+              setIncomingCall(null)
+              setOutgoingCall(null)
+            }}
+          />
         )}
       </AnimatePresence>
     </motion.div>
