@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.vortexmessenger.app",
+    "sha256_cert_fingerprints": [
+      "A2:BA:FB:7A:D7:E6:69:CA:B5:45:22:FA:C5:4E:9D:4C:4E:60:52:3A:CB:F1:FF:AE:4D:5B:01:8B:CC:C6:97:D8"
+    ]
+  }
+}]

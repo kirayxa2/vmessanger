@@ -43,6 +43,8 @@ jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # нужно для git push assetlinks.json
     steps:
       - uses: actions/checkout@v4
 
@@ -60,28 +62,22 @@ jobs:
           yes | sdkmanager --licenses || true
           sdkmanager "build-tools;34.0.0" "platforms;android-34"
 
-      # ── Generate the entire Android project in CI — no git dependency ──
       - name: Generate Android TWA project
         run: |
           set -e
-
-          # ── Root project files ──
           mkdir -p android/gradle/wrapper
           mkdir -p android/app/src/main/java/com/vortexmessenger/app
           mkdir -p android/app/src/main/res/values
 
-          # settings.gradle
           cat > android/settings.gradle << 'EOF'
           include ':app'
           EOF
 
-          # gradle.properties
           cat > android/gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx2048m
           android.useAndroidX=true
           EOF
 
-          # root build.gradle
           cat > android/build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -92,7 +88,6 @@ jobs:
           }
           EOF
 
-          # app/build.gradle
           cat > android/app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
           android {
@@ -118,7 +113,6 @@ jobs:
           }
           EOF
 
-          # AndroidManifest.xml
           cat > android/app/src/main/AndroidManifest.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -142,7 +136,6 @@ jobs:
           </manifest>
           EOF
 
-          # strings.xml
           cat > android/app/src/main/res/values/strings.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -155,13 +148,11 @@ jobs:
           </resources>
           EOF
 
-          # LauncherActivity.java
           cat > android/app/src/main/java/com/vortexmessenger/app/LauncherActivity.java << 'EOF'
           package com.vortexmessenger.app;
           public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {}
           EOF
 
-          # gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -170,14 +161,11 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-          echo "All project files generated."
-
       - name: Download Gradle wrapper jar
         run: |
           curl -sL \
             "https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar" \
             -o android/gradle/wrapper/gradle-wrapper.jar
-          echo "Wrapper jar size: $(du -h android/gradle/wrapper/gradle-wrapper.jar)"
 
       - name: Create gradlew
         run: |
@@ -193,7 +181,6 @@ jobs:
           exec "$JAVACMD" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
           GRADLEW
           chmod +x android/gradlew
-          echo "gradlew ready: $(ls -la android/gradlew)"
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -206,7 +193,68 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon
+
+      # ── Извлекаем SHA-256 из debug keystore и пишем assetlinks.json ──
+      - name: Extract debug keystore SHA-256 & update assetlinks.json
+        run: |
+          # Debug keystore создаётся автоматически при первом gradle build
+          KEYSTORE="$HOME/.android/debug.keystore"
+
+          # Если нет — создаём стандартный Android debug keystore
+          if [ ! -f "$KEYSTORE" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkey -v \
+              -keystore "$KEYSTORE" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          # Извлекаем SHA-256
+          SHA256=$(keytool -list -v \
+            -keystore "$KEYSTORE" \
+            -alias androiddebugkey \
+            -storepass android \
+            -keypass android 2>/dev/null \
+            | grep "SHA256:" \
+            | head -1 \
+            | sed 's/.*SHA256: //' \
+            | tr -d ' \t\r\n')
+
+          echo "SHA-256: $SHA256"
+
+          # Записываем assetlinks.json
+          mkdir -p public/.well-known
+          cat > public/.well-known/assetlinks.json << ASSETEOF
+          [{
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+              "namespace": "android_app",
+              "package_name": "com.vortexmessenger.app",
+              "sha256_cert_fingerprints": ["$SHA256"]
+            }
+          }]
+          ASSETEOF
+
+          echo "assetlinks.json written:"
+          cat public/.well-known/assetlinks.json
+
+      # ── Коммитим assetlinks.json обратно в репо ──
+      - name: Commit assetlinks.json to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/.well-known/assetlinks.json
+          # Коммитим только если файл изменился
+          git diff --staged --quiet || git commit -m "ci: update assetlinks.json [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

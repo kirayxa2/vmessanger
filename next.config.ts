@@ -9,7 +9,6 @@ const withPWA = require('next-pwa')({
 const supabaseHostname = "taozobjhniqhjukwgmvn.supabase.co"
 
 const nextConfig: NextConfig = {
-  // Empty turbopack config — suppresses the Turbopack/webpack mismatch error on Next.js 16
   turbopack: {},
 
   images: {
@@ -25,8 +24,26 @@ const nextConfig: NextConfig = {
 
   async headers() {
     return [
+      // ── assetlinks.json — правильный Content-Type, без X-Frame-Options ──
       {
-        source: "/(.*)",
+        source: "/.well-known/assetlinks.json",
+        headers: [
+          { key: "Content-Type", value: "application/json" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Cache-Control", value: "public, max-age=3600" },
+        ],
+      },
+      // ── manifest.json ──
+      {
+        source: "/manifest.json",
+        headers: [
+          { key: "Content-Type", value: "application/manifest+json" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+        ],
+      },
+      // ── Все остальные маршруты ──
+      {
+        source: "/((?!.well-known).*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },

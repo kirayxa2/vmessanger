@@ -1,21 +1,28 @@
 {
   "name": "Vortex Messenger",
-  "short_name": "vMessenger",
+  "short_name": "Vortex",
   "description": "Next-Gen Real-time Messaging",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0e1621",
-  "theme_color": "#0e1621",
+  "orientation": "portrait",
+  "background_color": "#1c242f",
+  "theme_color": "#1c242f",
+  "lang": "en",
   "icons": [
     {
       "src": "/icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "categories": ["social", "communication"],
+  "prefer_related_applications": false
 }

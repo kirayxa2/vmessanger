@@ -14,14 +14,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VortexMessenger",
-  description: "Real-time messaging app",
+  title: "Vortex Messenger",
+  description: "Next-Gen Real-time Messaging",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Vortex",
+  },
   icons: {
     icon: [
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
       { url: "/logo (1).ico", type: "image/x-icon" },
     ],
     shortcut: "/logo (1).ico",
-    apple: "/logo (1).ico",
+    apple: [
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+    ],
   },
 };
 
@@ -29,7 +39,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#0e1621",
+  userScalable: false,
+  themeColor: "#1c242f",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
