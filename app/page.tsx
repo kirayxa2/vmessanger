@@ -281,19 +281,19 @@ export default function HomePage({ conversationId }: { conversationId?: string }
         {!showChatOnMobile && (
           <motion.div
             initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 420, damping: 36 }}
-            className="shrink-0 px-4 pb-4 pt-2"
-            style={{ backgroundColor: "#0a0f17" }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 100, opacity: 0 }}
+      transition={{ type: "spring", stiffness: 420, damping: 36 }}
+      className="shrink-0 px-2 pb-2 pt-1" // Уменьшил отступы, чтобы капсулы были ближе
+      style={{ backgroundColor: "#0f1721" }}
           >
             {/* Капсула-докбар */}
             <div
-              className="flex items-center justify-around rounded-[28px] px-2 py-2"
-              style={{
-                backgroundColor: "#1c242f",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
-              }}
+        className="flex items-center justify-around rounded-[28px] px-2 py-2"
+        style={{
+          backgroundColor: "#1c242f", // Тот же цвет, что и у капсулы чатов
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
+        }}
             >
               {/* Чаты */}
               <DockButton
