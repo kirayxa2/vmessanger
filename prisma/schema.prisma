@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id               Int                       @id @default(autoincrement())
+  email            String                    @unique
+  username         String                    @unique
+  password         String
+  avatar           String?
+  bio              String?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  conversations    ConversationParticipant[]
+  receivedMessages Message[]                 @relation("ReceivedMessages")
+  sentMessages     Message[]                 @relation("SentMessages")
+  drafts           Draft[]
+}
+
+// Conversation types:
+// 'private'  — обычный чат между двумя пользователями
+// 'saved'    — Избранное (только один участник — сам пользователь)
+// 'system'   — Системный чат Vortex (уведомления безопасности)
+model Conversation {
+  id           Int                       @id @default(autoincrement())
+  isGroup      Boolean                   @default(false)
+  name         String?
+  type         String                    @default("private") // 'private' | 'saved' | 'system'
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  participants ConversationParticipant[]
+  messages     Message[]
+  drafts       Draft[]
+}
+
+model ConversationParticipant {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  conversationId Int
+  joinedAt       DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conversationId])
+}
+
+model Message {
+  id              Int       @id @default(autoincrement())
+  content         String    @default("")
+  createdAt       DateTime  @default(now())
+  isRead          Boolean   @default(false)
+  senderId        Int
+  receiverId      Int?
+  conversationId  Int
+  replyToId       Int?
+  forwardFromId   Int?
+  fileUrl         String?
+  fileName        String?
+  fileSize        Int?
+  fileType        String?
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  receiver        User?        @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender          User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo         Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies         Message[]    @relation("MessageReplies")
+}
+
+model Draft {
+  id             Int          @id @default(autoincrement())
+  text           String
+  replyToId      Int?
+  entities       Json?
+  timestamp      DateTime     @default(now()) @updatedAt
+  userId         Int
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conversationId])
+}

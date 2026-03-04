@@ -1,0 +1,164 @@
+/* @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap'); */
+@import "tailwindcss";
+
+:root {
+  --background: #0e1621;
+  --foreground: #ffffff;
+  --sidebar-bg: #1c242f;
+  --sidebar-item-active: #8b72f3;
+  --header-bg: #1c242f;
+  --chat-bg: #0e1621;
+  --sender-bubble: #c67c78;
+  --sender-text: #ffffff;
+  --recipient-bubble: #212d3b;
+  --recipient-text: #ffffff;
+  --input-bg: #242f3d;
+  --pattern-color: rgba(255, 255, 255, 0.05);
+  --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --recipient-bubble: #212121 !important;
+    --input-bg: #212121 !important;
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --recipient-bubble: #212121 !important;
+    --input-bg: #212121 !important;
+  }
+}
+
+/* Ensure colors are consistent across browsers and devices */
+[style*="var(--input-bg)"], 
+[style*="var(--recipient-bubble)"],
+[fill="var(--recipient-bubble)"],
+[fill="var(--input-bg)"] {
+  background-color: #212121 !important;
+  fill: #212121 !important;
+}
+
+[style*="var(--sender-bubble)"],
+[fill="var(--sender-bubble)"] {
+  background-color: #c67c78 !important;
+  fill: #c67c78 !important;
+}
+
+input, select, textarea {
+  font-size: 16px !important; /* Prevents auto-zoom on mobile safari */
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  position: fixed;
+  font-family: "icons" !important;
+  --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu,
+  Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  --font-family-monospace: "Cascadia Mono", "Roboto Mono", "Droid Sans Mono", 'SF Mono', "Menlo", "Ubuntu Mono",
+  "Consolas", monospace;
+  --font-family-rounded: -ui-rounded, "Numbers Rounded", "Roboto", "Helvetica Neue", sans-serif;
+  --font-family-condensed: "Roboto Condensed", "Roboto", "Helvetica Neue", sans-serif;
+  --font-weight-semibold: 500; /* Note: Roboto is naturally quite bold, so 500 works well as default */
+
+  --color-borders-input: rgb(91, 91, 90, 1);
+  --border-radius-messages: 0.9375rem;
+
+  --sender-bubble: #c67c78;
+
+
+  font-family: var(--font-family);
+
+  font-size: 16px;
+  font-weight: var(--font-weight-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  color: var(--color-text);
+  text-align: left;
+
+  background-color: var(--color-background);
+
+  @media (max-width: 600px) {
+    height: calc(var(--vh, 1vh) * 100);
+  }
+}
+
+.wrapperinput {
+    box-shadow: 0 1px 2px var(--color-default-shadow);
+}
+
+
+html[lang="fa"],
+html[lang="fa"] body {
+  --font-family: "Vazirmatn", "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen,
+  Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+
+  &.is-ios,
+  &.is-macos {
+    --font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Roboto", "Apple Color Emoji", "Segoe UI", Oxygen,
+    Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  }
+
+  
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;
+}
+
+*, *::before, *::after {
+  font-family: var(--font-family) !important;
+  box-sizing: border-box;
+}
+
+input, textarea, [contenteditable="true"], .message-text {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.tg-bg {
+  background-color: var(--chat-bg);
+  background-image: url("/pattern.svg");
+  background-size: 540px;
+  background-repeat: repeat;
+  background-attachment: local;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.hide-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hide-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.hide-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.bubble-shadow {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
