@@ -121,17 +121,41 @@ jobs:
                   android:allowBackup="true">
                   <activity
                       android:name="com.vortexmessenger.app.LauncherActivity"
-                      android:exported="true">
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
+                      <!-- URL которое открывает TWA -->
+                      <meta-data
+                          android:name="android.support.customtabs.trusted.DEFAULT_URL"
+                          android:value="https://vmessanger-production.up.railway.app" />
                   </activity>
+                  <!-- Верификация домена для TWA (убирает адресную строку) -->
                   <meta-data
                       android:name="asset_statements"
                       android:value="@string/asset_statements" />
+                  <!-- Цвет статус-бара -->
+                  <meta-data
+                      android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
+                      android:value="@color/colorPrimary" />
+                  <meta-data
+                      android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR_DARK"
+                      android:value="@color/colorPrimary" />
+                  <meta-data
+                      android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
+                      android:value="@color/colorPrimary" />
               </application>
           </manifest>
+          EOF
+
+          # colors.xml — цвет статус-бара
+          cat > android/app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#1c242f</color>
+          </resources>
           EOF
 
           cat > android/app/src/main/res/values/strings.xml << 'EOF'
@@ -208,6 +232,14 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-8.2
           restore-keys: gradle-${{ runner.os }}-
+
+      - name: Show keystore SHA-256
+        run: |
+          keytool -list -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -alias androiddebugkey \
+            -storepass android \
+            -keypass android 2>/dev/null | grep -A1 "SHA256"
 
       - name: Build debug APK
         working-directory: android
