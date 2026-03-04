@@ -3,16 +3,26 @@ const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
   skipWaiting: true,
-  disable: false, // Кэширование включено
+  disable: process.env.NODE_ENV === 'development',
 });
 
+const supabaseHostname = "taozobjhniqhjukwgmvn.supabase.co"
+
 const nextConfig: NextConfig = {
+  // Empty turbopack config — suppresses the Turbopack/webpack mismatch error on Next.js 16
+  turbopack: {},
+
   images: {
-    domains: ["taozobjhniqhjukwgmvn.supabase.co"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: supabaseHostname,
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
     unoptimized: true,
   },
-  
-  // Твои заголовки безопасности (теперь они не сломают билд!)
+
   async headers() {
     return [
       {
@@ -30,9 +40,9 @@ const nextConfig: NextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
-              `img-src 'self' data: blob: https://taozobjhniqhjukwgmvn.supabase.co`,
-              "connect-src 'self' wss: ws: https://taozobjhniqhjukwgmvn.supabase.co https://vmessanger-production.up.railway.app",
-              "media-src 'self' blob: https://taozobjhniqhjukwgmvn.supabase.co",
+              `img-src 'self' data: blob: https://${supabaseHostname}`,
+              `connect-src 'self' wss: ws: https://${supabaseHostname} https://vmessanger-production.up.railway.app`,
+              `media-src 'self' blob: https://${supabaseHostname}`,
               "frame-ancestors 'none'",
             ].join("; "),
           },
