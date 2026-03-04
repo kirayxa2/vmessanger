@@ -663,26 +663,17 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
           {/* Header right buttons */}
           <div className="flex gap-1 text-gray-400 shrink-0" onClick={e => e.stopPropagation()}>
             {!isSpecialChat && (
-              <>
-                <motion.button
-                  whileTap={{ scale: 0.88 }}
-                  onClick={() => startCall("audio")}
-                  className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
-                  title="Аудиозвонок"
-                >
-                  <Phone size={20} />
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.88 }}
-                  onClick={() => startCall("video")}
-                  className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
-                  title="Видеозвонок"
-                >
-                  <Video size={20} />
-                </motion.button>
-              </>
+              <motion.button
+                whileTap={{ scale: 0.88 }}
+                onClick={() => startCall("audio")}
+                className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
+                title="Аудиозвонок"
+              >
+                <Phone size={20} />
+              </motion.button>
             )}
-            <motion.button whileTap={{ scale: 0.88 }} className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"><Search size={20} /></motion.button>
+            {/* Поиск — скрываем на узких экранах */}
+            <motion.button whileTap={{ scale: 0.88 }} className="hidden sm:flex hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"><Search size={20} /></motion.button>
             <motion.button whileTap={{ scale: 0.88 }} className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"><EllipsisVertical size={20} /></motion.button>
           </div>
         </div>

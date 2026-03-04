@@ -7,7 +7,6 @@ import { Phone, PhoneOff, Video, VideoOff, Mic, MicOff, Volume2 } from "lucide-r
 const ACCENT = "#7e85e1"
 
 interface CallModalProps {
-  // Incoming call props
   incomingCall?: {
     callId: number
     callType: "audio" | "video"
@@ -15,7 +14,6 @@ interface CallModalProps {
     initiatorName: string
     initiatorAvatar?: string
   } | null
-  // Outgoing call props
   outgoingCall?: {
     callId: number
     callType: "audio" | "video"
@@ -37,9 +35,10 @@ export default function CallModal({
 }: CallModalProps) {
   const [callState, setCallState] = useState<CallState>(incomingCall ? "incoming" : "outgoing")
   const [isMuted, setIsMuted] = useState(false)
-  const [isVideoOff, setIsVideoOff] = useState(false)
+  const [isVideoOn, setIsVideoOn] = useState(false)   // камера изначально ВЫКЛ, включается вручную
   const [callDuration, setCallDuration] = useState(0)
   const [connectionStatus, setConnectionStatus] = useState("Соединение...")
+  const [hasCamera, setHasCamera] = useState(false)   // есть ли камера на устройстве
 
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
@@ -47,8 +46,7 @@ export default function CallModal({
   const localStreamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const callType = incomingCall?.callType || outgoingCall?.callType || "audio"
-  const isVideo = callType === "video"
+  // Тип звонка — всегда аудио, видео включается кнопкой
   const callId = incomingCall?.callId || outgoingCall?.callId
   const otherUserId = incomingCall?.initiatorId || outgoingCall?.receiverId
   const otherName = incomingCall?.initiatorName || outgoingCall?.receiverName || ""
@@ -61,6 +59,13 @@ export default function CallModal({
     ]
   }
 
+  // Проверяем наличие камеры на устройстве
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      setHasCamera(devices.some(d => d.kind === "videoinput"))
+    }).catch(() => {})
+  }, [])
+
   const startTimer = useCallback(() => {
     timerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000)
   }, [])
@@ -71,14 +76,15 @@ export default function CallModal({
     return `${m}:${sec.toString().padStart(2, "0")}`
   }
 
-  const getLocalStream = useCallback(async () => {
+  // Получаем стрим — только аудио, видео добавляем если isVideoOn
+  const getLocalStream = useCallback(async (withVideo: boolean) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
-        video: isVideo ? { facingMode: "user", width: 640, height: 480 } : false,
+        video: withVideo ? { facingMode: "user" } : false,
       })
       localStreamRef.current = stream
-      if (localVideoRef.current && isVideo) {
+      if (localVideoRef.current && withVideo) {
         localVideoRef.current.srcObject = stream
       }
       return stream
@@ -86,7 +92,7 @@ export default function CallModal({
       console.error("getUserMedia error:", err)
       return null
     }
-  }, [isVideo])
+  }, [])
 
   const createPeer = useCallback((stream: MediaStream) => {
     const peer = new RTCPeerConnection(ICE_SERVERS)
@@ -102,11 +108,7 @@ export default function CallModal({
 
     peer.onicecandidate = (event) => {
       if (event.candidate && socket && otherUserId) {
-        socket.emit("call-ice", {
-          callId,
-          targetUserId: otherUserId,
-          candidate: event.candidate,
-        })
+        socket.emit("call-ice", { callId, targetUserId: otherUserId, candidate: event.candidate })
       }
     }
 
@@ -123,20 +125,17 @@ export default function CallModal({
     return peer
   }, [socket, otherUserId, callId, startTimer])
 
-  // Initiator: create offer after call accepted
   useEffect(() => {
     if (!socket) return
 
     const handleCallAnswered = async (data: { callId: number; sdp: RTCSessionDescriptionInit }) => {
       if (data.callId !== callId) return
-      const peer = peerRef.current
-      if (!peer) return
-      await peer.setRemoteDescription(new RTCSessionDescription(data.sdp))
+      await peerRef.current?.setRemoteDescription(new RTCSessionDescription(data.sdp))
     }
 
     const handleCallOffer = async (data: { callId: number; sdp: RTCSessionDescriptionInit }) => {
       if (data.callId !== callId) return
-      const stream = await getLocalStream()
+      const stream = await getLocalStream(false)
       if (!stream) return
       const peer = createPeer(stream)
       await peer.setRemoteDescription(new RTCSessionDescription(data.sdp))
@@ -149,22 +148,18 @@ export default function CallModal({
 
     const handleIce = async (data: { callId: number; candidate: RTCIceCandidateInit }) => {
       if (data.callId !== callId) return
-      try {
-        await peerRef.current?.addIceCandidate(new RTCIceCandidate(data.candidate))
-      } catch {}
+      try { await peerRef.current?.addIceCandidate(new RTCIceCandidate(data.candidate)) } catch {}
     }
 
     const handleCallDeclined = (data: { callId: number }) => {
       if (data.callId !== callId) return
-      setCallState("ended")
-      setConnectionStatus("Звонок отклонён")
+      setCallState("ended"); setConnectionStatus("Звонок отклонён")
       setTimeout(() => onHangup?.(), 2000)
     }
 
     const handleCallEnded = (data: { callId: number }) => {
       if (data.callId !== callId) return
-      setCallState("ended")
-      setConnectionStatus("Звонок завершён")
+      setCallState("ended"); setConnectionStatus("Звонок завершён")
       setTimeout(() => onHangup?.(), 1500)
     }
 
@@ -183,27 +178,22 @@ export default function CallModal({
     }
   }, [socket, callId, otherUserId, createPeer, getLocalStream, startTimer, onHangup])
 
-  // Outgoing: get stream and send offer
+  // Исходящий звонок — только аудио
   useEffect(() => {
     if (!outgoingCall || !socket) return
     ;(async () => {
-      const stream = await getLocalStream()
+      const stream = await getLocalStream(false)
       if (!stream) return
       const peer = createPeer(stream)
       const offer = await peer.createOffer()
       await peer.setLocalDescription(offer)
-      socket.emit("call-offer", {
-        callId,
-        receiverId: outgoingCall.receiverId,
-        sdp: offer,
-      })
+      socket.emit("call-offer", { callId, receiverId: outgoingCall.receiverId, sdp: offer })
     })()
-  }, []) // only on mount
+  }, [])
 
-  const acceptCall = useCallback(async () => {
+  const acceptCall = useCallback(() => {
     setCallState("connected")
     onAccept?.()
-    // Stream + peer will be created when we receive call-offer
   }, [onAccept])
 
   const declineCall = useCallback(() => {
@@ -222,18 +212,34 @@ export default function CallModal({
   }, [socket, callId, otherUserId, onHangup])
 
   const toggleMute = useCallback(() => {
-    const stream = localStreamRef.current
-    if (!stream) return
-    stream.getAudioTracks().forEach(t => { t.enabled = !t.enabled })
+    localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled })
     setIsMuted(m => !m)
   }, [])
 
-  const toggleVideo = useCallback(() => {
-    const stream = localStreamRef.current
-    if (!stream) return
-    stream.getVideoTracks().forEach(t => { t.enabled = !t.enabled })
-    setIsVideoOff(v => !v)
-  }, [])
+  // Включение/выключение камеры в звонке
+  const toggleCamera = useCallback(async () => {
+    if (!isVideoOn) {
+      // Включаем камеру
+      try {
+        const videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+        const videoTrack = videoStream.getVideoTracks()[0]
+        if (localVideoRef.current) localVideoRef.current.srcObject = videoStream
+        // Добавляем трек в peer connection
+        if (peerRef.current && localStreamRef.current) {
+          peerRef.current.addTrack(videoTrack, localStreamRef.current)
+        }
+        setIsVideoOn(true)
+      } catch { alert("Нет доступа к камере") }
+    } else {
+      // Выключаем камеру
+      if (localVideoRef.current?.srcObject) {
+        const s = localVideoRef.current.srcObject as MediaStream
+        s.getVideoTracks().forEach(t => t.stop())
+        localVideoRef.current.srcObject = null
+      }
+      setIsVideoOn(false)
+    }
+  }, [isVideoOn])
 
   useEffect(() => {
     return () => {
@@ -243,33 +249,27 @@ export default function CallModal({
     }
   }, [])
 
-  const avatarBg = ACCENT
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[300] flex flex-col items-center justify-between"
-      style={{ background: isVideo && callState === "connected" ? "transparent" : "linear-gradient(160deg, #1a1f2e 0%, #0d1117 100%)" }}
+      style={{ background: isVideoOn && callState === "connected" ? "transparent" : "linear-gradient(160deg, #1a1f2e 0%, #0d1117 100%)" }}
     >
       {/* Remote video background */}
-      {isVideo && (
-        <video
-          ref={remoteVideoRef}
-          autoPlay
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ display: callState === "connected" ? "block" : "none" }}
-        />
-      )}
+      <video
+        ref={remoteVideoRef}
+        autoPlay
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ display: isVideoOn && callState === "connected" ? "block" : "none" }}
+      />
 
-      {/* Dark overlay for readability */}
       <div className="absolute inset-0 bg-black/30 pointer-events-none" />
 
-      {/* Header */}
+      {/* Header — аватар и имя */}
       <div className="relative z-10 pt-16 pb-4 flex flex-col items-center w-full px-6">
-        {/* Avatar */}
         <div className="relative mb-4">
           <motion.div
             animate={callState === "incoming" || callState === "outgoing"
@@ -278,38 +278,30 @@ export default function CallModal({
             }
             transition={{ repeat: Infinity, duration: 2 }}
             className="w-28 h-28 rounded-full overflow-hidden flex items-center justify-center text-white text-5xl font-bold"
-            style={{ backgroundColor: avatarBg }}
+            style={{ backgroundColor: ACCENT }}
           >
             {otherAvatar
               ? <img src={otherAvatar} className="w-full h-full object-cover" alt="" />
               : otherName[0]?.toUpperCase()
             }
           </motion.div>
-
-          {/* Call type badge */}
-          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: ACCENT }}>
-            {isVideo ? <Video size={14} color="white" /> : <Phone size={14} color="white" />}
+          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: ACCENT }}>
+            <Phone size={14} color="white" />
           </div>
         </div>
-
-        {/* Name */}
         <h2 className="text-white text-2xl font-bold mb-1">{otherName}</h2>
-
-        {/* Status */}
         <p className="text-gray-300 text-[15px]">
-          {callState === "incoming" && (isVideo ? "Входящий видеозвонок" : "Входящий звонок")}
+          {callState === "incoming" && "Входящий звонок"}
           {callState === "outgoing" && "Вызов..."}
           {callState === "connected" && formatDuration(callDuration)}
           {callState === "ended" && connectionStatus}
         </p>
       </div>
 
-      {/* Local video (small PiP) */}
-      {isVideo && callState === "connected" && (
+      {/* Своё видео PiP */}
+      {isVideoOn && callState === "connected" && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
           className="absolute top-20 right-4 z-20 w-28 h-40 rounded-2xl overflow-hidden border-2 border-white/20 shadow-xl"
         >
           <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
@@ -319,89 +311,70 @@ export default function CallModal({
       {/* Controls */}
       <div className="relative z-10 pb-16 w-full px-8">
         {callState === "incoming" ? (
-          /* Incoming: accept + decline */
+          /* Входящий: отклонить + принять */
           <div className="flex items-center justify-around">
             <div className="flex flex-col items-center gap-2">
-              <motion.button
-                whileTap={{ scale: 0.88 }}
-                onClick={declineCall}
+              <motion.button whileTap={{ scale: 0.88 }} onClick={declineCall}
                 className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
-                style={{ backgroundColor: "#e53935" }}
-              >
+                style={{ backgroundColor: "#e53935" }}>
                 <PhoneOff size={26} color="white" />
               </motion.button>
               <span className="text-white/70 text-[12px]">Отклонить</span>
             </div>
 
             <div className="flex flex-col items-center gap-2">
-              <motion.button
-                whileTap={{ scale: 0.88 }}
-                onClick={acceptCall}
+              <motion.button whileTap={{ scale: 0.88 }} onClick={acceptCall}
                 className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
-                style={{ backgroundColor: "#43a047" }}
-              >
-                {isVideo ? <Video size={26} color="white" /> : <Phone size={26} color="white" />}
+                style={{ backgroundColor: "#43a047" }}>
+                <Phone size={26} color="white" />
               </motion.button>
               <span className="text-white/70 text-[12px]">Принять</span>
             </div>
           </div>
         ) : (
-          /* Outgoing / connected */
-          <div className="flex items-center justify-around">
-            {/* Mute */}
+          /* Исходящий / подключён: микрофон + завершить + камера + динамик */
+          <div className="flex items-center justify-around flex-wrap gap-4">
+            {/* Микрофон */}
             <div className="flex flex-col items-center gap-2">
-              <motion.button
-                whileTap={{ scale: 0.88 }}
-                onClick={toggleMute}
+              <motion.button whileTap={{ scale: 0.88 }} onClick={toggleMute}
                 className="w-14 h-14 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: isMuted ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.12)" }}
-              >
+                style={{ backgroundColor: isMuted ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.12)" }}>
                 {isMuted ? <MicOff size={22} color="white" /> : <Mic size={22} color="white" />}
               </motion.button>
-              <span className="text-white/60 text-[11px]">{isMuted ? "Вкл. микрофон" : "Выкл. микрофон"}</span>
+              <span className="text-white/60 text-[11px]">{isMuted ? "Микрофон" : "Без звука"}</span>
             </div>
 
-            {/* Hangup */}
+            {/* Завершить */}
             <div className="flex flex-col items-center gap-2">
-              <motion.button
-                whileTap={{ scale: 0.88 }}
-                onClick={hangup}
+              <motion.button whileTap={{ scale: 0.88 }} onClick={hangup}
                 className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
-                style={{ backgroundColor: "#e53935" }}
-              >
+                style={{ backgroundColor: "#e53935" }}>
                 <PhoneOff size={26} color="white" />
               </motion.button>
               <span className="text-white/70 text-[12px]">Завершить</span>
             </div>
 
-            {/* Video toggle */}
-            {isVideo && (
+            {/* Камера — только если есть на устройстве */}
+            {hasCamera && (
               <div className="flex flex-col items-center gap-2">
-                <motion.button
-                  whileTap={{ scale: 0.88 }}
-                  onClick={toggleVideo}
+                <motion.button whileTap={{ scale: 0.88 }} onClick={toggleCamera}
                   className="w-14 h-14 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: isVideoOff ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.12)" }}
-                >
-                  {isVideoOff ? <VideoOff size={22} color="white" /> : <Video size={22} color="white" />}
+                  style={{ backgroundColor: isVideoOn ? ACCENT : "rgba(255,255,255,0.12)" }}>
+                  {isVideoOn ? <Video size={22} color="white" /> : <VideoOff size={22} color="white" />}
                 </motion.button>
-                <span className="text-white/60 text-[11px]">{isVideoOff ? "Вкл. камеру" : "Выкл. камеру"}</span>
+                <span className="text-white/60 text-[11px]">{isVideoOn ? "Камера вкл" : "Камера"}</span>
               </div>
             )}
 
-            {/* Speaker (audio only) */}
-            {!isVideo && (
-              <div className="flex flex-col items-center gap-2">
-                <motion.button
-                  whileTap={{ scale: 0.88 }}
-                  className="w-14 h-14 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
-                >
-                  <Volume2 size={22} color="white" />
-                </motion.button>
-                <span className="text-white/60 text-[11px]">Динамик</span>
-              </div>
-            )}
+            {/* Динамик */}
+            <div className="flex flex-col items-center gap-2">
+              <motion.button whileTap={{ scale: 0.88 }}
+                className="w-14 h-14 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+                <Volume2 size={22} color="white" />
+              </motion.button>
+              <span className="text-white/60 text-[11px]">Динамик</span>
+            </div>
           </div>
         )}
       </div>

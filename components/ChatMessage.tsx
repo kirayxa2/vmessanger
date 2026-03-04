@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useRef } from "react";
 import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Mic } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
+import { useProfanityFilter } from "@/hooks/useProfanityFilter";
 
 const SENDER_COLOR = "#c67c78";
 const RECIPIENT_COLOR = "#212121";
@@ -46,7 +47,10 @@ export default function ChatMessage({
   openMenuId, onMenuOpen, onMenuClose, menuPos, senderName,
 }: ChatMessageProps) {
   const { t } = useTranslation();
+  const { filter } = useProfanityFilter();
   const messageId = id.toString();
+  // Применяем фильтр к тексту сообщения (только визуально, оригинал не меняется)
+  const displayContent = filter(content);
   const showMenu = openMenuId === messageId;
   const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -211,7 +215,7 @@ export default function ChatMessage({
           )}
 
           {/* Voice message player */}
-          {voiceUrl ? (
+          {voiceUrl !== undefined && voiceUrl !== null && voiceUrl !== "" ? (
             <div className="flex items-center gap-2 min-w-[180px]">
               <motion.button
                 whileTap={{ scale: 0.85 }}
@@ -263,7 +267,7 @@ export default function ChatMessage({
           ) : (
             /* Regular text message */
             <div className="flex items-end gap-x-2 flex-wrap">
-              <span className="leading-[1.4] text-[15px] break-words flex-1">{content}</span>
+              <span className="leading-[1.4] text-[15px] break-words flex-1">{displayContent}</span>
               <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
                 {timeStr}
                 <ReadIndicator />

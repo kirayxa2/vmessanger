@@ -85,6 +85,14 @@ const resources = {
       // User profile
       "russian": "Russian",
       "english": "English",
+
+      // Privacy / Anti-profanity
+      "content_filter": "Content filter",
+      "anti_profanity": "Anti-profanity filter",
+      "anti_profanity_on": "Active",
+      "anti_profanity_hint": "Replace swear words with asterisks",
+      "anti_profanity_desc": "Only you see the filtered version. Messages are not changed for other users.",
+      "example": "Example",
     }
   },
   ru: {
@@ -169,6 +177,14 @@ const resources = {
       // User profile
       "russian": "Русский",
       "english": "Английский",
+
+      // Privacy / Anti-profanity
+      "content_filter": "Фильтр контента",
+      "anti_profanity": "Антимат фильтр",
+      "anti_profanity_on": "Включён",
+      "anti_profanity_hint": "Заменяет маты на звёздочки",
+      "anti_profanity_desc": "Фильтрация работает только у вас. Другие пользователи видят сообщения без изменений.",
+      "example": "Пример",
     }
   }
 };
