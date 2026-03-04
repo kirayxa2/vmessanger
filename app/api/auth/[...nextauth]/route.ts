@@ -31,7 +31,7 @@ async function sendSystemNotification(userId: number, message: string) {
   }
 }
 
-export const authOptions: NextAuthOptions = {
+const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: "Credentials",
