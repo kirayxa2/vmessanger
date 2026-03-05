@@ -265,9 +265,11 @@ export default function ChatMessage({
               </span>
             </div>
           ) : (
-            /* Regular text message */
+            /* Regular text message — автоперенос: 56 симв на ПК, 35 на мобильном */
             <div className="flex items-end gap-x-2 flex-wrap">
-              <span className="leading-[1.4] text-[15px] break-words flex-1">{displayContent}</span>
+              <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                <WrappedText text={displayContent} />
+              </span>
               <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
                 {timeStr}
                 <ReadIndicator />
@@ -359,4 +361,32 @@ function MenuItem({ icon, label, color = "text-white", onClick }: {
       <span className={`text-[14px] font-medium ${color}`}>{label}</span>
     </div>
   );
+}
+
+// Автоперенос сообщения: 56 симв. на ПК, 35 на мобильном
+function WrappedText({ text }: { text: string }) {
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const LIMIT = isMobile ? 35 : 56;
+
+  const lines: string[] = [];
+  // Сохраняем ручные \n отправителя
+  const rawLines = text.split("\n");
+  for (const rawLine of rawLines) {
+    let remaining = rawLine;
+    while (remaining.length > LIMIT) {
+      // Режем по пробелу перед лимитом
+      const spaceIdx = remaining.lastIndexOf(" ", LIMIT);
+      if (spaceIdx > 0) {
+        lines.push(remaining.slice(0, spaceIdx));
+        remaining = remaining.slice(spaceIdx + 1);
+      } else {
+        // Нет пробела — рубим жёстко
+        lines.push(remaining.slice(0, LIMIT));
+        remaining = remaining.slice(LIMIT);
+      }
+    }
+    lines.push(remaining);
+  }
+
+  return <>{lines.join("\n")}</>;
 }

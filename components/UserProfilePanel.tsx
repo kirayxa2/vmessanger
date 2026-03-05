@@ -13,9 +13,10 @@ interface UserProfilePanelProps {
   avatar?: string
   isOnline?: boolean
   onClose: () => void
+  isMobile?: boolean
 }
 
-export default function UserProfilePanel({ userId, username, avatar, isOnline, onClose }: UserProfilePanelProps) {
+export default function UserProfilePanel({ userId, username, avatar, isOnline, onClose, isMobile }: UserProfilePanelProps) {
   const [profile, setProfile] = useState<{ bio?: string; createdAt?: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const { t } = useTranslation()
@@ -31,29 +32,27 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
       .finally(() => setLoading(false))
   }, [userId])
 
+  // Одинаковая анимация справа на обоих платформах
+  // Мобильный — на весь экран, десктоп — 1/3 ширины
   return (
-    // Полноэкранный оверлей поверх чата — работает на любом экране
     <motion.div
-      className="absolute inset-0 z-50 flex flex-col bg-[#161e27]"
-      initial={{ x: "100%" }}
-      animate={{ x: 0 }}
-      exit={{ x: "100%" }}
+      className="absolute top-0 right-0 bottom-0 z-50 flex flex-col bg-[#161e27] border-l border-white/5 shadow-2xl overflow-hidden"
+      style={{ width: isMobile ? "100%" : "min(320px, 35%)" }}
+      initial={{ x: "100%", opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: "100%", opacity: 0 }}
       transition={{ type: "spring", stiffness: 340, damping: 34 }}
     >
-      {/* Header с кнопкой назад */}
-      <div className="flex items-center gap-2 px-2 h-[63px] border-b border-white/5 shrink-0 bg-[#161e27]">
-        <motion.button
-          onClick={onClose}
-          whileTap={{ scale: 0.88 }}
-          className="p-2 rounded-full hover:bg-white/10 text-white transition-colors"
-        >
-          <ArrowLeft size={24} />
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 h-[63px] border-b border-white/5 shrink-0">
+        <motion.button onClick={onClose} whileTap={{ scale: 0.88 }}
+          className="p-2 rounded-full hover:bg-white/10 text-white transition-colors">
+          <ArrowLeft size={22} />
         </motion.button>
         <span className="text-white font-semibold text-[17px]">User Info</span>
       </div>
 
       <div className="flex-1 overflow-y-auto hide-scrollbar">
-
         {/* Avatar + name */}
         <div className="flex flex-col items-center gap-3 pt-8 pb-6 px-4 border-b border-white/5">
           <div className="relative">
@@ -81,7 +80,8 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
         {/* Info rows */}
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: `${ACCENT} transparent transparent transparent` }} />
+            <div className="w-5 h-5 border-2 rounded-full animate-spin"
+              style={{ borderColor: `${ACCENT} transparent transparent transparent` }} />
           </div>
         ) : (
           <div className="py-2 border-b border-white/5">
@@ -129,11 +129,9 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
         {/* Media tabs */}
         <div className="flex border-b border-white/5">
           {["Posts", "Media", "Files", "Links"].map((tab, i) => (
-            <button
-              key={tab}
+            <button key={tab}
               className={`flex-1 py-3 text-[13px] font-medium transition-colors ${i === 0 ? "border-b-2" : ""}`}
-              style={i === 0 ? { color: ACCENT, borderColor: ACCENT } : { color: "#6b7280" }}
-            >
+              style={i === 0 ? { color: ACCENT, borderColor: ACCENT } : { color: "#6b7280" }}>
               {tab}
             </button>
           ))}
@@ -142,9 +140,9 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
         <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
           <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mb-3">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
             </svg>
           </div>
           <p className="text-gray-600 text-[13px]">No media yet</p>

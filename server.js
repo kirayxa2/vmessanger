@@ -160,6 +160,12 @@ app.prepare().then(() => {
       emitToUser(data.otherUserId, "call-ended", data)
     })
 
+    // call-accepted: receiver принял звонок, инициатор должен создать offer
+    socket.on("call-accepted", (data) => {
+      // data: { callId, initiatorId }
+      emitToUser(data.initiatorId, "call-accepted", data)
+    })
+
     // call-offer: WebRTC SDP offer from initiator
     socket.on("call-offer", (data) => {
       // data: { callId, receiverId, sdp }

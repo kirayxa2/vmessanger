@@ -256,21 +256,21 @@ export default function HomePage({ conversationId }: { conversationId?: string }
               />
             </motion.div>
           ) : (
-            /* Сайдбар — капсула с отступами и скруглением */
+            /* Сайдбар — капсула с отступами со всех сторон */
             <motion.div
               key="sidebar"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
-              className="absolute inset-0 m-0"
+              className="absolute inset-0 px-3"
             >
               {/* Капсула сайдбара */}
               <div
-                className="w-full h-full rounded-[28px] overflow-hidden"
+                className="w-full h-full rounded-[22px] overflow-hidden"
                 style={{
-                  backgroundColor: "#1c242f",
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
+                  backgroundColor: "#1a2233",
+                  boxShadow: "0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07)",
                 }}
               >
                 <ChatSidebar
@@ -296,39 +296,33 @@ export default function HomePage({ conversationId }: { conversationId?: string }
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", stiffness: 420, damping: 36 }}
-            className="shrink-0 px-2 pb-2 pt-2"
+            className="shrink-0 px-3 pb-3 pt-2"
             style={{ backgroundColor: "#0a0f17" }}
           >
             {/* Капсула-докбар */}
             <div
-              className="flex items-center justify-around rounded-[28px] px-2 py-2"
+              className="flex items-stretch rounded-[22px] overflow-hidden"
               style={{
-                backgroundColor: "#1c242f",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
+                backgroundColor: "#1a2233",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07)",
               }}
             >
-              {/* Чаты */}
               <DockButton
                 label="Чаты"
-                icon={<MessageSquare size={22} />}
+                icon={<MessageSquare size={23} />}
                 active={mobileTab === "chats"}
                 badge={totalUnread > 0 ? totalUnread : undefined}
-                avatar={null}
                 onClick={() => { setMobileTab("chats"); setShowChatOnMobile(false) }}
               />
-
-              {/* Настройки */}
               <DockButton
                 label="Настройки"
-                icon={<Settings size={22} />}
+                icon={<Settings size={23} />}
                 active={mobileTab === "settings"}
                 onClick={() => { setMobileTab("settings"); setShowChatOnMobile(false) }}
               />
-
-              {/* Профиль */}
               <DockButton
                 label="Профиль"
-                icon={<User size={22} />}
+                icon={<User size={23} />}
                 active={mobileTab === "profile"}
                 avatar={session?.user?.image || null}
                 avatarLetter={session?.user?.name?.[0]?.toUpperCase() || "?"}
@@ -342,7 +336,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
   )
 }
 
-// ── Кнопка докбара ────────────────────────────────────────────
+// ── Кнопка докбара — стиль Telegram ───────────────────────────
 function DockButton({ label, icon, active, badge, avatar, avatarLetter, onClick }: {
   label: string
   icon: React.ReactNode
@@ -355,51 +349,59 @@ function DockButton({ label, icon, active, badge, avatar, avatarLetter, onClick 
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ scale: 0.88 }}
-      className="flex flex-col items-center gap-1 px-5 py-1.5 rounded-2xl relative transition-colors"
-      style={{ minWidth: 72 }}
+      whileTap={{ scale: 0.95 }}
+      className="flex-1 flex flex-col items-center justify-center gap-[5px] py-[10px] relative"
     >
-      {/* Активный фон */}
-      {active && (
-        <motion.div
-          layoutId="dock-active"
-          className="absolute inset-0 rounded-2xl"
-          style={{ backgroundColor: `${ACCENT}22` }}
-          transition={{ type: "spring", stiffness: 500, damping: 35 }}
-        />
-      )}
+      {/* Активный фон — пилюла под иконкой как в TG */}
+      <AnimatePresence>
+        {active && (
+          <motion.div
+            layoutId="tg-dock-pill"
+            initial={{ opacity: 0, scaleX: 0.5 }}
+            animate={{ opacity: 1, scaleX: 1 }}
+            exit={{ opacity: 0, scaleX: 0.5 }}
+            transition={{ type: "spring", stiffness: 500, damping: 38 }}
+            className="absolute top-[6px] rounded-full"
+            style={{
+              backgroundColor: `${ACCENT}30`,
+              width: 56, height: 32,
+              left: "50%",
+              transform: "translateX(-50%)",
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Иконка / аватар */}
-      <div className="relative">
+      <div className="relative z-10">
         {avatar ? (
-          // Профиль — круглая аватарка
           <div
-            className="w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-white text-[13px] font-bold"
-            style={{ backgroundColor: active ? ACCENT : "#2d3f57" }}
+            className="w-[26px] h-[26px] rounded-full overflow-hidden border-2"
+            style={{ borderColor: active ? ACCENT : "transparent" }}
           >
             <img src={avatar} className="w-full h-full object-cover" alt="" />
           </div>
         ) : avatarLetter && label === "Профиль" ? (
-          // Профиль без фото — буква в кружке
           <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[13px] font-bold"
-            style={{ backgroundColor: active ? ACCENT : "#2d3f57" }}
+            className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-white text-[12px] font-bold"
+            style={{ backgroundColor: active ? ACCENT : "#3a4a5e" }}
           >
             {avatarLetter}
           </div>
         ) : (
-          // Обычная иконка
-          <div style={{ color: active ? ACCENT : "#6b7280" }}>
+          <motion.div
+            animate={{ color: active ? ACCENT : "#8896a5" }}
+            transition={{ duration: 0.15 }}
+          >
             {icon}
-          </div>
+          </motion.div>
         )}
 
-        {/* Бейдж непрочитанных */}
+        {/* Бейдж */}
         {badge !== undefined && badge > 0 && (
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-white text-[10px] font-bold px-1"
+            initial={{ scale: 0 }} animate={{ scale: 1 }}
+            className="absolute -top-[6px] -right-[8px] min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-white text-[10px] font-bold px-1"
             style={{ backgroundColor: ACCENT }}
           >
             {badge > 99 ? "99+" : badge}
@@ -408,12 +410,13 @@ function DockButton({ label, icon, active, badge, avatar, avatarLetter, onClick 
       </div>
 
       {/* Подпись */}
-      <span
-        className="text-[11px] font-medium relative z-10"
-        style={{ color: active ? ACCENT : "#6b7280" }}
+      <motion.span
+        animate={{ color: active ? ACCENT : "#8896a5" }}
+        transition={{ duration: 0.15 }}
+        className="text-[11px] font-medium relative z-10 leading-none"
       >
         {label}
-      </span>
+      </motion.span>
     </motion.button>
   )
 }

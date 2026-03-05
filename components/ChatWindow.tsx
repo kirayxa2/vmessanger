@@ -341,8 +341,22 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   // ── Voice recording ──────────────────────────────────────────
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream, { mimeType: "audio/webm" })
+      // Запрашиваем разрешение явно
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+
+      // Определяем поддерживаемый формат на этом устройстве
+      const mimeTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/ogg",
+        "audio/mp4",
+        "",
+      ]
+      const mimeType = mimeTypes.find(t => !t || MediaRecorder.isTypeSupported(t)) ?? ""
+
+      const options: MediaRecorderOptions = mimeType ? { mimeType } : {}
+      const mr = new MediaRecorder(stream, options)
       audioChunksRef.current = []
       mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       mr.start()
@@ -350,7 +364,16 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       setIsRecording(true)
       setRecordingSeconds(0)
       recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
-    } catch { alert("Нет доступа к микрофону") }
+    } catch (err: any) {
+      console.error("Microphone error:", err)
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        alert("Нет доступа к микрофону. Разрешите доступ в настройках браузера/телефона.")
+      } else if (err?.name === "NotFoundError") {
+        alert("Микрофон не найден на устройстве.")
+      } else {
+        alert("Ошибка микрофона: " + (err?.message || err))
+      }
+    }
   }, [])
 
   const cancelRecording = useCallback(() => {
@@ -732,10 +755,14 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                           fileType={msg.fileType || "application/octet-stream"}
                           isSender={isSender}
                           caption={msg.content || undefined}
+                          timeStr={new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          isRead={!!msg.isRead}
+                          senderName={msg.sender.username}
+                          sentAt={new Date(msg.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          onDelete={() => handleDeleteMessage(msg.id.toString())}
+                          onForward={() => handleForwardOpen({ id: msg.id.toString(), content: msg.content })}
+                          onReply={() => handleReply({ id: msg.id.toString(), content: msg.content, senderName: msg.sender.username })}
                         />
-                        <span className="text-[11px] text-gray-500 mt-0.5 px-1">
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
                       </div>
                     </div>
                   ) : (
@@ -939,8 +966,14 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
       <AnimatePresence>
         {showProfile && (
-          <UserProfilePanel userId={otherUser?.id} username={otherUser?.username}
-            avatar={otherUserAvatar || otherUser?.avatar} isOnline={otherUserOnline} onClose={() => setShowProfile(false)} />
+          <UserProfilePanel
+            userId={otherUser?.id}
+            username={otherUser?.username}
+            avatar={otherUserAvatar || otherUser?.avatar}
+            isOnline={otherUserOnline}
+            onClose={() => setShowProfile(false)}
+            isMobile={typeof window !== "undefined" && window.innerWidth < 768}
+          />
         )}
       </AnimatePresence>
 
