@@ -56,7 +56,7 @@ export default function OfflinePage() {
         </div>
         <h1>Нет соединения</h1>
         <p>Проверьте подключение к интернету и попробуйте снова</p>
-        <button onclick="window.location.reload()">Попробовать снова</button>
+        <button onClick={() => window.location.reload()}>Попробовать снова</button>
       </body>
     </html>
   )
