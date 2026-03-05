@@ -3,6 +3,20 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth/authOptions"
 
+// Простой in-memory rate limiter: не более 30 сообщений в минуту на пользователя
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(userId)
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 })
+    return true
+  }
+  if (entry.count >= 30) return false
+  entry.count++
+  return true
+}
+
 const messageInclude = {
   sender: { select: { id: true, username: true, avatar: true } },
   replyTo: {
@@ -23,6 +37,10 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    if (!checkRateLimit(session.user.id)) {
+      return NextResponse.json({ error: "Too many messages, slow down" }, { status: 429 })
+    }
 
     const body = await req.json()
     const { content, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType, voiceUrl, voiceDuration } = body

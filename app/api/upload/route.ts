@@ -18,6 +18,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "File too large (max 50MB)" }, { status: 413 })
     }
 
+    // Whitelist allowed MIME types — блокируем исполняемые файлы
+    const ALLOWED_TYPES = [
+      // Images
+      "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
+      // Video
+      "video/mp4", "video/webm", "video/ogg", "video/quicktime",
+      // Audio
+      "audio/mpeg", "audio/ogg", "audio/wav", "audio/webm", "audio/mp4", "audio/aac",
+      // Documents
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      // Archives
+      "application/zip", "application/x-rar-compressed", "application/x-7z-compressed",
+      // Text
+      "text/plain", "text/csv", "application/json",
+    ]
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json({ error: "File type not allowed" }, { status: 415 })
+    }
+
     const ext = file.name.split(".").pop()?.toLowerCase() || "bin"
     const safeName = `${session.user.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
     const filePath = `uploads/${safeName}`
