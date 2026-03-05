@@ -462,7 +462,7 @@ export default function ChatSidebar({
   // ── SETTINGS SCREEN ──────────────────────────────────────────
   if (view === "settings") {
   return (
-    <div className="w-full h-full flex flex-col bg-[#0f1721] p-2 pb-0">
+    <div className="w-full h-full flex flex-col bg-[#0f1721] ">
       <motion.div className="w-full h-full flex flex-col bg-[#1c242f] relative overflow-hidden rounded-[28px] border border-white/5 shadow-2xl"
         initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />

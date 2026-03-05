@@ -224,15 +224,14 @@ export default function HomePage({ conversationId }: { conversationId?: string }
   }
 
   // ── MOBILE LAYOUT ─────────────────────────────────────────────
-  // Структура: весь контент + докбар внизу
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-[#0a0f17] overflow-hidden fixed inset-0">
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden fixed inset-0" style={{ backgroundColor: "#0a0f17" }}>
 
       {/* ── Основной контент ── */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="flex-1 overflow-hidden relative px-2 pt-2">
         <AnimatePresence mode="wait">
 
-          {/* Открытый чат */}
+          {/* Открытый чат — тоже капсула */}
           {showChatOnMobile && selectedId ? (
             <motion.div
               key="chat"
@@ -240,7 +239,11 @@ export default function HomePage({ conversationId }: { conversationId?: string }
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 38, mass: 0.9 }}
-              className="absolute inset-0 bg-[#1c242f]"
+              className="absolute inset-0 rounded-[28px] overflow-hidden"
+              style={{
+                backgroundColor: "#1c242f",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
+              }}
             >
               <ChatWindow
                 key={selectedId}
@@ -253,24 +256,33 @@ export default function HomePage({ conversationId }: { conversationId?: string }
               />
             </motion.div>
           ) : (
-            /* Вкладки сайдбара — не пересоздаём компонент, просто меняем проп */
+            /* Сайдбар — капсула с отступами и скруглением */
             <motion.div
               key="sidebar"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
-              className="absolute inset-0 bg-[#1c242f]"
+              className="absolute inset-0 m-0"
             >
-              <ChatSidebar
-                currentUser={session?.user}
-                conversations={conversations}
-                selectedId={selectedId}
-                unreadCounts={unreadCounts}
-                onSelect={handleSelectConversation}
-                onConversationCreated={handleConversationCreated}
-                mobileInitialView={mobileTab}
-              />
+              {/* Капсула сайдбара */}
+              <div
+                className="w-full h-full rounded-[28px] overflow-hidden"
+                style={{
+                  backgroundColor: "#1c242f",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
+                }}
+              >
+                <ChatSidebar
+                  currentUser={session?.user}
+                  conversations={conversations}
+                  selectedId={selectedId}
+                  unreadCounts={unreadCounts}
+                  onSelect={handleSelectConversation}
+                  onConversationCreated={handleConversationCreated}
+                  mobileInitialView={mobileTab}
+                />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -281,19 +293,19 @@ export default function HomePage({ conversationId }: { conversationId?: string }
         {!showChatOnMobile && (
           <motion.div
             initial={{ y: 100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: 100, opacity: 0 }}
-      transition={{ type: "spring", stiffness: 420, damping: 36 }}
-      className="shrink-0 px-2 pb-2 pt-1" // Уменьшил отступы, чтобы капсулы были ближе
-      style={{ backgroundColor: "#0f1721" }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 420, damping: 36 }}
+            className="shrink-0 px-2 pb-2 pt-2"
+            style={{ backgroundColor: "#0a0f17" }}
           >
             {/* Капсула-докбар */}
             <div
-        className="flex items-center justify-around rounded-[28px] px-2 py-2"
-        style={{
-          backgroundColor: "#1c242f", // Тот же цвет, что и у капсулы чатов
-          boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
-        }}
+              className="flex items-center justify-around rounded-[28px] px-2 py-2"
+              style={{
+                backgroundColor: "#1c242f",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
+              }}
             >
               {/* Чаты */}
               <DockButton
