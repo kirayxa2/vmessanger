@@ -37,9 +37,20 @@ export default function HomePage({ conversationId }: { conversationId?: string }
   const [loading, setLoading] = useState(true)
   const [showChatOnMobile, setShowChatOnMobile] = useState(false)
 
-  // Мобильные вкладки докбара
-  // "chats" | "settings" | "profile"
   const [mobileTab, setMobileTab] = useState<"chats" | "settings" | "profile">("chats")
+
+  // Кнопка назад на Android
+  useEffect(() => {
+    if (!isMobile) return
+    const handlePopState = () => {
+      if (showChatOnMobile) {
+        setShowChatOnMobile(false)
+        setSelectedId(null)
+      }
+    }
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [isMobile, showChatOnMobile])
 
   const isFetching = useRef(false)
   const selectedIdRef = useRef<string | null>(null)
@@ -158,7 +169,10 @@ export default function HomePage({ conversationId }: { conversationId?: string }
     setSelectedId(id)
     setShowChatOnMobile(true)
     setUnreadCounts(prev => ({ ...prev, [id]: 0 }))
-    if (typeof window !== "undefined") window.history.pushState({ conversationId: id }, "", `/${id}`)
+    if (typeof window !== "undefined") {
+      // pushState добавляет запись в историю — нажатие назад даст popstate
+      window.history.pushState({ conversationId: id }, "", `/${id}`)
+    }
   }
 
   const handleConversationCreated = (conversation: any) => {
@@ -352,22 +366,17 @@ function DockButton({ label, icon, active, badge, avatar, avatarLetter, onClick 
       whileTap={{ scale: 0.95 }}
       className="flex-1 flex flex-col items-center justify-center gap-[5px] py-[10px] relative"
     >
-      {/* Активный фон — пилюла под иконкой как в TG */}
+      {/* Активный фон — подсветка на всю кнопку */}
       <AnimatePresence>
         {active && (
           <motion.div
             layoutId="tg-dock-pill"
-            initial={{ opacity: 0, scaleX: 0.5 }}
-            animate={{ opacity: 1, scaleX: 1 }}
-            exit={{ opacity: 0, scaleX: 0.5 }}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
             transition={{ type: "spring", stiffness: 500, damping: 38 }}
-            className="absolute top-[6px] rounded-full"
-            style={{
-              backgroundColor: `${ACCENT}30`,
-              width: 56, height: 32,
-              left: "50%",
-              transform: "translateX(-50%)",
-            }}
+            className="absolute inset-x-1 inset-y-1 rounded-[16px]"
+            style={{ backgroundColor: `${ACCENT}25` }}
           />
         )}
       </AnimatePresence>

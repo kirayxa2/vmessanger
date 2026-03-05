@@ -12,6 +12,7 @@ import { useSocket } from "@/app/ClientProviders"
 import { motion, AnimatePresence } from "framer-motion"
 import { VerifiedBadge } from "./VerifiedBadge"
 import { useProfanityFilter } from "@/hooks/useProfanityFilter"
+import { useNotificationSound, SOUND_LABELS, SoundType } from "@/hooks/useNotificationSound"
 
 const ACCENT = "#7e85e1"
 
@@ -205,6 +206,88 @@ function EditProfileScreen({ session, profile, onSave, onBack, isUploading, file
   )
 }
 
+// ── Notifications Screen ─────────────────────────────────────
+function NotificationsScreen({ onBack }: { onBack: () => void }) {
+  const { soundType, setSoundType, preview } = useNotificationSound()
+  const sounds = Object.keys(SOUND_LABELS) as SoundType[]
+
+  return (
+    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[#1c242f]"
+      initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
+      transition={{ type: "spring", stiffness: 380, damping: 32 }}>
+
+      <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
+        <motion.button onClick={onBack} whileTap={{ scale: 0.9 }}
+          className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
+          <ArrowLeft size={22} />
+        </motion.button>
+        <h2 className="text-[18px] font-bold text-white flex-1">Уведомления</h2>
+      </div>
+
+      <div className="flex-1 overflow-y-auto hide-scrollbar">
+        <div className="pt-5 pb-1 px-5">
+          <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
+            Звук сообщений
+          </p>
+        </div>
+
+        <div className="mx-3 rounded-2xl overflow-hidden" style={{ backgroundColor: "#1a2332" }}>
+          {sounds.map((type, i) => (
+            <motion.div
+              key={type}
+              onClick={() => { setSoundType(type); preview(type) }}
+              whileTap={{ scale: 0.98 }}
+              className={`px-4 py-3.5 flex items-center gap-4 cursor-pointer transition-colors ${
+                i < sounds.length - 1 ? "border-b border-white/5" : ""
+              } hover:bg-white/5`}
+            >
+              {/* Иконка звука */}
+              <motion.div
+                className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                animate={{ backgroundColor: soundType === type ? ACCENT : "rgba(255,255,255,0.08)" }}
+                transition={{ duration: 0.2 }}
+              >
+                {type === "none" ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                    <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+                    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+                  </svg>
+                )}
+              </motion.div>
+
+              <span className="flex-1 text-[15px] text-white">{SOUND_LABELS[type]}</span>
+
+              {/* Чекбокс */}
+              <AnimatePresence>
+                {soundType === type && (
+                  <motion.div
+                    initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                  >
+                    <Check size={20} style={{ color: ACCENT }} strokeWidth={2.5} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          ))}
+        </div>
+
+        <p className="px-5 pt-3 text-[12px] text-gray-600 leading-relaxed">
+          Нажмите на вариант чтобы прослушать. Выбранный звук будет воспроизводиться при каждом входящем сообщении.
+        </p>
+      </div>
+    </motion.div>
+  )
+}
+
 // ── Privacy Screen (отдельный экран) ──────────────────────────
 function PrivacyScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation()
@@ -320,6 +403,7 @@ export default function ChatSidebar({
   )
   const [showEditProfile, setShowEditProfile] = useState(mobileInitialView === "profile")
   const [showPrivacy, setShowPrivacy] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
 
   // Когда докбар меняет вкладку — обновляем view
   useEffect(() => {
@@ -503,7 +587,7 @@ export default function ChatSidebar({
 
           {/* Settings rows */}
           <div className="py-2 border-b border-white/5">
-            <SettingsRow icon={<Bell size={17} />} iconColor="#5B9BD5" label={t("notifications")} />
+            <SettingsRow icon={<Bell size={17} />} iconColor="#5B9BD5" label={t("notifications")} onClick={() => setShowNotifications(true)} />
             <SettingsRow
               icon={<Shield size={17} />}
               iconColor={profanityEnabled ? ACCENT : "#3a8a6e"}
@@ -552,6 +636,11 @@ export default function ChatSidebar({
               fileInputRef={fileInputRef as React.RefObject<HTMLInputElement>}
               onAvatarClick={() => fileInputRef.current?.click()} />
           )}
+        </AnimatePresence>
+
+        {/* Notifications overlay */}
+        <AnimatePresence>
+          {showNotifications && <NotificationsScreen onBack={() => setShowNotifications(false)} />}
         </AnimatePresence>
 
         {/* Privacy overlay */}

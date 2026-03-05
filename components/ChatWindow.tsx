@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
 import UserProfilePanel from "./UserProfilePanel"
+import { useNotificationSound } from "@/hooks/useNotificationSound"
 import { VerifiedBadge } from "./VerifiedBadge"
 
 const ACCENT = "#7e85e1"
@@ -95,6 +96,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [forwardSearch, setForwardSearch] = useState("")
 
   // ── Voice recording ──────────────────────────────────────────
+  const { play: playSound } = useNotificationSound()
+
   const [isRecording, setIsRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -158,7 +161,12 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     isInitialLoad.current = true
     fetch(`/api/messages?conversationId=${apiId}`)
       .then(r => r.json())
-      .then(data => { setMessages(Array.isArray(data) ? data : []); setLoading(false) })
+      .then(data => {
+        setMessages(Array.isArray(data) ? data : [])
+        setLoading(false)
+        // Прокручиваем в низ после загрузки
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "instant" }), 50)
+      })
       .catch(() => { setMessages([]); setLoading(false) })
     fetch("/api/conversations")
       .then(r => r.json())
@@ -220,6 +228,10 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         newMsgIds.current.add(message.id.toString())
         return [...prev, message]
       })
+      // Play sound for incoming messages
+      if (message.sender.id?.toString() !== session?.user?.id?.toString()) {
+        playSound()
+      }
       // Auto-mark as read if chat is visible
       if (message.sender.id?.toString() !== session?.user?.id?.toString()) {
         fetch("/api/messages/read", {
@@ -771,7 +783,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                       isSender={isSender} isFirstInGroup={isFirstInGroup} isLastInGroup={isLastInGroup}
                       hasAbove={!isFirstInGroup} replyTo={msg.replyTo} isForwarded={!!msg.forwardFromId}
                       isRead={msg.isRead} voiceUrl={msg.voiceUrl} voiceDuration={msg.voiceDuration}
-                      senderName={msg.sender.username} isTemp={isNew}
+                      senderName={msg.sender.username} senderId={msg.sender.id} isTemp={isNew}
                       onDelete={handleDeleteMessage} onEdit={handleStartEdit}
                       onReply={handleReply} onForward={handleForwardOpen} onScrollToMessage={scrollToMessage}
                       openMenuId={openMenuId} onMenuOpen={handleMenuOpen} onMenuClose={handleMenuClose} menuPos={menuPos}

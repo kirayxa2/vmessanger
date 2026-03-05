@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
-import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Mic } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck } from "lucide-react";
+import { VerifiedBadge } from "./VerifiedBadge";
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useProfanityFilter } from "@/hooks/useProfanityFilter";
 
 const SENDER_COLOR = "#c67c78";
 const RECIPIENT_COLOR = "#212121";
 const ACCENT = "#7e85e1";
+const DEV_USER_ID = 1; // ID разработчика — показываем галочку
 
 interface ReplyTo {
   id: number;
@@ -38,22 +40,88 @@ interface ChatMessageProps {
   onMenuClose: () => void;
   menuPos: { x: number; y: number };
   senderName?: string;
+  senderId?: string | number;
 }
 
 export default function ChatMessage({
   id, content, createdAt, isSender, isFirstInGroup, isLastInGroup, hasAbove,
   replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp,
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
-  openMenuId, onMenuOpen, onMenuClose, menuPos, senderName,
+  openMenuId, onMenuOpen, onMenuClose, menuPos, senderName, senderId,
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const { filter } = useProfanityFilter();
   const messageId = id.toString();
-  // Применяем фильтр к тексту сообщения (только визуально, оригинал не меняется)
   const displayContent = filter(content);
   const showMenu = openMenuId === messageId;
   const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Свайп для ответа
+  const swipeX = useMotionValue(0);
+  const SWIPE_THRESHOLD = 60;
+  const swipeTriggered = useRef(false);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const isSwipeGesture = useRef(false);
+
+  // Иконка ответа появляется при свайпе
+  const replyIconOpacity = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, -20, 0] : [0, 20, SWIPE_THRESHOLD], isSender ? [1, 0.3, 0] : [0, 0.3, 1]);
+  const replyIconScale = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, -20, 0] : [0, 20, SWIPE_THRESHOLD], isSender ? [1, 0.6, 0.3] : [0.3, 0.6, 1]);
+  const replyIconX = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, 0] : [0, SWIPE_THRESHOLD], isSender ? [-8, 12] : [12, -8]);
+
+  const isDevUser = senderId !== undefined && (
+    senderId === DEV_USER_ID ||
+    senderId === DEV_USER_ID.toString() ||
+    Number(senderId) === DEV_USER_ID
+  );
+
+  const handleSwipeTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    swipeTriggered.current = false;
+    isSwipeGesture.current = false;
+  }, []);
+
+  const handleSwipeTouchMove = useCallback((e: React.TouchEvent) => {
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+
+    // Определяем направление жеста при первом движении
+    if (!isSwipeGesture.current && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+      isSwipeGesture.current = Math.abs(dx) > Math.abs(dy);
+    }
+
+    if (!isSwipeGesture.current) return;
+
+    // Для своих сообщений — свайп влево (dx < 0), для чужих — вправо (dx > 0)
+    const correctDir = isSender ? dx < 0 : dx > 0;
+    if (!correctDir) return;
+
+    const clamped = isSender
+      ? Math.max(dx, -SWIPE_THRESHOLD * 1.2)
+      : Math.min(dx, SWIPE_THRESHOLD * 1.2);
+
+    swipeX.set(clamped);
+
+    // Тактильный фидбек и триггер ответа
+    const abs = Math.abs(clamped);
+    if (abs >= SWIPE_THRESHOLD && !swipeTriggered.current) {
+      swipeTriggered.current = true;
+      // Вибрация если поддерживается
+      if (navigator.vibrate) navigator.vibrate(30);
+    }
+  }, [isSender, swipeX]);
+
+  const handleSwipeTouchEnd = useCallback(() => {
+    if (swipeTriggered.current) {
+      onReply?.({ id: messageId, content, senderName: senderName || "" });
+    }
+    // Возвращаем на место со пружиной
+    animate(swipeX, 0, { type: "spring", stiffness: 500, damping: 35 });
+    swipeTriggered.current = false;
+    isSwipeGesture.current = false;
+  }, [swipeX, messageId, content, senderName, onReply]);
 
   // Voice player state
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -68,16 +136,27 @@ export default function ChatMessage({
   }, [messageId, onMenuOpen]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    handleSwipeTouchStart(e);
     const touch = e.touches[0];
     const timer = setTimeout(() => {
       onMenuOpen(messageId, touch.clientX, touch.clientY);
     }, 500);
     setLongPressTimer(timer);
-  }, [messageId, onMenuOpen]);
+  }, [messageId, onMenuOpen, handleSwipeTouchStart]);
 
-  const handleTouchEnd = useCallback(() => {
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    // Если началось движение — отменяем long press
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    handleSwipeTouchMove(e);
+  }, [longPressTimer, handleSwipeTouchMove]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (longPressTimer) clearTimeout(longPressTimer);
-  }, [longPressTimer]);
+    handleSwipeTouchEnd();
+  }, [longPressTimer, handleSwipeTouchEnd]);
 
   const handleDelete = useCallback(() => {
     onMenuClose();
@@ -110,11 +189,7 @@ export default function ChatMessage({
     }
   }, [voiceUrl, isPlaying, audioDuration]);
 
-  const formatDuration = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, "0")}`;
-  };
+  const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   const bubbleColor = isSender ? SENDER_COLOR : RECIPIENT_COLOR;
 
@@ -137,9 +212,7 @@ export default function ChatMessage({
 
   const { menuStyle, transformOrigin } = useMemo(() => {
     if (typeof window === "undefined") return { menuStyle: { top: menuPos.y, left: menuPos.x }, transformOrigin: "top left" };
-    const menuW = 208;
-    const menuH = 280;
-    const margin = 8;
+    const menuW = 208; const menuH = 280; const margin = 8;
     const growUp = menuPos.y + menuH > window.innerHeight - margin;
     let top = growUp ? menuPos.y - menuH - 4 : menuPos.y + 4;
     let left = menuPos.x - menuW / 2;
@@ -147,11 +220,9 @@ export default function ChatMessage({
     if (left < margin) left = margin;
     if (left + menuW > window.innerWidth - margin) left = window.innerWidth - menuW - margin;
     const originX = Math.round(Math.min(Math.max(menuPos.x - left, 16), menuW - 16));
-    const originY = growUp ? menuH : 0;
-    return { menuStyle: { top, left }, transformOrigin: `${originX}px ${originY}px` };
+    return { menuStyle: { top, left }, transformOrigin: `${originX}px ${growUp ? menuH : 0}px` };
   }, [menuPos]);
 
-  // Read indicator for sender messages
   const ReadIndicator = () => {
     if (!isSender) return null;
     if (isTemp) return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-60" />;
@@ -171,141 +242,160 @@ export default function ChatMessage({
       transition={{ type: "spring", stiffness: 420, damping: 32 }}
       className={`flex w-full ${isSender ? "justify-end" : "justify-start"} mb-[2px] ${isFirstInGroup ? "mt-3" : "mt-0"} relative`}
     >
+      {/* ── Иконка Reply (появляется при свайпе) ── */}
+      <motion.div
+        style={{
+          opacity: replyIconOpacity,
+          scale: replyIconScale,
+          x: replyIconX,
+          position: "absolute",
+          top: "50%",
+          translateY: "-50%",
+          ...(isSender ? { left: -44 } : { right: -44 }),
+          pointerEvents: "none",
+          zIndex: 5,
+        }}
+      >
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+          style={{ backgroundColor: ACCENT }}
+        >
+          <Reply size={17} color="white" />
+        </div>
+      </motion.div>
+
+      {/* ── Bubble wrapper со свайпом ── */}
       <div className="relative max-w-[80vw]">
         <motion.div
-          onContextMenu={handleContextMenu}
+          style={{ x: swipeX }}
           onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          animate={isDeleting ? { opacity: 0, scale: 0.8, filter: "blur(6px)", transition: { duration: 0.3 } } : {}}
-          style={{
-            borderTopLeftRadius: !isSender && hasAbove ? "5px" : "15px",
-            borderTopRightRadius: isSender && hasAbove ? "5px" : "15px",
-            borderBottomLeftRadius: !isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
-            borderBottomRightRadius: isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
-            backgroundColor: bubbleColor,
-          }}
-          className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 overflow-hidden min-w-[80px]"
+          onContextMenu={handleContextMenu}
+          className="relative"
         >
-          {/* Forwarded label */}
-          {isForwarded && (
-            <div className="flex items-center gap-1 mb-1 opacity-70">
-              <Forward size={12} />
-              <span className="text-[11px] font-medium">Forwarded</span>
-            </div>
-          )}
-
-          {/* Reply preview */}
-          {replyTo && (
-            <motion.div
-              onClick={(e) => { e.stopPropagation(); onScrollToMessage?.(replyTo.id.toString()); }}
-              className="mb-2 rounded-lg overflow-hidden cursor-pointer"
-              style={{ backgroundColor: "rgba(0,0,0,0.18)" }}
-              whileHover={{ backgroundColor: "rgba(0,0,0,0.28)" }}
-            >
-              <div className="flex">
-                <div className="w-[3px] rounded-l-lg shrink-0" style={{ backgroundColor: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
-                <div className="px-2 py-1.5 min-w-0">
-                  <p className="text-[12px] font-semibold truncate" style={{ color: isSender ? "rgba(255,255,255,0.85)" : ACCENT }}>
-                    {replyTo.sender.username}
-                  </p>
-                  <p className="text-[12px] opacity-70 truncate">{replyTo.content}</p>
-                </div>
+          <motion.div
+            animate={isDeleting ? { opacity: 0, scale: 0.8, filter: "blur(6px)", transition: { duration: 0.3 } } : {}}
+            style={{
+              borderTopLeftRadius: !isSender && hasAbove ? "5px" : "15px",
+              borderTopRightRadius: isSender && hasAbove ? "5px" : "15px",
+              borderBottomLeftRadius: !isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
+              borderBottomRightRadius: isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
+              backgroundColor: bubbleColor,
+            }}
+            className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 overflow-hidden min-w-[80px]"
+          >
+            {/* Имя отправителя с галочкой разработчика */}
+            {!isSender && isFirstInGroup && senderName && (
+              <div className="flex items-center gap-1 mb-0.5">
+                <span className="text-[12px] font-semibold" style={{ color: ACCENT }}>{senderName}</span>
+                {isDevUser && <VerifiedBadge size={13} />}
               </div>
-            </motion.div>
-          )}
+            )}
 
-          {/* Voice message player */}
-          {voiceUrl !== undefined && voiceUrl !== null && voiceUrl !== "" ? (
-            <div className="flex items-center gap-2 min-w-[180px]">
-              <motion.button
-                whileTap={{ scale: 0.85 }}
-                onClick={(e) => { e.stopPropagation(); toggleAudio(); }}
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                style={{ backgroundColor: "rgba(255,255,255,0.2)" }}
+            {/* Forwarded label */}
+            {isForwarded && (
+              <div className="flex items-center gap-1 mb-1 opacity-70">
+                <Forward size={12} />
+                <span className="text-[11px] font-medium">Forwarded</span>
+              </div>
+            )}
+
+            {/* Reply preview */}
+            {replyTo && (
+              <motion.div
+                onClick={(e) => { e.stopPropagation(); onScrollToMessage?.(replyTo.id.toString()); }}
+                className="mb-2 rounded-lg overflow-hidden cursor-pointer"
+                style={{ backgroundColor: "rgba(0,0,0,0.18)" }}
+                whileHover={{ backgroundColor: "rgba(0,0,0,0.28)" }}
               >
-                {isPlaying ? (
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                    <rect x="2" y="1" width="4" height="12" rx="1.5" />
-                    <rect x="8" y="1" width="4" height="12" rx="1.5" />
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                    <path d="M3 2l9 5-9 5V2z" />
-                  </svg>
-                )}
-              </motion.button>
-
-              <div className="flex-1 min-w-0">
-                {/* Waveform progress bar */}
-                <div className="relative h-[28px] flex items-center gap-[2px]">
-                  {Array.from({ length: 28 }).map((_, i) => {
-                    const heights = [3,5,8,12,16,20,18,14,10,7,5,8,14,20,18,12,8,5,7,11,17,20,16,11,7,5,4,3];
-                    const h = heights[i % heights.length];
-                    const filled = (i / 28) * 100 < audioProgress;
-                    return (
-                      <div
-                        key={i}
-                        className="rounded-full flex-1 transition-all duration-100"
-                        style={{
-                          height: `${h}px`,
-                          backgroundColor: filled
-                            ? "rgba(255,255,255,0.9)"
-                            : "rgba(255,255,255,0.3)",
-                        }}
-                      />
-                    );
-                  })}
+                <div className="flex">
+                  <div className="w-[3px] rounded-l-lg shrink-0" style={{ backgroundColor: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
+                  <div className="px-2 py-1.5 min-w-0">
+                    <p className="text-[12px] font-semibold truncate" style={{ color: isSender ? "rgba(255,255,255,0.85)" : ACCENT }}>
+                      {replyTo.sender.username}
+                    </p>
+                    <p className="text-[12px] opacity-70 truncate">{replyTo.content}</p>
+                  </div>
                 </div>
-                <span className="text-[10px] opacity-60">{formatDuration(audioDuration)}</span>
+              </motion.div>
+            )}
+
+            {/* Voice message */}
+            {voiceUrl !== undefined && voiceUrl !== null && voiceUrl !== "" ? (
+              <div className="flex items-center gap-2 min-w-[180px]">
+                <motion.button whileTap={{ scale: 0.85 }}
+                  onClick={(e) => { e.stopPropagation(); toggleAudio(); }}
+                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
+                  {isPlaying ? (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                      <rect x="2" y="1" width="4" height="12" rx="1.5" />
+                      <rect x="8" y="1" width="4" height="12" rx="1.5" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
+                      <path d="M3 2l9 5-9 5V2z" />
+                    </svg>
+                  )}
+                </motion.button>
+                <div className="flex-1 min-w-0">
+                  <div className="relative h-[28px] flex items-center gap-[2px]">
+                    {Array.from({ length: 28 }).map((_, i) => {
+                      const heights = [3,5,8,12,16,20,18,14,10,7,5,8,14,20,18,12,8,5,7,11,17,20,16,11,7,5,4,3];
+                      const h = heights[i % heights.length];
+                      const filled = (i / 28) * 100 < audioProgress;
+                      return (
+                        <div key={i} className="rounded-full flex-1 transition-all duration-100"
+                          style={{ height: `${h}px`, backgroundColor: filled ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }} />
+                      );
+                    })}
+                  </div>
+                  <span className="text-[10px] opacity-60">{formatDuration(audioDuration)}</span>
+                </div>
+                <span className="text-[10px] opacity-60 whitespace-nowrap flex items-center gap-0.5 shrink-0 self-end pb-0.5">
+                  {timeStr}<ReadIndicator />
+                </span>
               </div>
+            ) : (
+              <div className="flex items-end gap-x-2 flex-wrap">
+                <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                  <WrappedText text={displayContent} />
+                </span>
+                <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
+                  {timeStr}<ReadIndicator />
+                </span>
+              </div>
+            )}
+          </motion.div>
 
-              <span className="text-[10px] opacity-60 whitespace-nowrap flex items-center gap-0.5 shrink-0 self-end pb-0.5">
-                {timeStr}
-                <ReadIndicator />
-              </span>
-            </div>
-          ) : (
-            /* Regular text message — автоперенос: 56 симв на ПК, 35 на мобильном */
-            <div className="flex items-end gap-x-2 flex-wrap">
-              <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                <WrappedText text={displayContent} />
-              </span>
-              <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
-                {timeStr}
-                <ReadIndicator />
-              </span>
+          {/* Bubble tail */}
+          {isLastInGroup && !isDeleting && (
+            <div className={`absolute bottom-0 w-[10px] h-4 ${isSender ? "-right-[10px]" : "-left-[9px]"} z-0`}>
+              <svg width="10" height="16" viewBox="0 0 10 16">
+                {isSender
+                  ? <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill={SENDER_COLOR} />
+                  : <path d="M3 17h6V0c-.193 2.84-.876 5.767-2.05 8.782-.904 2.325-2.446 4.485-4.625 6.48A1 1 0 003 17z" fill={RECIPIENT_COLOR} />
+                }
+              </svg>
             </div>
           )}
+
+          {/* Delete particles */}
+          <AnimatePresence>
+            {isDeleting && (
+              <div className="absolute inset-0 pointer-events-none z-20 overflow-visible">
+                {particleData.map((p, i) => (
+                  <motion.div key={i}
+                    initial={{ left: p.initialX, top: p.initialY, scale: 1, opacity: 1, backgroundColor: bubbleColor, borderRadius: "2px" }}
+                    animate={{ x: p.targetX, y: p.targetY, scale: 0, opacity: 0, rotate: p.rotate }}
+                    transition={{ duration: 0.8, ease: "easeOut", delay: p.delay }}
+                    className="absolute w-2 h-2" />
+                ))}
+              </div>
+            )}
+          </AnimatePresence>
         </motion.div>
-
-        {/* Bubble tail */}
-        {isLastInGroup && !isDeleting && (
-          <div className={`absolute bottom-0 w-[10px] h-4 ${isSender ? "-right-[10px]" : "-left-[9px]"} z-0`}>
-            <svg width="10" height="16" viewBox="0 0 10 16">
-              {isSender
-                ? <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill={SENDER_COLOR} />
-                : <path d="M3 17h6V0c-.193 2.84-.876 5.767-2.05 8.782-.904 2.325-2.446 4.485-4.625 6.48A1 1 0 003 17z" fill={RECIPIENT_COLOR} />
-              }
-            </svg>
-          </div>
-        )}
-
-        {/* Delete particles */}
-        <AnimatePresence>
-          {isDeleting && (
-            <div className="absolute inset-0 pointer-events-none z-20 overflow-visible">
-              {particleData.map((p, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ left: p.initialX, top: p.initialY, scale: 1, opacity: 1, backgroundColor: bubbleColor, borderRadius: "2px" }}
-                  animate={{ x: p.targetX, y: p.targetY, scale: 0, opacity: 0, rotate: p.rotate }}
-                  transition={{ duration: 0.8, ease: "easeOut", delay: p.delay }}
-                  className="absolute w-2 h-2"
-                />
-              ))}
-            </div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Context menu */}
@@ -353,40 +443,26 @@ function MenuItem({ icon, label, color = "text-white", onClick }: {
   icon: React.ReactNode; label: string; color?: string; onClick?: () => void;
 }) {
   return (
-    <div
-      onClick={onClick}
-      className="px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-white/6 active:bg-white/10 transition-colors group"
-    >
+    <div onClick={onClick}
+      className="px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-white/6 active:bg-white/10 transition-colors group">
       <div className={`${color} opacity-75 group-hover:opacity-100 transition-opacity shrink-0`}>{icon}</div>
       <span className={`text-[14px] font-medium ${color}`}>{label}</span>
     </div>
   );
 }
 
-// Автоперенос сообщения: 56 симв. на ПК, 35 на мобильном
 function WrappedText({ text }: { text: string }) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const LIMIT = isMobile ? 35 : 56;
-
   const lines: string[] = [];
-  // Сохраняем ручные \n отправителя
-  const rawLines = text.split("\n");
-  for (const rawLine of rawLines) {
+  for (const rawLine of text.split("\n")) {
     let remaining = rawLine;
     while (remaining.length > LIMIT) {
-      // Режем по пробелу перед лимитом
       const spaceIdx = remaining.lastIndexOf(" ", LIMIT);
-      if (spaceIdx > 0) {
-        lines.push(remaining.slice(0, spaceIdx));
-        remaining = remaining.slice(spaceIdx + 1);
-      } else {
-        // Нет пробела — рубим жёстко
-        lines.push(remaining.slice(0, LIMIT));
-        remaining = remaining.slice(LIMIT);
-      }
+      if (spaceIdx > 0) { lines.push(remaining.slice(0, spaceIdx)); remaining = remaining.slice(spaceIdx + 1); }
+      else { lines.push(remaining.slice(0, LIMIT)); remaining = remaining.slice(LIMIT); }
     }
     lines.push(remaining);
   }
-
   return <>{lines.join("\n")}</>;
 }
