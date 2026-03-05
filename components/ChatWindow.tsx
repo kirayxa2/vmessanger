@@ -875,7 +875,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               {isRecording && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                  className="flex items-center gap-3 px-3 py-2 mb-2 rounded-xl"
+                  className="flex items-center gap-3 px-3 py-2 mb-2 rounded-xl mx-auto w-full max-w-[calc(100%-108px)]"
                   style={{ backgroundColor: "var(--input-bg)" }}
                 >
                   <motion.div className="w-3 h-3 rounded-full bg-red-500"
@@ -916,41 +916,70 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                 )}
               </div>
 
-              {/* Text input bubble */}
-              <div
-                style={{
-                  backgroundColor: "var(--input-bg)",
-                  borderTopLeftRadius: (editingMessageId || replyingTo) ? "0" : "0.9375rem",
-                  borderTopRightRadius: (editingMessageId || replyingTo) ? "0" : "0.9375rem",
-                  borderBottomLeftRadius: "0.9375rem",
-                  borderBottomRightRadius: "0",
-                }}
-                className="relative flex items-center flex-1 min-w-0 px-2 py-1 min-h-[46px] shadow-lg"
-              >
-                <motion.button type="button" whileTap={{ scale: 0.85, rotate: 15 }} className="text-gray-400 hover:text-white transition-colors shrink-0 p-1">
-                  <Smile size={24} />
-                </motion.button>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder={isRecording ? "Запись голоса..." : t('message_placeholder')}
-                  value={input}
-                  disabled={isRecording}
-                  onChange={e => {
-                    setInput(e.target.value)
-                    const now = Date.now()
-                    if (socket && session?.user?.id && now - lastTypingEmitRef.current > 1500) {
-                      lastTypingEmitRef.current = now
-                      socket.emit("typing", { conversationId: String(apiId), userId: session.user.id })
-                    }
+              {/* Text input bubble & reply/edit preview */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <AnimatePresence>
+                  {(editingMessageId || replyingTo) && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                      transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                      style={{ backgroundColor: "var(--input-bg)", borderRadius: "0.9375rem 0.9375rem 0 0" }}
+                      className="overflow-hidden px-3 pt-2 pb-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-[3px] h-9 rounded-full shrink-0" style={{ backgroundColor: ACCENT }} />
+                        <div className="flex-1 min-w-0">
+                          {editingMessageId ? (
+                            <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{t('editing_message')}</p>
+                              <p className="text-[12px] text-gray-400 truncate leading-tight">{input}</p></>
+                          ) : replyingTo ? (
+                            <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{replyingTo.senderName}</p>
+                              <p className="text-[12px] text-gray-400 truncate leading-tight">{replyingTo.content}</p></>
+                          ) : null}
+                        </div>
+                        <motion.button onClick={editingMessageId ? cancelEdit : cancelReply} whileTap={{ scale: 0.88 }}
+                          className="p-1 rounded-full hover:bg-white/10 text-gray-500 hover:text-white transition-colors shrink-0">
+                          <X size={16} />
+                        </motion.button>
+                      </div>
+                      <div className="mt-1 mx-1 border-t border-white/8" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div
+                  style={{
+                    backgroundColor: "var(--input-bg)",
+                    borderTopLeftRadius: (editingMessageId || replyingTo) ? "0" : "0.9375rem",
+                    borderTopRightRadius: (editingMessageId || replyingTo) ? "0" : "0.9375rem",
+                    borderBottomLeftRadius: "0.9375rem",
+                    borderBottomRightRadius: "0",
                   }}
-                  onKeyDown={handleKeyDown}
-                  className="flex-1 bg-transparent border-none outline-none text-white text-[15px] px-2 py-2 placeholder-gray-500 min-w-0 disabled:opacity-50"
-                />
-                <div className="absolute bottom-px -right-2 w-2 h-4 pointer-events-none">
-                  <svg width="9" height="20"><g fill="#212121" fillRule="evenodd">
-                    <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill="#212121" />
-                  </g></svg>
+                  className="relative flex items-center w-full px-2 py-1 min-h-[46px] shadow-lg"
+                >
+                  <motion.button type="button" whileTap={{ scale: 0.85, rotate: 15 }} className="text-gray-400 hover:text-white transition-colors shrink-0 p-1">
+                    <Smile size={24} />
+                  </motion.button>
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    placeholder={isRecording ? "Запись голоса..." : t('message_placeholder')}
+                    value={input}
+                    disabled={isRecording}
+                    onChange={e => {
+                      setInput(e.target.value)
+                      const now = Date.now()
+                      if (socket && session?.user?.id && now - lastTypingEmitRef.current > 1500) {
+                        lastTypingEmitRef.current = now
+                        socket.emit("typing", { conversationId: String(apiId), userId: session.user.id })
+                      }
+                    }}
+                    onKeyDown={handleKeyDown}
+                    className="flex-1 bg-transparent border-none outline-none text-white text-[15px] px-2 py-2 placeholder-gray-500 min-w-0 disabled:opacity-50"
+                  />
+                  <div className="absolute bottom-px -right-2 w-2 h-4 pointer-events-none">
+                    <svg width="9" height="20"><g fill="#212121" fillRule="evenodd">
+                      <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill="#212121" />
+                    </g></svg>
+                  </div>
                 </div>
               </div>
 
