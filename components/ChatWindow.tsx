@@ -68,6 +68,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [loading, setLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState("")
+  
+  const DEV_USER_ID = 1;
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -467,6 +470,11 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     })
   }, [otherUser, session, apiId, socket, otherUserAvatar])
 
+  const isOtherUserDev = useMemo(() => {
+  if (!otherUser?.id) return false;
+  return Number(otherUser.id) === DEV_USER_ID;
+}, [otherUser?.id]);
+
   // ── File upload ──────────────────────────────────────────────
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -615,6 +623,10 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     )
   }
 
+  
+
+// 2. Добавляем проверку здесь (выше рендера)
+
   return (
     <motion.div className="flex-1 flex flex-row h-full bg-[#1c242f] relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
       <div className="flex-1 flex flex-col h-full min-w-0 tg-bg">
@@ -664,7 +676,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                 </div>
               ) : (
                 <>
-                  <h2 className="text-base font-bold truncate text-white leading-tight">{otherUser?.username || t('chat')}</h2>
+                  <h2 className="text-base font-bold truncate text-white leading-tight">{otherUser?.username || t('chat')} {isOtherUserDev && <VerifiedBadge size={20} />}</h2>
                   <AnimatePresence mode="wait">
                     {isOtherTyping ? (
                       <motion.div key="typing" className="flex items-center gap-1"
@@ -754,6 +766,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               const msgIdStr = msg.id.toString()
               const isNew = msgIdStr.startsWith("temp-") || newMsgIds.current.has(msgIdStr)
               const sk = stableKeys.current.get(msgIdStr) || msgIdStr
+
 
               return (
                 <div key={sk} ref={el => { messageRefs.current[msg.id.toString()] = el }} className="rounded-lg">

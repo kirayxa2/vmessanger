@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck } from "lucide-react";
-import { VerifiedBadge } from "./VerifiedBadge";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useProfanityFilter } from "@/hooks/useProfanityFilter";
@@ -8,7 +7,6 @@ import { useProfanityFilter } from "@/hooks/useProfanityFilter";
 const SENDER_COLOR = "#c67c78";
 const RECIPIENT_COLOR = "#212121";
 const ACCENT = "#7e85e1";
-const DEV_USER_ID = 27; // ID разработчика — показываем галочку
 
 interface ReplyTo {
   id: number;
@@ -69,12 +67,6 @@ export default function ChatMessage({
   const replyIconOpacity = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, -20, 0] : [0, 20, SWIPE_THRESHOLD], isSender ? [1, 0.3, 0] : [0, 0.3, 1]);
   const replyIconScale = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, -20, 0] : [0, 20, SWIPE_THRESHOLD], isSender ? [1, 0.6, 0.3] : [0.3, 0.6, 1]);
   const replyIconX = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, 0] : [0, SWIPE_THRESHOLD], isSender ? [-8, 12] : [12, -8]);
-
-  const isDevUser = senderId !== undefined && (
-    senderId === DEV_USER_ID ||
-    senderId === DEV_USER_ID.toString() ||
-    Number(senderId) === DEV_USER_ID
-  );
 
   const handleSwipeTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -286,12 +278,7 @@ export default function ChatMessage({
             className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 overflow-hidden min-w-[80px]"
           >
             {/* Имя отправителя с галочкой разработчика */}
-            {!isSender && isFirstInGroup && senderName && (
-              <div className="flex items-center gap-1 mb-0.5">
-                <span className="text-[12px] font-semibold" style={{ color: ACCENT }}>{senderName}</span>
-                {isDevUser && <VerifiedBadge size={13} />}
-              </div>
-            )}
+            
 
             {/* Forwarded label */}
             {isForwarded && (

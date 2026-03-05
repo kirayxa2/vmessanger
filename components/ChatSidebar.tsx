@@ -16,6 +16,8 @@ import { useNotificationSound, SOUND_LABELS, SoundType } from "@/hooks/useNotifi
 
 const ACCENT = "#7e85e1"
 
+const DEV_USER_ID = 1;
+
 // ── Toggle Switch компонент ────────────────────────────────────
 function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
   return (
@@ -753,6 +755,12 @@ export default function ChatSidebar({
                 : isSystem ? t("service_notifications")
                 : (chat.messages?.[0]?.content || t("no_messages"))
 
+              const isDevUser = otherUser?.id !== undefined && (
+                  otherUser.id === DEV_USER_ID ||
+                  otherUser.id === DEV_USER_ID.toString() ||
+                  Number(otherUser.id) === DEV_USER_ID
+                );
+
               return (
                 <motion.div key={chat.id} onClick={() => onSelect?.(chat.id.toString())}
                   initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
@@ -768,7 +776,7 @@ export default function ChatSidebar({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
                       <div className="font-semibold text-[16px] truncate text-white flex items-center gap-1">
-                        {displayNameEl}
+                        {displayNameEl} {isDevUser && <span className="text-[10px] opacity-50 font-mono">({otherUser.id})</span>} {isDevUser && <VerifiedBadge size={20} />}
                       </div>
                       <span className="text-[12px] opacity-60 shrink-0 ml-1">
                         {chat.messages?.[0] ? new Date(chat.messages[0].createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
