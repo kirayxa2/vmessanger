@@ -8,7 +8,7 @@ import { useProfanityFilter } from "@/hooks/useProfanityFilter";
 const SENDER_COLOR = "#c67c78";
 const RECIPIENT_COLOR = "#212121";
 const ACCENT = "#7e85e1";
-const DEV_USER_ID = 1; // ID разработчика — показываем галочку
+const DEV_USER_ID = 27; // ID разработчика — показываем галочку
 
 interface ReplyTo {
   id: number;
