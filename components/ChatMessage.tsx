@@ -275,7 +275,7 @@ export default function ChatMessage({
               borderBottomRightRadius: isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
               backgroundColor: bubbleColor,
             }}
-            className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 overflow-hidden min-w-[80px]"
+            className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px]"
           >
             {/* Имя отправителя с галочкой разработчика */}
             
