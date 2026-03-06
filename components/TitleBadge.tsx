@@ -9,7 +9,7 @@ interface TitleConfig {
 }
 
 const TITLE_MAP: Record<number, TitleConfig> = {
-  33: {
+  7: {
     label: "ШИПУЧКА",
     bg: "linear-gradient(90deg, #f953c6, #b91d73)",
     text: "#fff",
