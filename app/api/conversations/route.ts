@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth/authOptions"
 
 const conversationInclude = {
-  drafts: true, // filtered per-user below
+  drafts: true,
   participants: {
     include: {
       user: { select: { id: true, username: true, avatar: true } },
@@ -28,23 +28,18 @@ export async function POST(req: NextRequest) {
 
     const currentUserId = parseInt(session.user.id)
     const body = await req.json()
-    const { userId, type } = body
+    const { userId, type, name, memberIds, description, avatar } = body
 
-    // ── Saved Messages (Избранное) ──
+    // ── Saved Messages ──
     if (type === "saved") {
       const existing = await prisma.conversation.findFirst({
-        where: {
-          type: "saved",
-          participants: { some: { userId: currentUserId } },
-        },
+        where: { type: "saved", participants: { some: { userId: currentUserId } } },
         include: conversationInclude,
       })
       if (existing) return NextResponse.json(existing)
-
       const created = await prisma.conversation.create({
         data: {
-          type: "saved",
-          name: "Saved Messages",
+          type: "saved", name: "Saved Messages",
           participants: { create: { userId: currentUserId } },
         },
         include: conversationInclude,
@@ -52,46 +47,58 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(created, { status: 201 })
     }
 
-    // ── System chat (Vortex) ──
+    // ── System chat ──
     if (type === "system") {
       const existing = await prisma.conversation.findFirst({
-        where: {
-          type: "system",
-          participants: { some: { userId: currentUserId } },
-        },
+        where: { type: "system", participants: { some: { userId: currentUserId } } },
         include: conversationInclude,
       })
       if (existing) return NextResponse.json(existing)
-
       const created = await prisma.conversation.create({
         data: {
-          type: "system",
-          name: "Vortex",
+          type: "system", name: "Vortex",
           participants: { create: { userId: currentUserId } },
         },
         include: conversationInclude,
       })
-      // Отправляем приветственное сообщение
       await prisma.message.create({
         data: {
           content: "👋 Добро пожаловать в Vortex!\n\nЗдесь вы будете получать уведомления о безопасности вашего аккаунта:\n• Входы с новых устройств\n• Изменения пароля или email\n• Подозрительная активность\n\nЕсли вы не совершали это действие — немедленно смените пароль в настройках.",
-          conversationId: created.id,
-          senderId: currentUserId, // system messages sent "from" the user
+          conversationId: created.id, senderId: currentUserId,
         },
       })
-      const withMsg = await prisma.conversation.findUnique({
-        where: { id: created.id },
+      const withMsg = await prisma.conversation.findUnique({ where: { id: created.id }, include: conversationInclude })
+      return NextResponse.json(withMsg, { status: 201 })
+    }
+
+    // ── Group chat ──
+    if (type === "group") {
+      if (!name?.trim()) return NextResponse.json({ error: "Group name required" }, { status: 400 })
+      const members: number[] = Array.isArray(memberIds) ? memberIds.map(Number).filter(Boolean) : []
+      if (!members.includes(currentUserId)) members.push(currentUserId)
+      if (members.length > 200000) return NextResponse.json({ error: "Max 200,000 members" }, { status: 400 })
+
+      const conversation = await prisma.conversation.create({
+        data: {
+          type: "group", isGroup: true, name: name.trim(),
+          description: description || null, avatar: avatar || null,
+          maxMembers: 200000,
+          participants: {
+            create: members.map(uid => ({
+              userId: uid,
+              role: uid === currentUserId ? "owner" : "member",
+            })),
+          },
+        },
         include: conversationInclude,
       })
-      return NextResponse.json(withMsg, { status: 201 })
+      return NextResponse.json(conversation, { status: 201 })
     }
 
     // ── Private chat ──
     if (userId) {
       const otherUserId = parseInt(userId)
-      if (isNaN(otherUserId)) {
-        return NextResponse.json({ error: "Invalid userId" }, { status: 400 })
-      }
+      if (isNaN(otherUserId)) return NextResponse.json({ error: "Invalid userId" }, { status: 400 })
 
       const existingConversation = await prisma.conversation.findFirst({
         where: {
@@ -105,20 +112,16 @@ export async function POST(req: NextRequest) {
       })
 
       if (existingConversation && existingConversation.participants.length === 2) {
-        // Filter drafts for current user
-        const filtered = {
+        return NextResponse.json({
           ...existingConversation,
           drafts: existingConversation.drafts.filter((d: any) => d.userId === currentUserId),
-        }
-        return NextResponse.json(filtered)
+        })
       }
 
       const conversation = await prisma.conversation.create({
         data: {
           type: "private",
-          participants: {
-            create: [{ userId: currentUserId }, { userId: otherUserId }],
-          },
+          participants: { create: [{ userId: currentUserId }, { userId: otherUserId }] },
         },
         include: conversationInclude,
       })
@@ -135,31 +138,29 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const currentUserId = parseInt(session.user.id)
 
     const conversations = await prisma.conversation.findMany({
       where: {
         participants: { some: { userId: currentUserId } },
-        // Исключаем старые групповые чаты (Общий чат)
-        NOT: { isGroup: true },
+        NOT: { isGroup: true, type: "private" }, // не старые групповые
+        OR: [
+          { type: "private" },
+          { type: "saved" },
+          { type: "system" },
+          { type: "group" },
+        ],
       },
       include: {
         drafts: { where: { userId: currentUserId } },
         participants: {
-          include: {
-            user: { select: { id: true, username: true, avatar: true } },
-          },
+          include: { user: { select: { id: true, username: true, avatar: true } } },
         },
         messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          include: {
-            sender: { select: { id: true, username: true, avatar: true } },
-          },
+          orderBy: { createdAt: "desc" }, take: 1,
+          include: { sender: { select: { id: true, username: true, avatar: true } } },
         },
       },
     })
@@ -167,6 +168,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(conversations)
   } catch (error) {
     console.error("Conversations fetch error:", error)
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+  }
+}
+
+// PATCH — update group (name, avatar, description)
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const currentUserId = parseInt(session.user.id)
+    const body = await req.json()
+    const { conversationId, name, avatar, description } = body
+
+    const participant = await prisma.conversationParticipant.findFirst({
+      where: { conversationId: parseInt(conversationId), userId: currentUserId },
+    })
+    if (!participant || !["owner", "admin"].includes(participant.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const updated = await prisma.conversation.update({
+      where: { id: parseInt(conversationId) },
+      data: { name, avatar, description },
+      include: conversationInclude,
+    })
+    return NextResponse.json(updated)
+  } catch (error) {
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }

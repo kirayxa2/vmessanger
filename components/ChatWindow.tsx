@@ -12,6 +12,7 @@ import { useSocket } from "@/app/ClientProviders"
 import UserProfilePanel from "./UserProfilePanel"
 import { useNotificationSound } from "@/hooks/useNotificationSound"
 import { VerifiedBadge } from "./VerifiedBadge"
+import TitleBadge from "./TitleBadge"
 
 const ACCENT = "#7e85e1"
 
@@ -347,6 +348,30 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
   const cancelEdit = useCallback(() => { setEditingMessageId(null); setInput("") }, [])
   const handleMenuOpen = useCallback((id: string, x: number, y: number) => { setOpenMenuId(id); setMenuPos({ x, y }) }, [])
+
+  // ── Фикс клавиатуры — скроллим input в видимую область при фокусе на мобильном ──────────
+  useEffect(() => {
+    const inp = inputRef.current
+    if (!inp) return
+    const onFocus = () => {
+      // Небольшая задержка чтобы клавиатура успела открыться
+      setTimeout(() => {
+        inp.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+        // Дополнительный скролл через visualViewport offset
+        if (window.visualViewport) {
+          const vv = window.visualViewport
+          const inpRect = inp.getBoundingClientRect()
+          const inpBottom = inpRect.bottom
+          const vvBottom = vv.offsetTop + vv.height
+          if (inpBottom > vvBottom - 8) {
+            window.scrollBy({ top: inpBottom - vvBottom + 16, behavior: 'smooth' })
+          }
+        }
+      }, 350)
+    }
+    inp.addEventListener('focus', onFocus)
+    return () => inp.removeEventListener('focus', onFocus)
+  }, [])
   const handleMenuClose = useCallback(() => setOpenMenuId(null), [])
   const handleReply = useCallback((msg: { id: string; content: string; senderName: string }) => {
     setReplyingTo(msg); setEditingMessageId(null)
@@ -679,7 +704,11 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                 </div>
               ) : (
                 <>
-                  <h2 className="text-base font-bold truncate text-white leading-tight">{otherUser?.username || t('chat')} {isOtherUserDev && <VerifiedBadge size={20} />}</h2>
+                  <h2 className="text-base font-bold text-white leading-tight flex items-center gap-1 flex-wrap">
+                    <span className="truncate">{otherUser?.username || t('chat')}</span>
+                    {isOtherUserDev && <VerifiedBadge size={18} />}
+                    <TitleBadge userId={otherUser?.id} className="mt-[1px]" />
+                  </h2>
                   <AnimatePresence mode="wait">
                     {isOtherTyping ? (
                       <motion.div key="typing" className="flex items-center gap-1"

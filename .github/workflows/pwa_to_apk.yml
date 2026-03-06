@@ -128,8 +128,8 @@ jobs:
                   <activity
                       android:name="com.vortexmessenger.app.MainActivity"
                       android:exported="true"
-                      android:configChanges="orientation|screenSize|keyboardHidden"
-                      android:windowSoftInputMode="adjustResize">
+                      android:configChanges="orientation|screenSize|keyboardHidden|keyboard"
+                      android:windowSoftInputMode="adjustPan">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />

@@ -3,6 +3,8 @@ import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck } from "lucide-
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useProfanityFilter } from "@/hooks/useProfanityFilter";
+import TitleBadge from "./TitleBadge";
+import { VerifiedBadge } from "./VerifiedBadge";
 
 const SENDER_COLOR = "#c67c78";
 const RECIPIENT_COLOR = "#212121";
@@ -311,6 +313,15 @@ export default function ChatMessage({
             className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px]"
           >
             {/* Имя отправителя */}
+            {!isSender && isFirstInGroup && senderName && (
+              <div className="flex items-center gap-1 mb-[3px] flex-wrap">
+                <span className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>
+                  {senderName}
+                </span>
+                {isDevUser && <VerifiedBadge size={13} />}
+                <TitleBadge userId={senderId} />
+              </div>
+            )}
 
             {/* Forwarded */}
             {isForwarded && (

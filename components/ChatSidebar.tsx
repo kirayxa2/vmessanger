@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react"
 import {
   Search, Menu, LogOut, Moon, Globe, Bookmark,
   ArrowLeft, Camera, Loader2, Check, X, AtSign, Info,
-  Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert
+  Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
@@ -13,6 +13,8 @@ import { motion, AnimatePresence } from "framer-motion"
 import { VerifiedBadge } from "./VerifiedBadge"
 import { useProfanityFilter } from "@/hooks/useProfanityFilter"
 import { useNotificationSound, SOUND_LABELS, SoundType } from "@/hooks/useNotificationSound"
+import TitleBadge from "./TitleBadge"
+import CreateGroupModal from "./CreateGroupModal"
 
 const ACCENT = "#7e85e1"
 
@@ -400,6 +402,7 @@ export default function ChatSidebar({
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   // mobileInitialView синхронизирует внутренний view с докбаром
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [view, setView] = useState<"chats" | "settings">(
     mobileInitialView === "settings" || mobileInitialView === "profile" ? "settings" : "chats"
   )
@@ -657,7 +660,18 @@ export default function ChatSidebar({
   // ── CHATS SCREEN ─────────────────────────────────────────────
   return (
     <div className="w-full h-full flex flex-col relative bg-[#1c242f]">
-      <motion.div className="px-3 flex items-center gap-2 relative bg-[#1c242f] overflow-hidden"
+      {/* Create Group Modal */}
+      <AnimatePresence>
+        {showCreateGroup && (
+          <CreateGroupModal
+            onClose={() => setShowCreateGroup(false)}
+            onCreated={conv => { onConversationCreated?.(conv); onSelect?.(conv.id.toString()) }}
+            currentUserId={currentUser?.id}
+          />
+        )}
+      </AnimatePresence>
+
+        <motion.div className="px-3 flex items-center gap-2 relative bg-[#1c242f] overflow-hidden"
         layout style={{ height: 56 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
         <div className="relative w-10 h-10 shrink-0">
           <motion.button onClick={() => setShowDropdown(v => !v)}
@@ -711,6 +725,16 @@ export default function ChatSidebar({
           </AnimatePresence>
         </div>
 
+        {/* Create group button */}
+        <motion.button
+          onClick={() => setShowCreateGroup(true)}
+          whileTap={{ scale: 0.9 }}
+          className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+          title="Создать группу"
+        >
+          <Plus size={20} />
+        </motion.button>
+
         {/* Search bar */}
         <motion.div className="relative flex-1"
           animate={isSearchActive ? { scaleX: 1, opacity: 1 } : { scaleX: 0.97, opacity: 0.92 }}
@@ -747,13 +771,23 @@ export default function ChatSidebar({
 
               const avatarBg = isSaved ? "#4e8cde" : isSystem ? "#7e85e1" : ACCENT
 
+              const isGroup = chat.type === "group"
+
               const displayNameEl = isSaved ? <span>{t("saved_messages")}</span>
                 : isSystem ? <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
-                : <span>{chat.name || otherUser?.username}</span>
+                : isGroup ? <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
+                : <span className="flex items-center gap-1">
+                    <span>{otherUser?.username}</span>
+                    {isDevUser && <VerifiedBadge size={15} />}
+                    <TitleBadge userId={otherUser?.id} />
+                  </span>
 
-              const previewText = isSaved ? (chat.messages?.[0]?.content || t("saved_chat_subtitle"))
+              const lastMsg = chat.messages?.[0]
+              const previewText = isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
                 : isSystem ? t("service_notifications")
-                : (chat.messages?.[0]?.content || t("no_messages"))
+                : isGroup
+                  ? lastMsg ? `${lastMsg.sender?.username || ""}: ${lastMsg.content || "📎"}` : t("no_messages")
+                  : (lastMsg?.content || t("no_messages"))
 
               const isDevUser = otherUser?.id !== undefined && (
                   otherUser.id === DEV_USER_ID ||
@@ -776,7 +810,7 @@ export default function ChatSidebar({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
                       <div className="font-semibold text-[16px] truncate text-white flex items-center gap-1">
-                        {displayNameEl} {isDevUser && <span className="text-[10px] opacity-50 font-mono">({otherUser.id})</span>} {isDevUser && <VerifiedBadge size={20} />}
+                        {displayNameEl}
                       </div>
                       <span className="text-[12px] opacity-60 shrink-0 ml-1">
                         {chat.messages?.[0] ? new Date(chat.messages[0].createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}

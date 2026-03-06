@@ -30,7 +30,10 @@ model Conversation {
   id           Int                       @id @default(autoincrement())
   isGroup      Boolean                   @default(false)
   name         String?
+  avatar       String?
+  description  String?
   type         String                    @default("private")
+  maxMembers   Int                       @default(200000)
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
   participants ConversationParticipant[]
@@ -43,6 +46,7 @@ model ConversationParticipant {
   id             Int          @id @default(autoincrement())
   userId         Int
   conversationId Int
+  role           String       @default("member") // "owner" | "admin" | "member"
   joinedAt       DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -239,7 +239,11 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   // ── MOBILE LAYOUT ─────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-[100dvh] w-full overflow-hidden fixed inset-0" style={{ backgroundColor: "#0a0f17" }}>
+    <div
+      id="mobile-chat-wrap"
+      className="flex flex-col w-full overflow-hidden"
+      style={{ height: 'var(--app-height, 100dvh)', backgroundColor: '#0a0f17' }}
+    >
 
       {/* ── Основной контент ── */}
       <div className="flex-1 overflow-hidden relative px-2 pt-2">

@@ -54,26 +54,61 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/logo (1).ico" type="image/x-icon" />
         <link rel="shortcut icon" href="/logo (1).ico" type="image/x-icon" />
-        {/* Фикс клавиатуры Android WebView: пересчитываем --vh при resize */}
+        {/* Фикс клавиатуры Android WebView */}
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
-            function setVh() {
-              var vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight) * 0.01;
-              document.documentElement.style.setProperty('--vh', vh + 'px');
-              document.documentElement.style.setProperty('--app-height', (window.visualViewport ? window.visualViewport.height : window.innerHeight) + 'px');
+            var isAndroid = /Android/i.test(navigator.userAgent);
+            
+            function applyHeight(h) {
+              var r = document.documentElement;
+              r.style.setProperty('--vh', (h * 0.01) + 'px');
+              r.style.setProperty('--app-height', h + 'px');
+              // Для мобильного layout — двигаем контейнер чата
+              var chatWrap = document.getElementById('mobile-chat-wrap');
+              if (chatWrap) chatWrap.style.height = h + 'px';
             }
-            setVh();
+
+            function getH() {
+              return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            }
+
+            applyHeight(getH());
+
             if (window.visualViewport) {
-              window.visualViewport.addEventListener('resize', setVh);
-              window.visualViewport.addEventListener('scroll', setVh);
+              // visualViewport — самый точный источник высоты с учётом клавиатуры
+              window.visualViewport.addEventListener('resize', function() {
+                applyHeight(window.visualViewport.height);
+              });
+              window.visualViewport.addEventListener('scroll', function() {
+                applyHeight(window.visualViewport.height);
+              });
             }
-            window.addEventListener('resize', setVh);
+            // Fallback для браузеров без visualViewport
+            window.addEventListener('resize', function() {
+              applyHeight(getH());
+            });
+
+            // Дополнительный polling для Android WebView который иногда не тригерит visualViewport
+            // Проверяем через 100мс после фокуса на любом input
+            document.addEventListener('focusin', function(e) {
+              if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                var checks = [100, 300, 500, 800];
+                checks.forEach(function(ms) {
+                  setTimeout(function() { applyHeight(getH()); }, ms);
+                });
+              }
+            });
+            document.addEventListener('focusout', function(e) {
+              if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                setTimeout(function() { applyHeight(getH()); }, 200);
+              }
+            });
           })();
         ` }} />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0e1621] text-white overflow-hidden flex flex-col`}
-        style={{ height: 'var(--app-height, 100dvh)' }}>
-        <div className="flex-1 overflow-hidden relative" style={{ height: 'var(--app-height, 100dvh)' }}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0e1621] text-white`}
+        style={{ height: 'var(--app-height, 100dvh)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="flex-1 relative" style={{ height: 'var(--app-height, 100dvh)', overflow: 'hidden' }}>
           <ClientProviders>{children}</ClientProviders>
         </div>
       </body>
