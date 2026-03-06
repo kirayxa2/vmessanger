@@ -110,7 +110,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   // ── Calls ────────────────────────────────────────────────────
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null)
   const [outgoingCall, setOutgoingCall] = useState<OutgoingCall | null>(null)
-  const showCallModal = !!(incomingCall || outgoingCall)
+  // callActive: модал остаётся открытым в течение всего звонка
+  const [callActive, setCallActive] = useState(false)
+  const showCallModal = !!(incomingCall || outgoingCall || callActive)
 
   const convType: string = conversation?.type || "private"
   const isSavedChat = convType === "saved"
@@ -468,6 +470,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       receiverName: otherUser.username || "",
       receiverAvatar: otherUserAvatar || otherUser.avatar || undefined,
     })
+    setCallActive(true)
   }, [otherUser, session, apiId, socket, otherUserAvatar])
 
   const isOtherUserDev = useMemo(() => {
@@ -1058,14 +1061,19 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
             socket={socket}
             currentUserId={session?.user?.id || ""}
             onAccept={() => {
+              // НЕ убираем incomingCall здесь!
+              // Модал остаётся жить через callActive
+              setCallActive(true)
               setIncomingCall(null)
             }}
             onDecline={() => {
               setIncomingCall(null)
+              setCallActive(false)
             }}
             onHangup={() => {
               setIncomingCall(null)
               setOutgoingCall(null)
+              setCallActive(false)
             }}
           />
         )}

@@ -311,19 +311,6 @@ export default function ChatMessage({
             className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px]"
           >
             {/* Имя отправителя */}
-            {!isSender && isFirstInGroup && senderName && (
-              <div className="flex items-center gap-1 mb-0.5">
-                <span className="text-[12px] font-semibold" style={{ color: ACCENT }}>
-                  {senderName}
-                </span>
-                {isDevUser && (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="12" fill={ACCENT} />
-                    <path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </div>
-            )}
 
             {/* Forwarded */}
             {isForwarded && (

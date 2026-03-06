@@ -35,184 +35,181 @@ const ICE_SERVERS = {
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-  ]
+  ],
 }
 
 export default function CallModal({
-  incomingCall, outgoingCall, onAccept, onDecline, onHangup, socket, currentUserId
+  incomingCall, outgoingCall, onAccept, onDecline, onHangup, socket, currentUserId,
 }: CallModalProps) {
-  const [callState, setCallState] = useState<CallState>(incomingCall ? "incoming" : "outgoing")
-  const [isMuted, setIsMuted] = useState(false)
-  const [isVideoOn, setIsVideoOn] = useState(false)
+  // Снимок данных при монтировании — не меняются когда родитель убирает props
+  const callDataRef = useRef({
+    callId:      incomingCall?.callId      ?? outgoingCall?.callId,
+    otherUserId: incomingCall?.initiatorId ?? outgoingCall?.receiverId,
+    otherName:   incomingCall?.initiatorName ?? outgoingCall?.receiverName ?? "",
+    otherAvatar: incomingCall?.initiatorAvatar ?? outgoingCall?.receiverAvatar,
+    isIncoming:  !!incomingCall,
+  })
+  const { callId, otherUserId, otherName, otherAvatar, isIncoming } = callDataRef.current
+
+  const [callState,    setCallState]    = useState<CallState>(isIncoming ? "incoming" : "outgoing")
+  const [isMuted,      setIsMuted]      = useState(false)
+  const [isVideoOn,    setIsVideoOn]    = useState(false)
   const [callDuration, setCallDuration] = useState(0)
-  const [statusText, setStatusText] = useState(incomingCall ? "Входящий звонок" : "Вызов...")
-  const [hasCamera, setHasCamera] = useState(false)
+  const [statusText,   setStatusText]   = useState(isIncoming ? "Входящий звонок" : "Вызов...")
+  const [hasCamera,    setHasCamera]    = useState(false)
 
-  const localVideoRef = useRef<HTMLVideoElement>(null)
+  const localVideoRef  = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
-  const peerRef = useRef<RTCPeerConnection | null>(null)
+  const peerRef        = useRef<RTCPeerConnection | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timerStartedRef = useRef(false)
-  const acceptedRef = useRef(false) // receiver принял звонок
-
-  const callId = incomingCall?.callId || outgoingCall?.callId
-  const otherUserId = incomingCall?.initiatorId || outgoingCall?.receiverId
-  const otherName = incomingCall?.initiatorName || outgoingCall?.receiverName || ""
-  const otherAvatar = incomingCall?.initiatorAvatar || outgoingCall?.receiverAvatar
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerStarted   = useRef(false)
+  // Буфер ICE-кандидатов до setRemoteDescription
+  const iceBufRef      = useRef<RTCIceCandidateInit[]>([])
 
   useEffect(() => {
     navigator.mediaDevices?.enumerateDevices?.()
-      .then(devices => setHasCamera(devices.some(d => d.kind === "videoinput")))
+      .then(ds => setHasCamera(ds.some(d => d.kind === "videoinput")))
       .catch(() => {})
   }, [])
 
+  // ── Таймер ────────────────────────────────────────────────────
   const startTimer = useCallback(() => {
-    if (timerStartedRef.current) return
-    timerStartedRef.current = true
+    if (timerStarted.current) return
+    timerStarted.current = true
     setCallDuration(0)
     timerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000)
   }, [])
 
-  const formatDuration = (s: number) =>
+  const fmt = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`
 
+  // ── Микрофон ──────────────────────────────────────────────────
   const getLocalStream = useCallback(async (): Promise<MediaStream | null> => {
+    if (localStreamRef.current) return localStreamRef.current
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       localStreamRef.current = stream
       return stream
     } catch (err: any) {
-      console.error("getUserMedia error:", err?.name, err?.message)
+      console.error("getUserMedia:", err?.name)
       setStatusText("Нет доступа к микрофону")
       return null
     }
   }, [])
 
-  // Создаём RTCPeerConnection
+  // ── Создаём RTCPeerConnection ─────────────────────────────────
   const createPeer = useCallback((stream: MediaStream): RTCPeerConnection => {
-    // Закрываем предыдущий если есть
-    if (peerRef.current) {
-      peerRef.current.close()
-    }
-
+    peerRef.current?.close()
     const peer = new RTCPeerConnection(ICE_SERVERS)
     peerRef.current = peer
 
-    stream.getTracks().forEach(track => peer.addTrack(track, stream))
+    stream.getTracks().forEach(t => peer.addTrack(t, stream))
 
-    peer.ontrack = (event) => {
-      console.log("ontrack:", event.streams)
-      if (remoteVideoRef.current && event.streams[0]) {
-        remoteVideoRef.current.srcObject = event.streams[0]
-      }
+    peer.ontrack = e => {
+      if (remoteVideoRef.current && e.streams[0])
+        remoteVideoRef.current.srcObject = e.streams[0]
     }
 
-    peer.onicecandidate = (event) => {
-      if (event.candidate && socket && otherUserId) {
-        socket.emit("call-ice", { callId, targetUserId: otherUserId, candidate: event.candidate })
-      }
+    peer.onicecandidate = e => {
+      if (e.candidate && socket && otherUserId)
+        socket.emit("call-ice", { callId, targetUserId: otherUserId, candidate: e.candidate })
     }
 
-    const handleConnected = () => {
-      console.log("Peer connected!")
+    const onConnected = () => {
       setCallState("connected")
       setStatusText("")
       startTimer()
     }
 
     peer.onconnectionstatechange = () => {
-      console.log("connectionState:", peer.connectionState)
-      if (peer.connectionState === "connected") handleConnected()
+      if (peer.connectionState === "connected") onConnected()
       else if (peer.connectionState === "failed") setStatusText("Ошибка соединения")
     }
-
     peer.oniceconnectionstatechange = () => {
-      console.log("iceConnectionState:", peer.iceConnectionState)
-      if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
-        handleConnected()
-      }
+      if (peer.iceConnectionState === "connected" ||
+          peer.iceConnectionState === "completed") onConnected()
     }
 
     return peer
   }, [socket, otherUserId, callId, startTimer])
 
-  // ── SOCKET EVENTS ────────────────────────────────────────────
+  // ── Применяем буферизованные ICE после setRemoteDescription ──
+  const flushIceBuf = useCallback(async () => {
+    const peer = peerRef.current
+    if (!peer) return
+    for (const c of iceBufRef.current) {
+      try { await peer.addIceCandidate(new RTCIceCandidate(c)) } catch {}
+    }
+    iceBufRef.current = []
+  }, [])
+
+  // ── Socket events ─────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return
 
-    // Инициатор: receiver принял, теперь нужно создать offer и отправить
-    // ВАЖНО: call-accepted — кастомное событие которое receiver шлёт до offer
+    // Инициатор: receiver принял → создаём offer
     const handleCallAccepted = async (data: { callId: number }) => {
       if (data.callId !== callId) return
-      console.log("call-accepted: receiver accepted, creating offer")
-
-      // Меняем UI у инициатора — уже не "Вызов..."
       setCallState("connected")
       setStatusText("Соединение...")
 
       const stream = await getLocalStream()
       if (!stream) return
-
       const peer = createPeer(stream)
       try {
         const offer = await peer.createOffer()
         await peer.setLocalDescription(offer)
         socket.emit("call-offer", { callId, receiverId: otherUserId, sdp: offer })
       } catch (err) {
-        console.error("createOffer error:", err)
+        console.error("createOffer:", err)
       }
     }
 
-    // Инициатор: получил SDP answer от receiver
+    // Инициатор: получил SDP answer
     const handleCallAnswered = async (data: { callId: number; sdp: RTCSessionDescriptionInit }) => {
       if (data.callId !== callId) return
-      console.log("call-answered: got SDP answer")
       const peer = peerRef.current
       if (!peer) return
       try {
         await peer.setRemoteDescription(new RTCSessionDescription(data.sdp))
+        await flushIceBuf()
       } catch (err) {
-        console.error("setRemoteDescription(answer) error:", err)
+        console.error("setRemoteDesc(answer):", err)
       }
     }
 
-    // Receiver: получил SDP offer от инициатора
+    // Receiver: получил SDP offer → отвечаем
     const handleCallOffer = async (data: { callId: number; sdp: RTCSessionDescriptionInit }) => {
       if (data.callId !== callId) return
-      console.log("call-offer received")
-
-      // Если receiver ещё не принял — игнорируем (не должно быть, но на всякий)
-      if (!acceptedRef.current) {
-        console.log("Got offer but not accepted yet, buffering...")
-        // Буферизуем — обработаем когда примет
-      }
-
-      const stream = localStreamRef.current || await getLocalStream()
+      const stream = localStreamRef.current ?? await getLocalStream()
       if (!stream) return
-
       const peer = createPeer(stream)
       try {
         await peer.setRemoteDescription(new RTCSessionDescription(data.sdp))
+        await flushIceBuf()
         const answer = await peer.createAnswer()
         await peer.setLocalDescription(answer)
         socket.emit("call-answer", { callId, initiatorId: otherUserId, sdp: answer })
         setCallState("connected")
         setStatusText("Соединение...")
         startTimer()
+        // Безопасно сообщаем родителю: WebRTC запущен, модал живёт
+        onAccept?.()
       } catch (err) {
-        console.error("handleCallOffer error:", err)
+        console.error("handleCallOffer:", err)
       }
     }
 
-    // ICE кандидат
+    // ICE кандидат — буферизуем до remoteDescription
     const handleIce = async (data: { callId: number; candidate: RTCIceCandidateInit }) => {
       if (data.callId !== callId) return
-      try {
-        if (peerRef.current?.remoteDescription) {
-          await peerRef.current.addIceCandidate(new RTCIceCandidate(data.candidate))
-        }
-      } catch {}
+      const peer = peerRef.current
+      if (peer?.remoteDescription) {
+        try { await peer.addIceCandidate(new RTCIceCandidate(data.candidate)) } catch {}
+      } else {
+        iceBufRef.current.push(data.candidate)
+      }
     }
 
     const handleCallDeclined = (data: { callId: number }) => {
@@ -229,46 +226,35 @@ export default function CallModal({
       setTimeout(() => onHangup?.(), 1500)
     }
 
-    socket.on("call-accepted", handleCallAccepted)
-    socket.on("call-answered", handleCallAnswered)
-    socket.on("call-offer", handleCallOffer)
-    socket.on("call-ice", handleIce)
-    socket.on("call-declined", handleCallDeclined)
-    socket.on("call-ended", handleCallEnded)
+    socket.on("call-accepted",  handleCallAccepted)
+    socket.on("call-answered",  handleCallAnswered)
+    socket.on("call-offer",     handleCallOffer)
+    socket.on("call-ice",       handleIce)
+    socket.on("call-declined",  handleCallDeclined)
+    socket.on("call-ended",     handleCallEnded)
 
     return () => {
-      socket.off("call-accepted", handleCallAccepted)
-      socket.off("call-answered", handleCallAnswered)
-      socket.off("call-offer", handleCallOffer)
-      socket.off("call-ice", handleIce)
-      socket.off("call-declined", handleCallDeclined)
-      socket.off("call-ended", handleCallEnded)
+      socket.off("call-accepted",  handleCallAccepted)
+      socket.off("call-answered",  handleCallAnswered)
+      socket.off("call-offer",     handleCallOffer)
+      socket.off("call-ice",       handleIce)
+      socket.off("call-declined",  handleCallDeclined)
+      socket.off("call-ended",     handleCallEnded)
     }
-  }, [socket, callId, otherUserId, createPeer, getLocalStream, startTimer, onHangup])
+  }, [socket, callId, otherUserId, createPeer, getLocalStream, flushIceBuf, startTimer, onAccept, onHangup])
 
-  // Исходящий — просто ждём, offer отправим когда получим call-accepted
-  // (Старый flow: offer сразу. Новый: offer только после принятия)
-  useEffect(() => {
-    if (!outgoingCall) return
-    // Ничего не делаем — ждём call-accepted от receiver
-  }, [])
-
-  // Принять входящий звонок
+  // ── Принять ───────────────────────────────────────────────────
   const acceptCall = useCallback(async () => {
-    acceptedRef.current = true
-
-    // Получаем микрофон заранее
-    const stream = await getLocalStream()
-    // stream сохранён в localStreamRef — будет использован когда придёт offer
-
-    // Сообщаем инициатору что приняли — он пришлёт offer
+    // Получаем микрофон заранее — сохраняется в localStreamRef
+    await getLocalStream()
+    // Сообщаем инициатору — он создаст и пришлёт offer
     socket?.emit("call-accepted", { callId, initiatorId: otherUserId })
-
     setCallState("connected")
     setStatusText("Соединение...")
-    onAccept?.()
-  }, [socket, callId, otherUserId, getLocalStream, onAccept])
+    // НЕ вызываем onAccept здесь: он закрыл бы модал раньше call-offer
+  }, [socket, callId, otherUserId, getLocalStream])
 
+  // ── Отклонить ─────────────────────────────────────────────────
   const declineCall = useCallback(() => {
     socket?.emit("call-declined", { callId, initiatorId: otherUserId })
     fetch("/api/calls", {
@@ -279,6 +265,7 @@ export default function CallModal({
     onDecline?.()
   }, [socket, callId, otherUserId, onDecline])
 
+  // ── Завершить ─────────────────────────────────────────────────
   const hangup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
     localStreamRef.current?.getTracks().forEach(t => t.stop())
@@ -303,9 +290,8 @@ export default function CallModal({
       try {
         const vs = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
         if (localVideoRef.current) localVideoRef.current.srcObject = vs
-        if (peerRef.current && localStreamRef.current) {
+        if (peerRef.current && localStreamRef.current)
           peerRef.current.addTrack(vs.getVideoTracks()[0], localStreamRef.current)
-        }
         setIsVideoOn(true)
       } catch {
         setStatusText("Нет доступа к камере")
@@ -320,6 +306,7 @@ export default function CallModal({
     }
   }, [isVideoOn])
 
+  // Cleanup при размонтировании
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
@@ -329,7 +316,7 @@ export default function CallModal({
   }, [])
 
   const displayStatus = () => {
-    if (callState === "connected" && !statusText) return formatDuration(callDuration)
+    if (callState === "connected" && !statusText) return fmt(callDuration)
     return statusText
   }
 
@@ -342,10 +329,7 @@ export default function CallModal({
       style={{ background: "linear-gradient(160deg, #1a1f2e 0%, #0d1117 100%)" }}
     >
       {/* Remote video */}
-      <video
-        ref={remoteVideoRef}
-        autoPlay
-        playsInline
+      <video ref={remoteVideoRef} autoPlay playsInline
         className="absolute inset-0 w-full h-full object-cover"
         style={{ display: isVideoOn && callState === "connected" ? "block" : "none" }}
       />
@@ -364,10 +348,10 @@ export default function CallModal({
           >
             {otherAvatar
               ? <img src={otherAvatar} className="w-full h-full object-cover" alt="" />
-              : otherName[0]?.toUpperCase()
-            }
+              : otherName[0]?.toUpperCase()}
           </motion.div>
-          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: ACCENT }}>
+          <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: ACCENT }}>
             <Phone size={14} color="white" />
           </div>
         </div>
@@ -379,7 +363,7 @@ export default function CallModal({
         </motion.p>
       </div>
 
-      {/* Своё видео PiP */}
+      {/* Local video PiP */}
       {isVideoOn && callState === "connected" && (
         <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
           className="absolute top-20 right-4 z-20 w-28 h-40 rounded-2xl overflow-hidden border-2 border-white/20 shadow-xl">

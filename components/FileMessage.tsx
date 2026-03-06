@@ -226,10 +226,39 @@ function AudioPlayer({ url, name, size, isSender }: { url: string; name: string;
 
 // ── Generic File ──────────────────────────────────────────────
 function GenericFile({ url, name, size, type }: { url: string; name: string; size: number; type: string }) {
+  const [downloading, setDownloading] = useState(false)
+
+  // fetch→blob работает и в Android WebView/PWA где <a download> не работает
+  const handleDownload = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (downloading) return
+    setDownloading(true)
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = blobUrl
+      a.download = name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000)
+    } catch {
+      // Fallback: открыть в новой вкладке
+      window.open(url, "_blank", "noopener,noreferrer")
+    } finally {
+      setDownloading(false)
+    }
+  }, [url, name, downloading])
+
   return (
-    <a href={url} download={name} target="_blank" rel="noopener noreferrer"
-      className="flex items-center gap-3 px-3 py-2.5 rounded-2xl min-w-[200px] max-w-[280px] hover:bg-white/5 transition-colors group"
-      style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+    <div
+      onClick={handleDownload}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-2xl min-w-[200px] max-w-[280px] hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+      style={{ backgroundColor: "rgba(255,255,255,0.05)" }}
+    >
       <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
         style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
         {getFileIcon(type)}
@@ -238,12 +267,17 @@ function GenericFile({ url, name, size, type }: { url: string; name: string; siz
         <p className="text-[13px] text-white font-medium truncate">{name}</p>
         <p className="text-[11px] text-gray-500 mt-0.5">{formatBytes(size)}</p>
       </div>
-      <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ backgroundColor: ACCENT }}>
-        <Download size={14} className="text-white" />
+      <motion.div whileTap={{ scale: 0.88 }}
+        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+        style={{ backgroundColor: downloading ? "rgba(255,255,255,0.08)" : ACCENT }}>
+        {downloading
+          ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            </motion.div>
+          : <Download size={14} className="text-white" />
+        }
       </motion.div>
-    </a>
+    </div>
   )
 }
 
