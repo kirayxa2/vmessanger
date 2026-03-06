@@ -773,6 +773,12 @@ export default function ChatSidebar({
 
               const isGroup = chat.type === "group"
 
+              const isDevUser = otherUser?.id !== undefined && (
+                  otherUser.id === DEV_USER_ID ||
+                  otherUser.id === DEV_USER_ID.toString() ||
+                  Number(otherUser.id) === DEV_USER_ID
+                );
+
               const displayNameEl = isSaved ? <span>{t("saved_messages")}</span>
                 : isSystem ? <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
                 : isGroup ? <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
@@ -789,11 +795,7 @@ export default function ChatSidebar({
                   ? lastMsg ? `${lastMsg.sender?.username || ""}: ${lastMsg.content || "📎"}` : t("no_messages")
                   : (lastMsg?.content || t("no_messages"))
 
-              const isDevUser = otherUser?.id !== undefined && (
-                  otherUser.id === DEV_USER_ID ||
-                  otherUser.id === DEV_USER_ID.toString() ||
-                  Number(otherUser.id) === DEV_USER_ID
-                );
+              
 
               return (
                 <motion.div key={chat.id} onClick={() => onSelect?.(chat.id.toString())}
