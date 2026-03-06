@@ -106,9 +106,21 @@ export default function CallModal({
 
     stream.getTracks().forEach(t => peer.addTrack(t, stream))
 
+    // onConnectedOnce — срабатывает ровно один раз от любого из триггеров
+    let connectedFired = false
+    const onConnectedOnce = () => {
+      if (connectedFired) return
+      connectedFired = true
+      setCallState("connected")
+      setStatusText("")
+      startTimer()
+    }
+
     peer.ontrack = e => {
       if (remoteVideoRef.current && e.streams[0])
         remoteVideoRef.current.srcObject = e.streams[0]
+      // Как только пошёл трек — соединение точно есть
+      onConnectedOnce()
     }
 
     peer.onicecandidate = e => {
@@ -116,20 +128,26 @@ export default function CallModal({
         socket.emit("call-ice", { callId, targetUserId: otherUserId, candidate: e.candidate })
     }
 
-    const onConnected = () => {
-      setCallState("connected")
-      setStatusText("")
-      startTimer()
-    }
-
     peer.onconnectionstatechange = () => {
-      if (peer.connectionState === "connected") onConnected()
+      console.log("connectionState:", peer.connectionState)
+      if (peer.connectionState === "connected") onConnectedOnce()
       else if (peer.connectionState === "failed") setStatusText("Ошибка соединения")
     }
     peer.oniceconnectionstatechange = () => {
+      console.log("iceState:", peer.iceConnectionState)
       if (peer.iceConnectionState === "connected" ||
-          peer.iceConnectionState === "completed") onConnected()
+          peer.iceConnectionState === "completed") onConnectedOnce()
     }
+
+    // Fallback: если через 4с state-события не сработали — всё равно переходим в connected
+    const fallbackTimer = setTimeout(() => {
+      if (peerRef.current === peer) onConnectedOnce()
+    }, 4000)
+    // Чистим fallback если пеер закрылся раньше
+    peer.addEventListener("connectionstatechange", () => {
+      if (peer.connectionState === "closed" || peer.connectionState === "failed")
+        clearTimeout(fallbackTimer)
+    })
 
     return peer
   }, [socket, otherUserId, callId, startTimer])
@@ -191,10 +209,7 @@ export default function CallModal({
         const answer = await peer.createAnswer()
         await peer.setLocalDescription(answer)
         socket.emit("call-answer", { callId, initiatorId: otherUserId, sdp: answer })
-        setCallState("connected")
-        setStatusText("Соединение...")
-        startTimer()
-        // Безопасно сообщаем родителю: WebRTC запущен, модал живёт
+        // Не меняем state здесь — onConnectedOnce в createPeer сам сработает когда придет трек
         onAccept?.()
       } catch (err) {
         console.error("handleCallOffer:", err)

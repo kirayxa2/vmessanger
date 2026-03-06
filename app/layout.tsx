@@ -54,9 +54,26 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/logo (1).ico" type="image/x-icon" />
         <link rel="shortcut icon" href="/logo (1).ico" type="image/x-icon" />
+        {/* Фикс клавиатуры Android WebView: пересчитываем --vh при resize */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            function setVh() {
+              var vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight) * 0.01;
+              document.documentElement.style.setProperty('--vh', vh + 'px');
+              document.documentElement.style.setProperty('--app-height', (window.visualViewport ? window.visualViewport.height : window.innerHeight) + 'px');
+            }
+            setVh();
+            if (window.visualViewport) {
+              window.visualViewport.addEventListener('resize', setVh);
+              window.visualViewport.addEventListener('scroll', setVh);
+            }
+            window.addEventListener('resize', setVh);
+          })();
+        ` }} />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0e1621] text-white overflow-hidden h-screen flex flex-col`}>
-        <div className="flex-1 overflow-hidden relative">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0e1621] text-white overflow-hidden flex flex-col`}
+        style={{ height: 'var(--app-height, 100dvh)' }}>
+        <div className="flex-1 overflow-hidden relative" style={{ height: 'var(--app-height, 100dvh)' }}>
           <ClientProviders>{children}</ClientProviders>
         </div>
       </body>
