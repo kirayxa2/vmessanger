@@ -843,33 +843,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               )}
             </AnimatePresence>
 
-            <AnimatePresence>
-              {(editingMessageId || replyingTo) && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                  transition={{ type: "spring", stiffness: 420, damping: 36 }}
-                  style={{ backgroundColor: "var(--input-bg)", borderRadius: "0.9375rem 0.9375rem 0 0" }}
-                  className="overflow-hidden px-3 pt-2 pb-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-[3px] h-9 rounded-full shrink-0" style={{ backgroundColor: ACCENT }} />
-                    <div className="flex-1 min-w-0">
-                      {editingMessageId ? (
-                        <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{t('editing_message')}</p>
-                          <p className="text-[12px] text-gray-400 truncate leading-tight">{input}</p></>
-                      ) : replyingTo ? (
-                        <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{replyingTo.senderName}</p>
-                          <p className="text-[12px] text-gray-400 truncate leading-tight">{replyingTo.content}</p></>
-                      ) : null}
-                    </div>
-                    <motion.button onClick={editingMessageId ? cancelEdit : cancelReply} whileTap={{ scale: 0.88 }}
-                      className="p-1 rounded-full hover:bg-white/10 text-gray-500 hover:text-white transition-colors shrink-0">
-                      <X size={16} />
-                    </motion.button>
-                  </div>
-                  <div className="mt-1 mx-1 border-t border-white/8" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* Voice recording UI */}
             <AnimatePresence>
               {isRecording && (

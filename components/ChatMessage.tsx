@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { useProfanityFilter } from "@/hooks/useProfanityFilter";
 const SENDER_COLOR = "#c67c78";
 const RECIPIENT_COLOR = "#212121";
 const ACCENT = "#7e85e1";
+const DEV_USER_ID = 1;
 
 interface ReplyTo {
   id: number;
@@ -57,98 +58,130 @@ export default function ChatMessage({
 
   // Свайп для ответа
   const swipeX = useMotionValue(0);
-  const SWIPE_THRESHOLD = 60;
+  const SWIPE_THRESHOLD = 64;
   const swipeTriggered = useRef(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
-  const isSwipeGesture = useRef(false);
+  const gestureDir = useRef<"none" | "horizontal" | "vertical">("none");
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Иконка ответа появляется при свайпе
-  const replyIconOpacity = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, -20, 0] : [0, 20, SWIPE_THRESHOLD], isSender ? [1, 0.3, 0] : [0, 0.3, 1]);
-  const replyIconScale = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, -20, 0] : [0, 20, SWIPE_THRESHOLD], isSender ? [1, 0.6, 0.3] : [0.3, 0.6, 1]);
-  const replyIconX = useTransform(swipeX, isSender ? [-SWIPE_THRESHOLD, 0] : [0, SWIPE_THRESHOLD], isSender ? [-8, 12] : [12, -8]);
+  // Ref на сам bubble-wrapper для non-passive touch events
+  const swipeWrapRef = useRef<HTMLDivElement>(null);
 
-  const handleSwipeTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    swipeTriggered.current = false;
-    isSwipeGesture.current = false;
-  }, []);
+  // Иконка ответа — появляется при свайпе
+  const replyIconOpacity = useTransform(
+    swipeX,
+    isSender ? [-SWIPE_THRESHOLD, -24, 0] : [0, 24, SWIPE_THRESHOLD],
+    isSender ? [1, 0.4, 0]            : [0, 0.4, 1]
+  );
+  const replyIconScale = useTransform(
+    swipeX,
+    isSender ? [-SWIPE_THRESHOLD, -24, 0] : [0, 24, SWIPE_THRESHOLD],
+    isSender ? [1, 0.7, 0.3]              : [0.3, 0.7, 1]
+  );
 
-  const handleSwipeTouchMove = useCallback((e: React.TouchEvent) => {
-    const dx = e.touches[0].clientX - touchStartX.current;
-    const dy = e.touches[0].clientY - touchStartY.current;
+  const isDevUser =
+    senderId !== undefined &&
+    (senderId === DEV_USER_ID ||
+      senderId === DEV_USER_ID.toString() ||
+      Number(senderId) === DEV_USER_ID);
 
-    // Определяем направление жеста при первом движении
-    if (!isSwipeGesture.current && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
-      isSwipeGesture.current = Math.abs(dx) > Math.abs(dy);
-    }
+  // ── Non-passive touch handlers (через useEffect) ──────────────
+  useEffect(() => {
+    const el = swipeWrapRef.current;
+    if (!el) return;
 
-    if (!isSwipeGesture.current) return;
+    const onStart = (e: TouchEvent) => {
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+      gestureDir.current = "none";
+      swipeTriggered.current = false;
 
-    // Для своих сообщений — свайп влево (dx < 0), для чужих — вправо (dx > 0)
-    const correctDir = isSender ? dx < 0 : dx > 0;
-    if (!correctDir) return;
+      // long-press для контекстного меню
+      const touch = e.touches[0];
+      longPressRef.current = setTimeout(() => {
+        onMenuOpen(messageId, touch.clientX, touch.clientY);
+      }, 500);
+    };
 
-    const clamped = isSender
-      ? Math.max(dx, -SWIPE_THRESHOLD * 1.2)
-      : Math.min(dx, SWIPE_THRESHOLD * 1.2);
+    const onMove = (e: TouchEvent) => {
+      // Отменяем long press при движении
+      if (longPressRef.current) {
+        clearTimeout(longPressRef.current);
+        longPressRef.current = null;
+      }
 
-    swipeX.set(clamped);
+      const dx = e.touches[0].clientX - touchStartX.current;
+      const dy = e.touches[0].clientY - touchStartY.current;
 
-    // Тактильный фидбек и триггер ответа
-    const abs = Math.abs(clamped);
-    if (abs >= SWIPE_THRESHOLD && !swipeTriggered.current) {
-      swipeTriggered.current = true;
-      // Вибрация если поддерживается
-      if (navigator.vibrate) navigator.vibrate(30);
-    }
-  }, [isSender, swipeX]);
+      // Определяем направление жеста один раз
+      if (gestureDir.current === "none" && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        gestureDir.current =
+          Math.abs(dx) > Math.abs(dy) * 1.4 ? "horizontal" : "vertical";
+      }
 
-  const handleSwipeTouchEnd = useCallback(() => {
-    if (swipeTriggered.current) {
-      onReply?.({ id: messageId, content, senderName: senderName || "" });
-    }
-    // Возвращаем на место со пружиной
-    animate(swipeX, 0, { type: "spring", stiffness: 500, damping: 35 });
-    swipeTriggered.current = false;
-    isSwipeGesture.current = false;
-  }, [swipeX, messageId, content, senderName, onReply]);
+      // Вертикаль — отдаём скроллу, не трогаем
+      if (gestureDir.current !== "horizontal") return;
 
-  // Voice player state
+      // Проверяем правильное направление
+      const correctDir = isSender ? dx < 0 : dx > 0;
+      if (!correctDir) return;
+
+      // Блокируем скролл страницы — работает т.к. listener non-passive
+      e.preventDefault();
+
+      const max = SWIPE_THRESHOLD * 1.15;
+      const clamped = isSender
+        ? Math.max(dx, -max)
+        : Math.min(dx, max);
+
+      swipeX.set(clamped);
+
+      if (Math.abs(clamped) >= SWIPE_THRESHOLD && !swipeTriggered.current) {
+        swipeTriggered.current = true;
+        if (navigator.vibrate) navigator.vibrate(28);
+      }
+    };
+
+    const onEnd = () => {
+      if (longPressRef.current) {
+        clearTimeout(longPressRef.current);
+        longPressRef.current = null;
+      }
+      if (swipeTriggered.current) {
+        onReply?.({ id: messageId, content, senderName: senderName || "" });
+      }
+      animate(swipeX, 0, { type: "spring", stiffness: 480, damping: 36 });
+      swipeTriggered.current = false;
+      gestureDir.current = "none";
+    };
+
+    // passive: false — обязательно для e.preventDefault() в touchmove
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove",  onMove,  { passive: false });
+    el.addEventListener("touchend",   onEnd,   { passive: true });
+    el.addEventListener("touchcancel",onEnd,   { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove",  onMove);
+      el.removeEventListener("touchend",   onEnd);
+      el.removeEventListener("touchcancel",onEnd);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSender, messageId, content, senderName]);
+
+  // Voice player
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audioProgress, setAudioProgress] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(voiceDuration || 0);
+  const [isPlaying,    setIsPlaying]    = useState(false);
+  const [audioProgress,setAudioProgress]= useState(0);
+  const [audioDuration,setAudioDuration]= useState(voiceDuration || 0);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     onMenuOpen(messageId, e.clientX, e.clientY);
   }, [messageId, onMenuOpen]);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    handleSwipeTouchStart(e);
-    const touch = e.touches[0];
-    const timer = setTimeout(() => {
-      onMenuOpen(messageId, touch.clientX, touch.clientY);
-    }, 500);
-    setLongPressTimer(timer);
-  }, [messageId, onMenuOpen, handleSwipeTouchStart]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    // Если началось движение — отменяем long press
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-    handleSwipeTouchMove(e);
-  }, [longPressTimer, handleSwipeTouchMove]);
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (longPressTimer) clearTimeout(longPressTimer);
-    handleSwipeTouchEnd();
-  }, [longPressTimer, handleSwipeTouchEnd]);
 
   const handleDelete = useCallback(() => {
     onMenuClose();
@@ -164,61 +197,59 @@ export default function ChatMessage({
         const dur = audioRef.current!.duration || audioDuration || 1;
         setAudioProgress((audioRef.current!.currentTime / dur) * 100);
       };
-      audioRef.current.onloadedmetadata = () => {
+      audioRef.current.onloadedmetadata = () =>
         setAudioDuration(Math.round(audioRef.current!.duration));
-      };
       audioRef.current.onended = () => {
         setIsPlaying(false);
         setAudioProgress(0);
       };
     }
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current.play();
-      setIsPlaying(true);
-    }
+    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
+    else           { audioRef.current.play();  setIsPlaying(true);  }
   }, [voiceUrl, isPlaying, audioDuration]);
 
-  const formatDuration = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+  const fmt = (s: number) =>
+    `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   const bubbleColor = isSender ? SENDER_COLOR : RECIPIENT_COLOR;
 
   const particleData = useMemo(() => {
     const num = typeof id === "number" ? id : parseInt(id.replace(/\D/g, "") || "0");
     return Array.from({ length: 24 }).map((_, i) => {
-      const seed = num + i * 137;
+      const s = num + i * 137;
       return {
-        initialX: `${(seed * 1.23) % 100}%`,
-        initialY: `${(seed * 4.56) % 100}%`,
-        targetX: `${((seed * 7.89) % 400) - 200}%`,
-        targetY: `${((seed * 3.21) % 300) - 50}%`,
-        rotate: (seed * 999) % 360,
-        delay: (seed * 0.002) % 0.2,
+        initialX: `${(s * 1.23) % 100}%`,
+        initialY: `${(s * 4.56) % 100}%`,
+        targetX:  `${((s * 7.89) % 400) - 200}%`,
+        targetY:  `${((s * 3.21) % 300) - 50}%`,
+        rotate: (s * 999) % 360,
+        delay:  (s * 0.002) % 0.2,
       };
     });
   }, [id]);
 
-  const timeStr = new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const timeStr = new Date(createdAt).toLocaleTimeString([], {
+    hour: "2-digit", minute: "2-digit",
+  });
 
   const { menuStyle, transformOrigin } = useMemo(() => {
-    if (typeof window === "undefined") return { menuStyle: { top: menuPos.y, left: menuPos.x }, transformOrigin: "top left" };
-    const menuW = 208; const menuH = 280; const margin = 8;
-    const growUp = menuPos.y + menuH > window.innerHeight - margin;
-    let top = growUp ? menuPos.y - menuH - 4 : menuPos.y + 4;
-    let left = menuPos.x - menuW / 2;
-    if (top < margin) top = margin;
-    if (left < margin) left = margin;
-    if (left + menuW > window.innerWidth - margin) left = window.innerWidth - menuW - margin;
-    const originX = Math.round(Math.min(Math.max(menuPos.x - left, 16), menuW - 16));
-    return { menuStyle: { top, left }, transformOrigin: `${originX}px ${growUp ? menuH : 0}px` };
+    if (typeof window === "undefined")
+      return { menuStyle: { top: menuPos.y, left: menuPos.x }, transformOrigin: "top left" };
+    const mW = 208, mH = 280, mg = 8;
+    const growUp = menuPos.y + mH > window.innerHeight - mg;
+    let top  = growUp ? menuPos.y - mH - 4 : menuPos.y + 4;
+    let left = menuPos.x - mW / 2;
+    if (top  < mg) top  = mg;
+    if (left < mg) left = mg;
+    if (left + mW > window.innerWidth - mg) left = window.innerWidth - mW - mg;
+    const ox = Math.round(Math.min(Math.max(menuPos.x - left, 16), mW - 16));
+    return { menuStyle: { top, left }, transformOrigin: `${ox}px ${growUp ? mH : 0}px` };
   }, [menuPos]);
 
   const ReadIndicator = () => {
     if (!isSender) return null;
-    if (isTemp) return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-60" />;
-    if (isRead) return <CheckCheck size={13} strokeWidth={2.5} className="ml-0.5" style={{ color: "#a8d8f0" }} />;
+    if (isTemp)  return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-60" />;
+    if (isRead)  return <CheckCheck size={13} strokeWidth={2.5} className="ml-0.5" style={{ color: "#a8d8f0" }} />;
     return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-70" />;
   };
 
@@ -227,60 +258,74 @@ export default function ChatMessage({
       layout="position"
       initial={isTemp ? { opacity: 0, scale: 0.88, y: 10, x: isSender ? 10 : -10 } : false}
       animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-      exit={isDeleting
-        ? { opacity: 0, transition: { duration: 0.2, delay: 0.75 } }
-        : { opacity: 0, scale: 0.8, transition: { duration: 0.15 } }
+      exit={
+        isDeleting
+          ? { opacity: 0, transition: { duration: 0.2, delay: 0.75 } }
+          : { opacity: 0, scale: 0.8, transition: { duration: 0.15 } }
       }
       transition={{ type: "spring", stiffness: 420, damping: 32 }}
-      className={`flex w-full ${isSender ? "justify-end" : "justify-start"} mb-[2px] ${isFirstInGroup ? "mt-3" : "mt-0"} relative`}
+      className={`flex w-full ${isSender ? "justify-end" : "justify-start"} mb-[2px] ${isFirstInGroup ? "mt-3" : "mt-0"} relative overflow-visible`}
     >
-      {/* ── Иконка Reply (появляется при свайпе) ── */}
+      {/* ── Иконка Reply — появляется при свайпе, стоит позади бабла ── */}
       <motion.div
         style={{
-          opacity: replyIconOpacity,
-          scale: replyIconScale,
-          x: replyIconX,
+          opacity:  replyIconOpacity,
+          scale:    replyIconScale,
           position: "absolute",
           top: "50%",
           translateY: "-50%",
-          ...(isSender ? { left: -44 } : { right: -44 }),
+          ...(isSender ? { left: 8 } : { right: 8 }),
           pointerEvents: "none",
-          zIndex: 5,
+          zIndex: 0,
         }}
       >
         <div
-          className="w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+          className="w-8 h-8 rounded-full flex items-center justify-center shadow-lg"
           style={{ backgroundColor: ACCENT }}
         >
-          <Reply size={17} color="white" />
+          <Reply size={15} color="white" />
         </div>
       </motion.div>
 
-      {/* ── Bubble wrapper со свайпом ── */}
-      <div className="relative max-w-[80vw]">
+      {/* ── Bubble + хвостик двигаются вместе ── */}
+      <div className="relative max-w-[80vw]" style={{ zIndex: 1 }}>
+        {/* swipeWrapRef — сюда вешаются non-passive touch listeners */}
         <motion.div
+          ref={swipeWrapRef}
           style={{ x: swipeX }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
           onContextMenu={handleContextMenu}
           className="relative"
         >
+          {/* Bubble */}
           <motion.div
-            animate={isDeleting ? { opacity: 0, scale: 0.8, filter: "blur(6px)", transition: { duration: 0.3 } } : {}}
+            animate={isDeleting
+              ? { opacity: 0, scale: 0.8, filter: "blur(6px)", transition: { duration: 0.3 } }
+              : {}}
             style={{
-              borderTopLeftRadius: !isSender && hasAbove ? "5px" : "15px",
-              borderTopRightRadius: isSender && hasAbove ? "5px" : "15px",
-              borderBottomLeftRadius: !isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
-              borderBottomRightRadius: isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
+              borderTopLeftRadius:     !isSender && hasAbove ? "5px"  : "15px",
+              borderTopRightRadius:     isSender && hasAbove ? "5px"  : "15px",
+              borderBottomLeftRadius:  !isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
+              borderBottomRightRadius:  isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
               backgroundColor: bubbleColor,
             }}
             className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px]"
           >
-            {/* Имя отправителя с галочкой разработчика */}
-            
+            {/* Имя отправителя */}
+            {!isSender && isFirstInGroup && senderName && (
+              <div className="flex items-center gap-1 mb-0.5">
+                <span className="text-[12px] font-semibold" style={{ color: ACCENT }}>
+                  {senderName}
+                </span>
+                {isDevUser && (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="12" fill={ACCENT} />
+                    <path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+            )}
 
-            {/* Forwarded label */}
+            {/* Forwarded */}
             {isForwarded && (
               <div className="flex items-center gap-1 mb-1 opacity-70">
                 <Forward size={12} />
@@ -291,15 +336,17 @@ export default function ChatMessage({
             {/* Reply preview */}
             {replyTo && (
               <motion.div
-                onClick={(e) => { e.stopPropagation(); onScrollToMessage?.(replyTo.id.toString()); }}
+                onClick={e => { e.stopPropagation(); onScrollToMessage?.(replyTo.id.toString()); }}
                 className="mb-2 rounded-lg overflow-hidden cursor-pointer"
                 style={{ backgroundColor: "rgba(0,0,0,0.18)" }}
                 whileHover={{ backgroundColor: "rgba(0,0,0,0.28)" }}
               >
                 <div className="flex">
-                  <div className="w-[3px] rounded-l-lg shrink-0" style={{ backgroundColor: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
+                  <div className="w-[3px] rounded-l-lg shrink-0"
+                    style={{ backgroundColor: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
                   <div className="px-2 py-1.5 min-w-0">
-                    <p className="text-[12px] font-semibold truncate" style={{ color: isSender ? "rgba(255,255,255,0.85)" : ACCENT }}>
+                    <p className="text-[12px] font-semibold truncate"
+                      style={{ color: isSender ? "rgba(255,255,255,0.85)" : ACCENT }}>
                       {replyTo.sender.username}
                     </p>
                     <p className="text-[12px] opacity-70 truncate">{replyTo.content}</p>
@@ -308,37 +355,30 @@ export default function ChatMessage({
               </motion.div>
             )}
 
-            {/* Voice message */}
-            {voiceUrl !== undefined && voiceUrl !== null && voiceUrl !== "" ? (
+            {/* Voice */}
+            {voiceUrl ? (
               <div className="flex items-center gap-2 min-w-[180px]">
                 <motion.button whileTap={{ scale: 0.85 }}
-                  onClick={(e) => { e.stopPropagation(); toggleAudio(); }}
+                  onClick={e => { e.stopPropagation(); toggleAudio(); }}
                   className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
                   style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
-                  {isPlaying ? (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                      <rect x="2" y="1" width="4" height="12" rx="1.5" />
-                      <rect x="8" y="1" width="4" height="12" rx="1.5" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="white">
-                      <path d="M3 2l9 5-9 5V2z" />
-                    </svg>
-                  )}
+                  {isPlaying
+                    ? <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><rect x="2" y="1" width="4" height="12" rx="1.5"/><rect x="8" y="1" width="4" height="12" rx="1.5"/></svg>
+                    : <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M3 2l9 5-9 5V2z"/></svg>}
                 </motion.button>
                 <div className="flex-1 min-w-0">
                   <div className="relative h-[28px] flex items-center gap-[2px]">
                     {Array.from({ length: 28 }).map((_, i) => {
-                      const heights = [3,5,8,12,16,20,18,14,10,7,5,8,14,20,18,12,8,5,7,11,17,20,16,11,7,5,4,3];
-                      const h = heights[i % heights.length];
-                      const filled = (i / 28) * 100 < audioProgress;
+                      const hs = [3,5,8,12,16,20,18,14,10,7,5,8,14,20,18,12,8,5,7,11,17,20,16,11,7,5,4,3];
                       return (
                         <div key={i} className="rounded-full flex-1 transition-all duration-100"
-                          style={{ height: `${h}px`, backgroundColor: filled ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }} />
+                          style={{ height: `${hs[i % hs.length]}px`,
+                            backgroundColor: (i / 28) * 100 < audioProgress
+                              ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }} />
                       );
                     })}
                   </div>
-                  <span className="text-[10px] opacity-60">{formatDuration(audioDuration)}</span>
+                  <span className="text-[10px] opacity-60">{fmt(audioDuration)}</span>
                 </div>
                 <span className="text-[10px] opacity-60 whitespace-nowrap flex items-center gap-0.5 shrink-0 self-end pb-0.5">
                   {timeStr}<ReadIndicator />
@@ -346,7 +386,8 @@ export default function ChatMessage({
               </div>
             ) : (
               <div className="flex items-end gap-x-2 flex-wrap">
-                <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                <span className="leading-[1.4] text-[15px] flex-1"
+                  style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
                   <WrappedText text={displayContent} />
                 </span>
                 <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
@@ -356,7 +397,7 @@ export default function ChatMessage({
             )}
           </motion.div>
 
-          {/* Bubble tail */}
+          {/* Хвостик */}
           {isLastInGroup && !isDeleting && (
             <div className={`absolute bottom-0 w-[10px] h-4 ${isSender ? "-right-[10px]" : "-left-[9px]"} z-0`}>
               <svg width="10" height="16" viewBox="0 0 10 16">
@@ -368,13 +409,14 @@ export default function ChatMessage({
             </div>
           )}
 
-          {/* Delete particles */}
+          {/* Частицы при удалении */}
           <AnimatePresence>
             {isDeleting && (
               <div className="absolute inset-0 pointer-events-none z-20 overflow-visible">
                 {particleData.map((p, i) => (
                   <motion.div key={i}
-                    initial={{ left: p.initialX, top: p.initialY, scale: 1, opacity: 1, backgroundColor: bubbleColor, borderRadius: "2px" }}
+                    initial={{ left: p.initialX, top: p.initialY, scale: 1, opacity: 1,
+                      backgroundColor: bubbleColor, borderRadius: "2px" }}
                     animate={{ x: p.targetX, y: p.targetY, scale: 0, opacity: 0, rotate: p.rotate }}
                     transition={{ duration: 0.8, ease: "easeOut", delay: p.delay }}
                     className="absolute w-2 h-2" />
@@ -385,7 +427,7 @@ export default function ChatMessage({
         </motion.div>
       </div>
 
-      {/* Context menu */}
+      {/* Контекстное меню */}
       <AnimatePresence>
         {showMenu && (
           <motion.div
@@ -396,26 +438,26 @@ export default function ChatMessage({
             className="fixed z-[100] w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden"
             style={{ ...menuStyle, transformOrigin }}
           >
-            <MenuItem icon={<Reply size={17} />} label={t('reply')} onClick={() => {
+            <MenuItem icon={<Reply size={17} />} label={t("reply")} onClick={() => {
               onReply?.({ id: messageId, content, senderName: senderName || "" });
               onMenuClose();
             }} />
             {isSender && (
-              <MenuItem icon={<Pencil size={17} />} label={t('edit')} onClick={() => {
+              <MenuItem icon={<Pencil size={17} />} label={t("edit")} onClick={() => {
                 onEdit?.(messageId, content);
                 onMenuClose();
               }} />
             )}
-            <MenuItem icon={<Copy size={17} />} label={t('copy')} onClick={() => {
+            <MenuItem icon={<Copy size={17} />} label={t("copy")} onClick={() => {
               navigator.clipboard.writeText(content);
               onMenuClose();
             }} />
-            <MenuItem icon={<Forward size={17} />} label={t('forward')} onClick={() => {
+            <MenuItem icon={<Forward size={17} />} label={t("forward")} onClick={() => {
               onForward?.({ id: messageId, content });
               onMenuClose();
             }} />
             <div className="mx-3 my-1 border-t border-white/8" />
-            <MenuItem icon={<Trash2 size={17} />} label={t('delete')} color="text-red-400" onClick={handleDelete} />
+            <MenuItem icon={<Trash2 size={17} />} label={t("delete")} color="text-red-400" onClick={handleDelete} />
             <div className="px-4 py-1.5">
               <span className="text-[11px] text-gray-600">{timeStr}</span>
             </div>
@@ -443,13 +485,13 @@ function WrappedText({ text }: { text: string }) {
   const LIMIT = isMobile ? 35 : 56;
   const lines: string[] = [];
   for (const rawLine of text.split("\n")) {
-    let remaining = rawLine;
-    while (remaining.length > LIMIT) {
-      const spaceIdx = remaining.lastIndexOf(" ", LIMIT);
-      if (spaceIdx > 0) { lines.push(remaining.slice(0, spaceIdx)); remaining = remaining.slice(spaceIdx + 1); }
-      else { lines.push(remaining.slice(0, LIMIT)); remaining = remaining.slice(LIMIT); }
+    let rem = rawLine;
+    while (rem.length > LIMIT) {
+      const si = rem.lastIndexOf(" ", LIMIT);
+      if (si > 0) { lines.push(rem.slice(0, si)); rem = rem.slice(si + 1); }
+      else        { lines.push(rem.slice(0, LIMIT)); rem = rem.slice(LIMIT); }
     }
-    lines.push(remaining);
+    lines.push(rem);
   }
   return <>{lines.join("\n")}</>;
 }
