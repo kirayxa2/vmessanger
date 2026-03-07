@@ -35,6 +35,21 @@ const ICE_SERVERS = {
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    }
   ],
 }
 
@@ -43,34 +58,34 @@ export default function CallModal({
 }: CallModalProps) {
   // Снимок данных при монтировании — не меняются когда родитель убирает props
   const callDataRef = useRef({
-    callId:      incomingCall?.callId      ?? outgoingCall?.callId,
+    callId: incomingCall?.callId ?? outgoingCall?.callId,
     otherUserId: incomingCall?.initiatorId ?? outgoingCall?.receiverId,
-    otherName:   incomingCall?.initiatorName ?? outgoingCall?.receiverName ?? "",
+    otherName: incomingCall?.initiatorName ?? outgoingCall?.receiverName ?? "",
     otherAvatar: incomingCall?.initiatorAvatar ?? outgoingCall?.receiverAvatar,
-    isIncoming:  !!incomingCall,
+    isIncoming: !!incomingCall,
   })
   const { callId, otherUserId, otherName, otherAvatar, isIncoming } = callDataRef.current
 
-  const [callState,    setCallState]    = useState<CallState>(isIncoming ? "incoming" : "outgoing")
-  const [isMuted,      setIsMuted]      = useState(false)
-  const [isVideoOn,    setIsVideoOn]    = useState(false)
+  const [callState, setCallState] = useState<CallState>(isIncoming ? "incoming" : "outgoing")
+  const [isMuted, setIsMuted] = useState(false)
+  const [isVideoOn, setIsVideoOn] = useState(false)
   const [callDuration, setCallDuration] = useState(0)
-  const [statusText,   setStatusText]   = useState(isIncoming ? "Входящий звонок" : "Вызов...")
-  const [hasCamera,    setHasCamera]    = useState(false)
+  const [statusText, setStatusText] = useState(isIncoming ? "Входящий звонок" : "Вызов...")
+  const [hasCamera, setHasCamera] = useState(false)
 
-  const localVideoRef  = useRef<HTMLVideoElement>(null)
+  const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
-  const peerRef        = useRef<RTCPeerConnection | null>(null)
+  const peerRef = useRef<RTCPeerConnection | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
-  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timerStarted   = useRef(false)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerStarted = useRef(false)
   // Буфер ICE-кандидатов до setRemoteDescription
-  const iceBufRef      = useRef<RTCIceCandidateInit[]>([])
+  const iceBufRef = useRef<RTCIceCandidateInit[]>([])
 
   useEffect(() => {
     navigator.mediaDevices?.enumerateDevices?.()
       .then(ds => setHasCamera(ds.some(d => d.kind === "videoinput")))
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   // ── Таймер ────────────────────────────────────────────────────
@@ -136,7 +151,7 @@ export default function CallModal({
     peer.oniceconnectionstatechange = () => {
       console.log("iceState:", peer.iceConnectionState)
       if (peer.iceConnectionState === "connected" ||
-          peer.iceConnectionState === "completed") onConnectedOnce()
+        peer.iceConnectionState === "completed") onConnectedOnce()
     }
 
     // Fallback: если через 4с state-события не сработали — всё равно переходим в connected
@@ -157,7 +172,7 @@ export default function CallModal({
     const peer = peerRef.current
     if (!peer) return
     for (const c of iceBufRef.current) {
-      try { await peer.addIceCandidate(new RTCIceCandidate(c)) } catch {}
+      try { await peer.addIceCandidate(new RTCIceCandidate(c)) } catch { }
     }
     iceBufRef.current = []
   }, [])
@@ -221,7 +236,7 @@ export default function CallModal({
       if (data.callId !== callId) return
       const peer = peerRef.current
       if (peer?.remoteDescription) {
-        try { await peer.addIceCandidate(new RTCIceCandidate(data.candidate)) } catch {}
+        try { await peer.addIceCandidate(new RTCIceCandidate(data.candidate)) } catch { }
       } else {
         iceBufRef.current.push(data.candidate)
       }
@@ -241,20 +256,20 @@ export default function CallModal({
       setTimeout(() => onHangup?.(), 1500)
     }
 
-    socket.on("call-accepted",  handleCallAccepted)
-    socket.on("call-answered",  handleCallAnswered)
-    socket.on("call-offer",     handleCallOffer)
-    socket.on("call-ice",       handleIce)
-    socket.on("call-declined",  handleCallDeclined)
-    socket.on("call-ended",     handleCallEnded)
+    socket.on("call-accepted", handleCallAccepted)
+    socket.on("call-answered", handleCallAnswered)
+    socket.on("call-offer", handleCallOffer)
+    socket.on("call-ice", handleIce)
+    socket.on("call-declined", handleCallDeclined)
+    socket.on("call-ended", handleCallEnded)
 
     return () => {
-      socket.off("call-accepted",  handleCallAccepted)
-      socket.off("call-answered",  handleCallAnswered)
-      socket.off("call-offer",     handleCallOffer)
-      socket.off("call-ice",       handleIce)
-      socket.off("call-declined",  handleCallDeclined)
-      socket.off("call-ended",     handleCallEnded)
+      socket.off("call-accepted", handleCallAccepted)
+      socket.off("call-answered", handleCallAnswered)
+      socket.off("call-offer", handleCallOffer)
+      socket.off("call-ice", handleIce)
+      socket.off("call-declined", handleCallDeclined)
+      socket.off("call-ended", handleCallEnded)
     }
   }, [socket, callId, otherUserId, createPeer, getLocalStream, flushIceBuf, startTimer, onAccept, onHangup])
 
@@ -276,7 +291,7 @@ export default function CallModal({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ callId, status: "declined" }),
-    }).catch(() => {})
+    }).catch(() => { })
     onDecline?.()
   }, [socket, callId, otherUserId, onDecline])
 
@@ -291,7 +306,7 @@ export default function CallModal({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ callId, status: "ended" }),
-    }).catch(() => {})
+    }).catch(() => { })
     onHangup?.()
   }, [socket, callId, otherUserId, onHangup])
 

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, Notification } = require('electron');
 const path = require('path');
 
 const PRODUCTION_URL = 'https://vmessanger-production.up.railway.app';
@@ -48,6 +48,25 @@ function createWindow() {
     else mainWindow?.maximize();
   });
   ipcMain.on('window-close', () => mainWindow?.close());
+
+  ipcMain.on('show-notification', (event, title, body) => {
+    if (Notification.isSupported()) {
+      const notification = new Notification({
+        title: title,
+        body: body,
+        icon: getIconPath(),
+        silent: true // sound plays in web app
+      });
+      notification.on('click', () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      });
+      notification.show();
+    }
+  });
 
   mainWindow.on('closed', () => { mainWindow = null; });
 }

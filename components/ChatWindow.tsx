@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
 import UserProfilePanel from "./UserProfilePanel"
+import GroupProfilePanel from "./GroupProfilePanel"
 import { useNotificationSound } from "@/hooks/useNotificationSound"
 import { VerifiedBadge } from "./VerifiedBadge"
 import TitleBadge from "./TitleBadge"
@@ -69,7 +70,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [loading, setLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState("")
-  
+
   const DEV_USER_ID = 1;
 
 
@@ -121,7 +122,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [selfDestructSeconds, setSelfDestructSeconds] = useState<number | null>(null)
 
   // ── Voice recording ──────────────────────────────────────────
-  const { play: playSound } = useNotificationSound()
 
   const [isRecording, setIsRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -139,12 +139,40 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const convType: string = conversation?.type || "private"
   const isSavedChat = convType === "saved"
   const isSystemChat = convType === "system"
-  const isSpecialChat = isSavedChat || isSystemChat
+  const isGroupChat = convType === "group"
+
+  // ── Mobile Header Long Press & Keyboard Fixes ─────────────────────────────
+  const headerLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // When window resizes (e.g., mobile keyboard opens), scroll input into view
+    const handleResize = () => {
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        if (document.activeElement === inputRef.current) {
+          setTimeout(() => {
+            inputContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }, 100);
+        }
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  const isGroup = isGroupChat
+  const isSpecialChat = isSavedChat || isSystemChat || isGroup
 
   const otherUser = useMemo(() => {
     if (isSpecialChat || !conversation?.participants) return null
     return conversation.participants.find((p: any) => p.userId?.toString() !== session?.user?.id?.toString())?.user
   }, [conversation, session, isSpecialChat])
+
+  const chatTitle = isSavedChat ? t("saved_messages")
+    : isSystemChat ? "Vortex"
+      : isGroupChat ? conversation?.name
+        : otherUser?.username || t("loading")
+
+  const isOtherUserDev = otherUser?.id === DEV_USER_ID || otherUser?.id === DEV_USER_ID.toString() || Number(otherUser?.id) === DEV_USER_ID
 
   const participantIds = useMemo(() => {
     if (!conversation?.participants) return []
@@ -213,7 +241,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               const pinned = allMsgs.find((m: any) => m.id === conv.pinnedMessageId)
               if (pinned) setPinnedMessage(pinned)
             })
-            .catch(() => {})
+            .catch(() => { })
         }
         isInitialLoad.current = false
       })
@@ -236,7 +264,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       } else {
         setHasMoreMessages(false)
       }
-    } catch {}
+    } catch { }
     setLoadingMore(false)
   }, [apiId, loadingMore, hasMoreMessages])
 
@@ -275,7 +303,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
           participantIds,
         })
       }
-    }).catch(() => {})
+    }).catch(() => { })
   }, [loading, apiId, session?.user?.id])
 
   // Draft save
@@ -284,7 +312,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     const timer = setTimeout(async () => {
       try {
         await fetch("/api/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversationId: apiId, text: input }) })
-      } catch {}
+      } catch { }
     }, 500)
     return () => clearTimeout(timer)
   }, [input, apiId])
@@ -303,10 +331,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         newMsgIds.current.add(message.id.toString())
         return [...prev, message]
       })
-      // Play sound for incoming messages
-      if (message.sender.id?.toString() !== session?.user?.id?.toString()) {
-        playSound()
-      }
       // Auto-mark as read if chat is visible
       if (message.sender.id?.toString() !== session?.user?.id?.toString()) {
         fetch("/api/messages/read", {
@@ -322,7 +346,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               participantIds,
             })
           }
-        }).catch(() => {})
+        }).catch(() => { })
       }
     }
 
@@ -411,7 +435,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         setMessages(prev => prev.filter(m => m.id?.toString() !== id))
         socket?.emit("delete-message", { id, conversationId: String(apiId) })
       }
-    } catch {}
+    } catch { }
   }, [socket, apiId])
 
   const handleStartEdit = useCallback((id: string, content: string) => {
@@ -571,10 +595,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     setCallActive(true)
   }, [otherUser, session, apiId, socket, otherUserAvatar])
 
-  const isOtherUserDev = useMemo(() => {
-  if (!otherUser?.id) return false;
-  return Number(otherUser.id) === DEV_USER_ID;
-}, [otherUser?.id]);
 
   // ── File upload ──────────────────────────────────────────────
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -644,7 +664,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
           socket?.emit("edit-message", { ...updated, conversationId: String(apiId) })
           setEditingMessageId(null); setInput("")
         }
-      } catch {}
+      } catch { }
       return
     }
 
@@ -672,7 +692,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         stableKeys.current.set(saved.id.toString(), sk); stableKeys.current.delete(tempId)
         setMessages(prev => prev.map(m => m.id === tempId ? { ...saved } : m))
         socket?.emit("send-message", { ...saved, conversationId: String(apiId), participantIds })
-        fetch(`/api/drafts?conversationId=${apiId}`, { method: "DELETE" }).catch(() => {})
+        fetch(`/api/drafts?conversationId=${apiId}`, { method: "DELETE" }).catch(() => { })
       } else { setMessages(prev => prev.filter(m => m.id !== tempId)) }
     } catch { setMessages(prev => prev.filter(m => m.id !== tempId)) }
   }, [input, session, editingMessageId, apiId, socket, onNewMessage, participantIds, replyingTo])
@@ -709,7 +729,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         setPinnedMessage(data.pinnedMessage)
         socket?.emit("message-pinned", { conversationId: String(apiId), ...data })
       }
-    } catch {}
+    } catch { }
   }, [apiId, socket])
 
   const handleUnpinMessage = useCallback(async () => {
@@ -719,7 +739,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         setPinnedMessage(null)
         socket?.emit("message-unpinned", { conversationId: String(apiId) })
       }
-    } catch {}
+    } catch { }
   }, [apiId, socket])
 
   // ── Drag & Drop handlers ──
@@ -842,9 +862,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     )
   }
 
-  
 
-// 2. Добавляем проверку здесь (выше рендера)
+
+  // 2. Добавляем проверку здесь (выше рендера)
 
   return (
     <motion.div
@@ -878,10 +898,23 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
         {/* ── Header ── */}
         <div
-          className="px-4 flex items-center justify-between h-[63px] bg-[#1c242f] relative z-10 cursor-pointer"
+          className="px-4 flex items-center justify-between h-[63px] bg-[#1c242f] relative z-10 cursor-pointer select-none"
           onClick={() => setShowProfile(p => !p)}
+          onTouchStart={() => {
+            headerLongPressTimerRef.current = setTimeout(() => {
+              setShowSearch(true);
+              if (navigator.vibrate) navigator.vibrate(50);
+            }, 3000); // 3 seconds
+          }}
+          onTouchEnd={() => {
+            if (headerLongPressTimerRef.current) clearTimeout(headerLongPressTimerRef.current);
+          }}
+          onTouchMove={() => {
+            if (headerLongPressTimerRef.current) clearTimeout(headerLongPressTimerRef.current);
+          }}
+          style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none" }} // disable native long-press menus
         >
-          <div className="flex items-center gap-3 text-white flex-1 min-w-0">
+          <div className="flex items-center gap-3 text-white flex-1 min-w-0 pointer-events-none">
             {onBack && (
               <motion.button onClick={e => { e.stopPropagation(); onBack() }} whileTap={{ scale: 0.88 }}
                 className="md:hidden p-2 -ml-2 hover:bg-white/10 rounded-full transition-colors shrink-0">
@@ -890,15 +923,16 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
             )}
             <motion.div
               className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0 overflow-hidden relative text-white"
-              style={{ backgroundColor: isSavedChat ? "#4e8cde" : isSystemChat ? "#7e85e1" : ACCENT }}
+              style={{ backgroundColor: isSavedChat ? "#4e8cde" : isSystemChat || isGroupChat ? "#7e85e1" : ACCENT }}
               whileHover={{ scale: 1.05 }}
             >
               {isSavedChat ? <Bookmark size={18} className="text-white" />
                 : isSystemChat ? <img src="/logo (1).ico" alt="Vortex" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                : otherUserAvatar ? <img src={otherUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
-                : otherUser?.username?.[0]?.toUpperCase() || "C"}
+                  : isGroupChat ? chatTitle?.[0]?.toUpperCase() || "G"
+                    : otherUserAvatar ? <img src={otherUserAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                      : otherUser?.username?.[0]?.toUpperCase() || "C"}
               <AnimatePresence>
-                {!isSpecialChat && otherUserOnline && (
+                {!isSpecialChat && !isGroupChat && otherUserOnline && (
                   <motion.div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-[#1c242f]"
                     initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 500, damping: 25 }} />
                 )}
@@ -919,10 +953,15 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                   <h2 className="text-base font-bold truncate text-white leading-tight">{t('saved_messages')}</h2>
                   <p className="text-xs text-[#4e8cde]">{t('saved_chat_subtitle')}</p>
                 </div>
+              ) : isGroupChat ? (
+                <div>
+                  <h2 className="text-base font-bold truncate text-white leading-tight">{chatTitle}</h2>
+                  <p className="text-xs text-gray-400">Участники: {conversation?.participants?.length || 0}</p>
+                </div>
               ) : (
                 <>
                   <h2 className="text-base font-bold text-white leading-tight flex items-center gap-1 flex-wrap">
-                    <span className="truncate">{otherUser?.username || t('chat')}</span>
+                    <span className="truncate">{chatTitle}</span>
                     {isOtherUserDev && <VerifiedBadge size={18} />}
                     <TitleBadge userId={otherUser?.id} className="mt-[1px]" />
                   </h2>
@@ -1108,7 +1147,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                       isSender={isSender} isFirstInGroup={isFirstInGroup} isLastInGroup={isLastInGroup}
                       hasAbove={!isFirstInGroup} replyTo={msg.replyTo} isForwarded={!!msg.forwardFromId}
                       isRead={msg.isRead} voiceUrl={msg.voiceUrl} voiceDuration={msg.voiceDuration}
-                      senderName={msg.sender.username} senderId={msg.sender.id} isTemp={isNew}
+                      senderName={isGroupChat ? msg.sender.username : undefined} senderId={msg.sender.id} isTemp={isNew}
+                      isGroupChat={isGroupChat}
                       onDelete={handleDeleteMessage} onEdit={handleStartEdit}
                       onReply={handleReply} onForward={handleForwardOpen} onScrollToMessage={scrollToMessage}
                       openMenuId={openMenuId} onMenuOpen={handleMenuOpen} onMenuClose={handleMenuClose} menuPos={menuPos}
@@ -1135,7 +1175,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                             const msgData = await msgRes.json()
                             setMessages(Array.isArray(msgData.messages) ? msgData.messages : [])
                           }
-                        } catch {}
+                        } catch { }
                       }}
                     />
                   )}
@@ -1170,7 +1210,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
         {/* ── Input area ── */}
         {!isSystemChat && (
-          <div className="px-3 pb-4 pt-2">
+          <div ref={inputContainerRef} className="px-3 pb-4 pt-2 relative z-20">
             <AnimatePresence>
               {uploadError && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
@@ -1330,14 +1370,25 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
       <AnimatePresence>
         {showProfile && (
-          <UserProfilePanel
-            userId={otherUser?.id}
-            username={otherUser?.username}
-            avatar={otherUserAvatar || otherUser?.avatar}
-            isOnline={otherUserOnline}
-            onClose={() => setShowProfile(false)}
-            isMobile={typeof window !== "undefined" && window.innerWidth < 768}
-          />
+          isGroup ? (
+            <GroupProfilePanel
+              conversationId={apiId}
+              name={chatTitle || "Group"}
+              participants={conversation?.participants || []}
+              currentUserId={session?.user?.id || ""}
+              onClose={() => setShowProfile(false)}
+              isMobile={typeof window !== "undefined" && window.innerWidth < 768}
+            />
+          ) : (
+            <UserProfilePanel
+              userId={otherUser?.id}
+              username={otherUser?.username}
+              avatar={otherUserAvatar || otherUser?.avatar}
+              isOnline={otherUserOnline}
+              onClose={() => setShowProfile(false)}
+              isMobile={typeof window !== "undefined" && window.innerWidth < 768}
+            />
+          )
         )}
       </AnimatePresence>
 

@@ -47,6 +47,7 @@ interface ChatMessageProps {
   onReaction?: (messageId: string, emoji: string) => void;
   currentUserId?: string | number;
   selfDestructAt?: string | null;
+  isGroupChat?: boolean;
 }
 
 export default function ChatMessage({
@@ -54,7 +55,7 @@ export default function ChatMessage({
   replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp,
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
   openMenuId, onMenuOpen, onMenuClose, menuPos, senderName, senderId,
-  reactions, onPin, onReaction, currentUserId, selfDestructAt,
+  reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const { filter } = useProfanityFilter();
@@ -82,12 +83,12 @@ export default function ChatMessage({
   const replyIconOpacity = useTransform(
     swipeX,
     isSender ? [-SWIPE_THRESHOLD, -24, 0] : [0, 24, SWIPE_THRESHOLD],
-    isSender ? [1, 0.4, 0]            : [0, 0.4, 1]
+    isSender ? [1, 0.4, 0] : [0, 0.4, 1]
   );
   const replyIconScale = useTransform(
     swipeX,
     isSender ? [-SWIPE_THRESHOLD, -24, 0] : [0, 24, SWIPE_THRESHOLD],
-    isSender ? [1, 0.7, 0.3]              : [0.3, 0.7, 1]
+    isSender ? [1, 0.7, 0.3] : [0.3, 0.7, 1]
   );
 
   const isDevUser =
@@ -168,24 +169,24 @@ export default function ChatMessage({
 
     // passive: false — обязательно для e.preventDefault() в touchmove
     el.addEventListener("touchstart", onStart, { passive: true });
-    el.addEventListener("touchmove",  onMove,  { passive: false });
-    el.addEventListener("touchend",   onEnd,   { passive: true });
-    el.addEventListener("touchcancel",onEnd,   { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
 
     return () => {
       el.removeEventListener("touchstart", onStart);
-      el.removeEventListener("touchmove",  onMove);
-      el.removeEventListener("touchend",   onEnd);
-      el.removeEventListener("touchcancel",onEnd);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSender, messageId, content, senderName]);
 
   // Voice player
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying,    setIsPlaying]    = useState(false);
-  const [audioProgress,setAudioProgress]= useState(0);
-  const [audioDuration,setAudioDuration]= useState(voiceDuration || 0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(voiceDuration || 0);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -215,7 +216,7 @@ export default function ChatMessage({
       };
     }
     if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
-    else           { audioRef.current.play();  setIsPlaying(true);  }
+    else { audioRef.current.play(); setIsPlaying(true); }
   }, [voiceUrl, isPlaying, audioDuration]);
 
   const fmt = (s: number) =>
@@ -230,10 +231,10 @@ export default function ChatMessage({
       return {
         initialX: `${(s * 1.23) % 100}%`,
         initialY: `${(s * 4.56) % 100}%`,
-        targetX:  `${((s * 7.89) % 400) - 200}%`,
-        targetY:  `${((s * 3.21) % 300) - 50}%`,
+        targetX: `${((s * 7.89) % 400) - 200}%`,
+        targetY: `${((s * 3.21) % 300) - 50}%`,
         rotate: (s * 999) % 360,
-        delay:  (s * 0.002) % 0.2,
+        delay: (s * 0.002) % 0.2,
       };
     });
   }, [id]);
@@ -247,9 +248,9 @@ export default function ChatMessage({
       return { menuStyle: { top: menuPos.y, left: menuPos.x }, transformOrigin: "top left" };
     const mW = 208, mH = 280, mg = 8;
     const growUp = menuPos.y + mH > window.innerHeight - mg;
-    let top  = growUp ? menuPos.y - mH - 4 : menuPos.y + 4;
+    let top = growUp ? menuPos.y - mH - 4 : menuPos.y + 4;
     let left = menuPos.x - mW / 2;
-    if (top  < mg) top  = mg;
+    if (top < mg) top = mg;
     if (left < mg) left = mg;
     if (left + mW > window.innerWidth - mg) left = window.innerWidth - mW - mg;
     const ox = Math.round(Math.min(Math.max(menuPos.x - left, 16), mW - 16));
@@ -258,8 +259,8 @@ export default function ChatMessage({
 
   const ReadIndicator = () => {
     if (!isSender) return null;
-    if (isTemp)  return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-60" />;
-    if (isRead)  return <CheckCheck size={13} strokeWidth={2.5} className="ml-0.5" style={{ color: "#a8d8f0" }} />;
+    if (isTemp) return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-60" />;
+    if (isRead) return <CheckCheck size={13} strokeWidth={2.5} className="ml-0.5" style={{ color: "#a8d8f0" }} />;
     return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-70" />;
   };
 
@@ -279,12 +280,12 @@ export default function ChatMessage({
       {/* ── Иконка Reply — появляется при свайпе, стоит позади бабла ── */}
       <motion.div
         style={{
-          opacity:  replyIconOpacity,
-          scale:    replyIconScale,
+          opacity: replyIconOpacity,
+          scale: replyIconScale,
           position: "absolute",
           top: "50%",
           translateY: "-50%",
-          ...(isSender ? { left: 8 } : { right: 8 }),
+          ...(isSender ? { left: isGroupChat && !isSender && isLastInGroup ? 48 + 8 : 8 } : { right: isGroupChat && isSender && isLastInGroup ? 48 + 8 : 8 }),
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -296,6 +297,17 @@ export default function ChatMessage({
           <Reply size={15} color="white" />
         </div>
       </motion.div>
+
+      {/* Avatar for non-sender in group chat (placed on the left of the bubble) */}
+      {!isSender && isGroupChat && isLastInGroup && senderName && (
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-1 mr-2 self-end overflow-hidden outline outline-1 outline-white/10" style={{ backgroundColor: ACCENT }}>
+          <span className="text-white text-xs font-bold">{senderName[0]?.toUpperCase()}</span>
+        </div>
+      )}
+      {!isSender && isGroupChat && !isLastInGroup && senderName && (
+        /* Spacer for alignment when avatar is not shown */
+        <div className="w-8 h-8 mr-2 shrink-0"></div>
+      )}
 
       {/* ── Bubble + хвостик двигаются вместе ── */}
       <div className="relative max-w-[80vw]" style={{ zIndex: 1 }}>
@@ -312,16 +324,16 @@ export default function ChatMessage({
               ? { opacity: 0, scale: 0.8, filter: "blur(6px)", transition: { duration: 0.3 } }
               : {}}
             style={{
-              borderTopLeftRadius:     !isSender && hasAbove ? "5px"  : "15px",
-              borderTopRightRadius:     isSender && hasAbove ? "5px"  : "15px",
-              borderBottomLeftRadius:  !isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
-              borderBottomRightRadius:  isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
+              borderTopLeftRadius: !isSender && hasAbove ? "5px" : "15px",
+              borderTopRightRadius: isSender && hasAbove ? "5px" : "15px",
+              borderBottomLeftRadius: !isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
+              borderBottomRightRadius: isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
               backgroundColor: bubbleColor,
             }}
             className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px]"
           >
-            {/* Имя отправителя */}
-            {!isSender && isFirstInGroup && senderName && (
+            {/* Имя отправителя (only on the last message in Group Chats) */}
+            {!isSender && isGroupChat && isLastInGroup && senderName && (
               <div className="flex items-center gap-1 mb-[3px] flex-wrap">
                 <span className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>
                   {senderName}
@@ -369,18 +381,20 @@ export default function ChatMessage({
                   className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
                   style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
                   {isPlaying
-                    ? <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><rect x="2" y="1" width="4" height="12" rx="1.5"/><rect x="8" y="1" width="4" height="12" rx="1.5"/></svg>
-                    : <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M3 2l9 5-9 5V2z"/></svg>}
+                    ? <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><rect x="2" y="1" width="4" height="12" rx="1.5" /><rect x="8" y="1" width="4" height="12" rx="1.5" /></svg>
+                    : <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M3 2l9 5-9 5V2z" /></svg>}
                 </motion.button>
                 <div className="flex-1 min-w-0">
                   <div className="relative h-[28px] flex items-center gap-[2px]">
                     {Array.from({ length: 28 }).map((_, i) => {
-                      const hs = [3,5,8,12,16,20,18,14,10,7,5,8,14,20,18,12,8,5,7,11,17,20,16,11,7,5,4,3];
+                      const hs = [3, 5, 8, 12, 16, 20, 18, 14, 10, 7, 5, 8, 14, 20, 18, 12, 8, 5, 7, 11, 17, 20, 16, 11, 7, 5, 4, 3];
                       return (
                         <div key={i} className="rounded-full flex-1 transition-all duration-100"
-                          style={{ height: `${hs[i % hs.length]}px`,
+                          style={{
+                            height: `${hs[i % hs.length]}px`,
                             backgroundColor: (i / 28) * 100 < audioProgress
-                              ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }} />
+                              ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)"
+                          }} />
                       );
                     })}
                   </div>
@@ -421,8 +435,10 @@ export default function ChatMessage({
               <div className="absolute inset-0 pointer-events-none z-20 overflow-visible">
                 {particleData.map((p, i) => (
                   <motion.div key={i}
-                    initial={{ left: p.initialX, top: p.initialY, scale: 1, opacity: 1,
-                      backgroundColor: bubbleColor, borderRadius: "2px" }}
+                    initial={{
+                      left: p.initialX, top: p.initialY, scale: 1, opacity: 1,
+                      backgroundColor: bubbleColor, borderRadius: "2px"
+                    }}
                     animate={{ x: p.targetX, y: p.targetY, scale: 0, opacity: 0, rotate: p.rotate }}
                     transition={{ duration: 0.8, ease: "easeOut", delay: p.delay }}
                     className="absolute w-2 h-2" />
@@ -449,9 +465,8 @@ export default function ChatMessage({
                 key={emoji}
                 whileTap={{ scale: 0.85 }}
                 onClick={() => onReaction?.(messageId, emoji)}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors ${
-                  data.hasOwn ? 'bg-[#7e85e1]/30 border border-[#7e85e1]/50' : 'bg-white/10 border border-white/5'
-                }`}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors ${data.hasOwn ? 'bg-[#7e85e1]/30 border border-[#7e85e1]/50' : 'bg-white/10 border border-white/5'
+                  }`}
                 title={data.users.join(', ')}
               >
                 <span>{emoji}</span>
@@ -552,7 +567,7 @@ function WrappedText({ text }: { text: string }) {
     while (rem.length > LIMIT) {
       const si = rem.lastIndexOf(" ", LIMIT);
       if (si > 0) { lines.push(rem.slice(0, si)); rem = rem.slice(si + 1); }
-      else        { lines.push(rem.slice(0, LIMIT)); rem = rem.slice(LIMIT); }
+      else { lines.push(rem.slice(0, LIMIT)); rem = rem.slice(LIMIT); }
     }
     lines.push(rem);
   }

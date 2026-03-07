@@ -9,6 +9,9 @@ import { Loader2, MessageSquare, Settings, User } from "lucide-react"
 import { useSocket } from "./ClientProviders"
 import TitleBar from "@/components/TitleBar"
 import { motion, AnimatePresence } from "framer-motion"
+import { useNotificationSound } from "@/hooks/useNotificationSound"
+import { LocalNotifications } from '@capacitor/local-notifications'
+import { Capacitor } from '@capacitor/core'
 
 const ACCENT = "#7e85e1"
 
@@ -29,6 +32,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
   const { socket } = useSocket()
   const router = useRouter()
   const isMobile = useIsMobile()
+  const { play: playNotificationSound } = useNotificationSound()
 
   const [conversations, setConversations] = useState<any[]>([])
   const [messagesCache, setMessagesCache] = useState<{ [key: string]: any[] }>({})
@@ -139,11 +143,49 @@ export default function HomePage({ conversationId }: { conversationId?: string }
           const updated = [...existing, message].slice(-100)
           return { ...prev, [data.conversationId]: updated }
         })
-        if (
-          data.conversationId.toString() !== selectedIdRef.current?.toString() &&
-          message.sender?.id?.toString() !== session?.user?.id?.toString()
-        ) {
-          setUnreadCounts(prev => ({ ...prev, [data.conversationId]: (prev[data.conversationId] || 0) + 1 }))
+        const isNotActiveChat = data.conversationId.toString() !== selectedIdRef.current?.toString()
+        const isNotSender = message.sender?.id?.toString() !== session?.user?.id?.toString()
+
+        if (isNotSender) {
+          if (isNotActiveChat) {
+            setUnreadCounts(prev => ({ ...prev, [data.conversationId]: (prev[data.conversationId] || 0) + 1 }))
+          }
+          // Global notification: play sound
+          playNotificationSound()
+          
+          const title = "Vortex new message!"
+          let body = message.content || "🖼️ Файл"
+          if (body.length > 50) body = body.substring(0, 47) + "..."
+          const isElectron = typeof window !== 'undefined' && (window as any).electronAPI
+          
+          if (Capacitor.isNativePlatform()) {
+            // Mobile (Capacitor)
+            LocalNotifications.schedule({
+              notifications: [{
+                title,
+                body,
+                id: new Date().getTime(),
+                schedule: { at: new Date(Date.now() + 100) },
+                sound: undefined, // Custom sound plays via app
+                smallIcon: "res://drawable/screen"
+              }]
+            }).catch((e: any) => console.error("Capacitor notification error", e))
+          } else if (isElectron) {
+            // Desktop (Electron)
+            (window as any).electronAPI.showNotification(title, body)
+          } else if ("Notification" in window && Notification.permission === "granted") {
+            // Fallback: Desktop Web
+            try {
+              new Notification(title, {
+                body,
+                icon: "/logo (1).ico",
+                tag: `msg-${message.id}`,
+                silent: true // Custom sound plays instead
+              })
+            } catch (e) {
+              console.error("Web Push notification failed", e)
+            }
+          }
         }
         setConversations(prev =>
           prev.map(c => c.id.toString() === data.conversationId.toString() ? { ...c, messages: [message] } : c)
@@ -170,7 +212,15 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   useEffect(() => {
     if (status === "unauthenticated") { router.push("/login"); return }
-    if (status === "authenticated") fetchConversations()
+    if (status === "authenticated") {
+      fetchConversations()
+      // Request permissions
+      if (Capacitor.isNativePlatform()) {
+        LocalNotifications.requestPermissions().catch((e: any) => console.error(e))
+      } else if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission()
+      }
+    }
   }, [status, router, fetchConversations])
 
   const handleSelectConversation = (id: string) => {

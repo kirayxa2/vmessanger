@@ -66,6 +66,7 @@
     "@capacitor/android": "^8.1.0",
     "@capacitor/cli": "^8.1.0",
     "@capacitor/core": "^8.1.0",
+    "@capacitor/local-notifications": "^8.0.2",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.95.3",

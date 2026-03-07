@@ -839,29 +839,40 @@ export default function ChatSidebar({
                 ? chat.participants?.find((p: any) => p.userId?.toString() !== currentUser?.id?.toString())?.user
                 : null
 
-              const avatarContent = isSaved ? <Bookmark size={22} className="text-white" />
-                : isSystem ? <img src="/logo (1).ico" alt="Vortex" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
-                : otherUser?.avatar ? <img src={otherUser.avatar} className="w-full h-full object-cover" />
-                : <span className="font-bold text-xl">{otherUser?.username?.[0]?.toUpperCase() || "U"}</span>
-
-              const avatarBg = isSaved ? "#4e8cde" : isSystem ? "#7e85e1" : ACCENT
-
               const isGroup = chat.type === "group"
 
-              const isDevUser = otherUser?.id !== undefined && (
+              let avatarContent = null
+              let avatarBg = ACCENT
+              let displayNameEl = null
+
+              if (isSaved) {
+                avatarContent = <Bookmark size={22} className="text-white" />
+                avatarBg = "#4e8cde"
+                displayNameEl = <span>{t("saved_messages")}</span>
+              } else if (isSystem) {
+                avatarContent = <img src="/logo (1).ico" alt="Vortex" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
+                avatarBg = "#7e85e1"
+                displayNameEl = <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
+              } else if (isGroup) {
+                // Group avatar and name
+                avatarContent = <span className="font-bold text-xl">{chat.name?.[0]?.toUpperCase() || "G"}</span>
+                avatarBg = "#7e85e1" // distinct color for groups
+                displayNameEl = <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
+              } else {
+                // Private chat
+                avatarContent = otherUser?.avatar ? <img src={otherUser.avatar} className="w-full h-full object-cover" />
+                  : <span className="font-bold text-xl">{otherUser?.username?.[0]?.toUpperCase() || "U"}</span>
+                const isDevUser = otherUser?.id !== undefined && (
                   otherUser.id === DEV_USER_ID ||
                   otherUser.id === DEV_USER_ID.toString() ||
                   Number(otherUser.id) === DEV_USER_ID
-                );
-
-              const displayNameEl = isSaved ? <span>{t("saved_messages")}</span>
-                : isSystem ? <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
-                : isGroup ? <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
-                : <span className="flex items-center gap-1">
-                    <span>{otherUser?.username}</span>
-                    {isDevUser && <VerifiedBadge size={15} />}
-                    <TitleBadge userId={otherUser?.id} />
-                  </span>
+                )
+                displayNameEl = <span className="flex items-center gap-1">
+                                  <span>{otherUser?.username}</span>
+                                  {isDevUser && <VerifiedBadge size={15} />}
+                                  <TitleBadge userId={otherUser?.id} />
+                                </span>
+              }
 
               const lastMsg = chat.messages?.[0]
               const previewText = isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
