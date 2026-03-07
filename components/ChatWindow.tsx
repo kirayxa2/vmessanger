@@ -143,6 +143,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
   // ── Mobile Header Long Press & Keyboard Fixes ─────────────────────────────
   const headerLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchStartX = useRef<number>(0)
+  const touchStartY = useRef<number>(0)
   const inputContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -900,7 +902,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         <div
           className="px-4 flex items-center justify-between h-[63px] bg-[#1c242f] relative z-10 cursor-pointer select-none"
           onClick={() => setShowProfile(p => !p)}
-          onTouchStart={() => {
+          onTouchStart={(e) => {
+            touchStartX.current = e.touches[0].clientX;
+            touchStartY.current = e.touches[0].clientY;
             headerLongPressTimerRef.current = setTimeout(() => {
               setShowSearch(true);
               if (navigator.vibrate) navigator.vibrate(50);
@@ -909,12 +913,18 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
           onTouchEnd={() => {
             if (headerLongPressTimerRef.current) clearTimeout(headerLongPressTimerRef.current);
           }}
-          onTouchMove={() => {
-            if (headerLongPressTimerRef.current) clearTimeout(headerLongPressTimerRef.current);
+          onTouchMove={(e) => {
+            if (headerLongPressTimerRef.current) {
+              const dx = e.touches[0].clientX - touchStartX.current;
+              const dy = e.touches[0].clientY - touchStartY.current;
+              if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                clearTimeout(headerLongPressTimerRef.current);
+              }
+            }
           }}
           style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none" }} // disable native long-press menus
         >
-          <div className="flex items-center gap-3 text-white flex-1 min-w-0 pointer-events-none">
+          <div className="flex items-center gap-3 text-white flex-1 min-w-0">
             {onBack && (
               <motion.button onClick={e => { e.stopPropagation(); onBack() }} whileTap={{ scale: 0.88 }}
                 className="md:hidden p-2 -ml-2 hover:bg-white/10 rounded-full transition-colors shrink-0">

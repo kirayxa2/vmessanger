@@ -110,6 +110,8 @@ export async function GET(req: NextRequest) {
           { selfDestructAt: null },
           { selfDestructAt: { gt: new Date() } },
         ],
+        // If the user cleared history, only show messages after that timestamp
+        ...(participant.clearedAt ? { createdAt: { gt: participant.clearedAt } } : {}),
         ...(cursor ? { id: { lt: Number(cursor) } } : {}),
       },
       include: messageInclude,
