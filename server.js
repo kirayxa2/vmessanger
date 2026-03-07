@@ -68,18 +68,28 @@ app.prepare().then(() => {
       next()
     } catch (err) {
       // If jsonwebtoken fails, try accepting NextAuth session token
-      // by checking if it's a base64 payload (NextAuth JWE)
+      // Client sends: btoa(JSON.stringify({ id, name, email }))
       try {
-        const parts = token.split(".")
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString())
-          if (payload.id) {
-            socket.data.userId = String(payload.id)
-            socket.data.username = payload.name || ""
-            return next()
+        let payload
+        if (token.includes(".")) {
+          // It might be a JWT-like structure (NextAuth JWE)
+          const parts = token.split(".")
+          if (parts.length === 3) {
+            payload = JSON.parse(Buffer.from(parts[1], "base64").toString())
           }
+        } else {
+          // It's the base64 JSON directly from our ClientProviders
+          payload = JSON.parse(Buffer.from(token, "base64").toString())
         }
-      } catch {}
+        
+        if (payload && payload.id) {
+          socket.data.userId = String(payload.id)
+          socket.data.username = payload.name || ""
+          return next()
+        }
+      } catch (parseErr) {
+        console.error("Token parse error:", parseErr, "Token was:", token)
+      }
       return next(new Error("Invalid token"))
     }
   })
