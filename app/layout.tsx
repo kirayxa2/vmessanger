@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ClientProviders } from "./ClientProviders";
+import { ThemeProvider } from "@/lib/theme";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -109,7 +110,9 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0e1621] text-white`}
         style={{ height: 'var(--app-height, 100dvh)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div className="flex-1 relative" style={{ height: 'var(--app-height, 100dvh)', overflow: 'hidden' }}>
-          <ClientProviders>{children}</ClientProviders>
+          <ThemeProvider>
+            <ClientProviders>{children}</ClientProviders>
+          </ThemeProvider>
         </div>
       </body>
     </html>

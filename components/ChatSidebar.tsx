@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react"
 import {
   Search, Menu, LogOut, Moon, Globe, Bookmark,
   ArrowLeft, Camera, Loader2, Check, X, AtSign, Info,
-  Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus
+  Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus, Sun, Lock
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
@@ -398,6 +398,10 @@ export default function ChatSidebar({
   const { t, i18n } = useTranslation()
   const { socket } = useSocket()
 
+  // Import theme
+  const themeModule = require("@/lib/theme")
+  const { theme, toggleTheme } = themeModule.useTheme()
+
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
@@ -409,6 +413,13 @@ export default function ChatSidebar({
   const [showEditProfile, setShowEditProfile] = useState(mobileInitialView === "profile")
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
+  const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
 
   // Когда докбар меняет вкладку — обновляем view
   useEffect(() => {
@@ -448,6 +459,24 @@ export default function ChatSidebar({
     setProfile({ username: saved.username || data.username, bio: data.bio })
     setShowEditProfile(false)
   }, [update])
+
+  const handlePasswordChange = useCallback(async () => {
+    setPasswordError(""); setPasswordSuccess(false)
+    if (newPassword.length < 8) { setPasswordError("Минимум 8 символов"); return }
+    if (newPassword !== confirmPassword) { setPasswordError("Пароли не совпадают"); return }
+    setPasswordSaving(true)
+    try {
+      const res = await fetch("/api/users/password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Ошибка") }
+      setPasswordSuccess(true); setCurrentPassword(""); setNewPassword(""); setConfirmPassword("")
+      setTimeout(() => { setPasswordSuccess(false); setShowPasswordChange(false) }, 2000)
+    } catch (e: any) { setPasswordError(e.message || "Ошибка") }
+    finally { setPasswordSaving(false) }
+  }, [currentPassword, newPassword, confirmPassword])
 
   useEffect(() => { setLocalConversations(conversations) }, [conversations])
 
@@ -600,6 +629,16 @@ export default function ChatSidebar({
               badge={profanityEnabled ? t("anti_profanity_on") : undefined}
               onClick={() => setShowPrivacy(true)}
             />
+            <SettingsRow
+              icon={theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
+              iconColor="#e0a83c"
+              label={theme === "dark" ? "Тёмная тема" : "Светлая тема"}
+              rightEl={
+                <ToggleSwitch enabled={theme === "dark"} onToggle={toggleTheme} />
+              }
+              onClick={toggleTheme}
+            />
+            <SettingsRow icon={<Lock size={17} />} iconColor="#d45555" label="Сменить пароль" onClick={() => setShowPasswordChange(true)} />
             <SettingsRow icon={<Monitor size={17} />} iconColor="#e08a3c" label={t("devices")} badge="2" />
             <SettingsRow icon={<Folder size={17} />} iconColor="#8b6fd6" label={t("chat_folders")} />
           </div>
@@ -651,6 +690,41 @@ export default function ChatSidebar({
         {/* Privacy overlay */}
         <AnimatePresence>
           {showPrivacy && <PrivacyScreen onBack={() => setShowPrivacy(false)} />}
+        </AnimatePresence>
+
+        {/* Password change overlay */}
+        <AnimatePresence>
+          {showPasswordChange && (
+            <motion.div className="absolute inset-0 z-50 flex flex-col bg-[#1c242f]"
+              initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}>
+              <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
+                <motion.button onClick={() => { setShowPasswordChange(false); setPasswordError(""); setPasswordSuccess(false) }}
+                  whileTap={{ scale: 0.9 }} className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
+                  <ArrowLeft size={22} />
+                </motion.button>
+                <h2 className="text-[18px] font-bold text-white flex-1">Смена пароля</h2>
+              </div>
+              <div className="flex-1 overflow-y-auto hide-scrollbar p-5 flex flex-col gap-4">
+                <FloatInput label="Текущий пароль" value={currentPassword} onChange={setCurrentPassword} />
+                <FloatInput label="Новый пароль" value={newPassword} onChange={setNewPassword} />
+                <FloatInput label="Подтвердите пароль" value={confirmPassword} onChange={setConfirmPassword} />
+                {passwordError && <p className="text-red-400 text-[13px]">{passwordError}</p>}
+                {passwordSuccess && (
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="text-green-400 text-[13px] flex items-center gap-2">
+                    <Check size={14} /> Пароль изменён
+                  </motion.p>
+                )}
+                <motion.button onClick={handlePasswordChange} disabled={passwordSaving}
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  className="mt-2 w-full py-3 rounded-xl text-white font-semibold text-[15px] shadow-lg"
+                  style={{ backgroundColor: ACCENT }}>
+                  {passwordSaving ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Сменить пароль"}
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </motion.div>
     </div>
@@ -712,7 +786,8 @@ export default function ChatSidebar({
                     <div className="h-px" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
                     <div className="py-1">
                       <DropdownItem icon={<Bookmark size={16} />} label={t("saved_messages")} />
-                      <DropdownItem icon={<Moon size={16} />} label={t("night_mode")} isToggle toggleEnabled={false} />
+                      <DropdownItem icon={theme === "dark" ? <Moon size={16} /> : <Sun size={16} />} label={theme === "dark" ? t("night_mode") : "Светлая тема"}
+                        isToggle toggleEnabled={theme === "dark"} onClick={() => { toggleTheme(); setShowDropdown(false) }} />
                     </div>
                     <div className="h-px mx-2" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
                     <div className="py-1">

@@ -1,27 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
-
-// Rate limit store (in-memory, resets on server restart)
-const registerAttempts = new Map<string, { count: number; resetAt: number }>()
+import { registerLimiter } from "@/lib/rateLimiter"
 
 export async function POST(req: NextRequest) {
   try {
     // ── Rate limiting: max 5 registrations per IP per hour ──
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown"
-    const now = Date.now()
-    const entry = registerAttempts.get(ip)
-    if (entry) {
-      if (now < entry.resetAt) {
-        if (entry.count >= 5) {
-          return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 })
-        }
-        entry.count++
-      } else {
-        registerAttempts.set(ip, { count: 1, resetAt: now + 3600_000 })
-      }
-    } else {
-      registerAttempts.set(ip, { count: 1, resetAt: now + 3600_000 })
+    if (!registerLimiter.isAllowed(`register:${ip}`)) {
+      return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 })
     }
 
     const body = await req.json()

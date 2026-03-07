@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck } from "lucide-react";
+import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Pin } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useProfanityFilter } from "@/hooks/useProfanityFilter";
@@ -42,6 +42,11 @@ interface ChatMessageProps {
   menuPos: { x: number; y: number };
   senderName?: string;
   senderId?: string | number;
+  reactions?: { id: number; emoji: string; userId: number; user: { id: number; username: string } }[];
+  onPin?: (id: string) => void;
+  onReaction?: (messageId: string, emoji: string) => void;
+  currentUserId?: string | number;
+  selfDestructAt?: string | null;
 }
 
 export default function ChatMessage({
@@ -49,6 +54,7 @@ export default function ChatMessage({
   replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp,
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
   openMenuId, onMenuOpen, onMenuClose, menuPos, senderName, senderId,
+  reactions, onPin, onReaction, currentUserId, selfDestructAt,
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const { filter } = useProfanityFilter();
@@ -57,6 +63,8 @@ export default function ChatMessage({
   const showMenu = openMenuId === messageId;
   const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showQuickReactions, setShowQuickReactions] = useState(false);
+  const quickReactionEmojis = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
 
   // Свайп для ответа
   const swipeX = useMotionValue(0);
@@ -423,6 +431,59 @@ export default function ChatMessage({
             )}
           </AnimatePresence>
         </motion.div>
+
+        {/* Reactions display */}
+        {reactions && reactions.length > 0 && (
+          <div className={`flex flex-wrap gap-1 mt-1 ${isSender ? 'justify-end' : 'justify-start'}`}
+            style={{ paddingLeft: isSender ? 0 : 8, paddingRight: isSender ? 8 : 0 }}>
+            {Object.entries(
+              reactions.reduce((acc, r) => {
+                acc[r.emoji] = acc[r.emoji] || { emoji: r.emoji, count: 0, users: [], hasOwn: false };
+                acc[r.emoji].count++;
+                acc[r.emoji].users.push(r.user?.username || 'user');
+                if (r.userId?.toString() === currentUserId?.toString()) acc[r.emoji].hasOwn = true;
+                return acc;
+              }, {} as Record<string, { emoji: string; count: number; users: string[]; hasOwn: boolean }>)
+            ).map(([emoji, data]) => (
+              <motion.button
+                key={emoji}
+                whileTap={{ scale: 0.85 }}
+                onClick={() => onReaction?.(messageId, emoji)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors ${
+                  data.hasOwn ? 'bg-[#7e85e1]/30 border border-[#7e85e1]/50' : 'bg-white/10 border border-white/5'
+                }`}
+                title={data.users.join(', ')}
+              >
+                <span>{emoji}</span>
+                <span className="text-white/80">{data.count}</span>
+              </motion.button>
+            ))}
+          </div>
+        )}
+
+        {/* Quick reaction bar on hover */}
+        <AnimatePresence>
+          {showQuickReactions && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 4 }}
+              className={`absolute -top-10 ${isSender ? 'right-0' : 'left-0'} z-50 flex gap-1 bg-[#1e1e1e] rounded-full px-2 py-1.5 shadow-xl border border-white/10`}
+            >
+              {quickReactionEmojis.map(emoji => (
+                <motion.button
+                  key={emoji}
+                  whileHover={{ scale: 1.3 }}
+                  whileTap={{ scale: 0.8 }}
+                  onClick={() => { onReaction?.(messageId, emoji); setShowQuickReactions(false) }}
+                  className="text-lg hover:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center"
+                >
+                  {emoji}
+                </motion.button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Контекстное меню */}
@@ -452,6 +513,10 @@ export default function ChatMessage({
             }} />
             <MenuItem icon={<Forward size={17} />} label={t("forward")} onClick={() => {
               onForward?.({ id: messageId, content });
+              onMenuClose();
+            }} />
+            <MenuItem icon={<Pin size={17} />} label="📌 Закрепить" onClick={() => {
+              onPin?.(messageId);
               onMenuClose();
             }} />
             <div className="mx-3 my-1 border-t border-white/8" />

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video } from "lucide-react"
+import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock } from "lucide-react"
 import ChatMessage from "./ChatMessage"
 import FileMessage from "./FileMessage"
 import CallModal from "./CallModal"
@@ -99,6 +99,27 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [conversations, setConversations] = useState<any[]>([])
   const [forwardSearch, setForwardSearch] = useState("")
 
+  // ── Search ──────────────────────────────────────────────────
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<Message[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+
+  // ── Pinned message ──────────────────────────────────────────
+  const [pinnedMessage, setPinnedMessage] = useState<Message | null>(null)
+
+  // ── Drag & Drop ─────────────────────────────────────────────
+  const [isDragOver, setIsDragOver] = useState(false)
+  const dragCounterRef = useRef(0)
+
+  // ── Pagination ──────────────────────────────────────────────
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const nextCursorRef = useRef<number | null>(null)
+
+  // ── Self-destruct timer ────────────────────────────────────
+  const [selfDestructSeconds, setSelfDestructSeconds] = useState<number | null>(null)
+
   // ── Voice recording ──────────────────────────────────────────
   const { play: playSound } = useNotificationSound()
 
@@ -161,16 +182,18 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     return () => { socket.off("user-avatar-updated", handleAvatarUpdate) }
   }, [socket, otherUser?.id])
 
-  // Load messages
+  // Load messages (paginated)
   useEffect(() => {
     setLoading(true)
     isInitialLoad.current = true
-    fetch(`/api/messages?conversationId=${apiId}`)
+    fetch(`/api/messages?conversationId=${apiId}&limit=50`)
       .then(r => r.json())
       .then(data => {
-        setMessages(Array.isArray(data) ? data : [])
+        const msgs = Array.isArray(data.messages) ? data.messages : (Array.isArray(data) ? data : [])
+        setMessages(msgs)
+        setHasMoreMessages(!!data.hasMore)
+        nextCursorRef.current = data.nextCursor || null
         setLoading(false)
-        // Прокручиваем в низ после загрузки
         setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "instant" }), 50)
       })
       .catch(() => { setMessages([]); setLoading(false) })
@@ -181,10 +204,56 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         setConversations(convs)
         const conv = convs.find((c: any) => c.id?.toString() === apiId.toString() || c._realId?.toString() === apiId.toString())
         setInput(conv?.drafts?.[0]?.text || "")
+        // Load pinned message if exists
+        if (conv?.pinnedMessageId) {
+          fetch(`/api/messages?conversationId=${apiId}&limit=100`)
+            .then(r => r.json())
+            .then(mData => {
+              const allMsgs = Array.isArray(mData.messages) ? mData.messages : []
+              const pinned = allMsgs.find((m: any) => m.id === conv.pinnedMessageId)
+              if (pinned) setPinnedMessage(pinned)
+            })
+            .catch(() => {})
+        }
         isInitialLoad.current = false
       })
       .catch(() => { isInitialLoad.current = false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiId])
+
+  // ── Load more messages (pagination) ──
+  const loadMoreMessages = useCallback(async () => {
+    if (loadingMore || !hasMoreMessages || !nextCursorRef.current) return
+    setLoadingMore(true)
+    try {
+      const res = await fetch(`/api/messages?conversationId=${apiId}&cursor=${nextCursorRef.current}&limit=50`)
+      const data = await res.json()
+      const older = Array.isArray(data.messages) ? data.messages : []
+      if (older.length > 0) {
+        setMessages(prev => [...older, ...prev])
+        setHasMoreMessages(!!data.hasMore)
+        nextCursorRef.current = data.nextCursor || null
+      } else {
+        setHasMoreMessages(false)
+      }
+    } catch {}
+    setLoadingMore(false)
+  }, [apiId, loadingMore, hasMoreMessages])
+
+  // ── Search handler ──
+  useEffect(() => {
+    if (!searchQuery.trim()) { setSearchResults([]); return }
+    const timer = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const res = await fetch(`/api/messages/search?q=${encodeURIComponent(searchQuery)}&conversationId=${apiId}`)
+        const data = await res.json()
+        setSearchResults(Array.isArray(data) ? data : [])
+      } catch { setSearchResults([]) }
+      setIsSearching(false)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery, apiId])
 
   // Mark messages as read when chat opens
   useEffect(() => {
@@ -317,7 +386,11 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
     setShowScrollButton(scrollHeight - scrollTop - clientHeight > 200)
-  }, [])
+    // Load more when scrolled to top
+    if (scrollTop < 100 && hasMoreMessages && !loadingMore) {
+      loadMoreMessages()
+    }
+  }, [hasMoreMessages, loadingMore, loadMoreMessages])
 
   const scrollToBottom = useCallback(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), [])
 
@@ -623,6 +696,124 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     if (e.key === "Escape") { if (editingMessageId) cancelEdit(); if (replyingTo) cancelReply() }
   }, [sendMessage, editingMessageId, cancelEdit, replyingTo, cancelReply])
 
+  // ── Pin message handler ──
+  const handlePinMessage = useCallback(async (messageId: string) => {
+    try {
+      const res = await fetch("/api/conversations/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: apiId, messageId }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setPinnedMessage(data.pinnedMessage)
+        socket?.emit("message-pinned", { conversationId: String(apiId), ...data })
+      }
+    } catch {}
+  }, [apiId, socket])
+
+  const handleUnpinMessage = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/conversations/pin?conversationId=${apiId}`, { method: "DELETE" })
+      if (res.ok) {
+        setPinnedMessage(null)
+        socket?.emit("message-unpinned", { conversationId: String(apiId) })
+      }
+    } catch {}
+  }, [apiId, socket])
+
+  // ── Drag & Drop handlers ──
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounterRef.current++
+    if (e.dataTransfer.types.includes("Files")) setIsDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) setIsDragOver(false)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounterRef.current = 0
+    setIsDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (!file || !session?.user) return
+    if (file.size > 50 * 1024 * 1024) { setUploadError("File too large (max 50MB)"); return }
+
+    setIsUploading(true)
+    setUploadError("")
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData })
+      if (!uploadRes.ok) { setUploadError("Upload failed"); return }
+      const uploaded = await uploadRes.json()
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: "", conversationId: apiId,
+          fileUrl: uploaded.url, fileName: uploaded.name, fileSize: uploaded.size, fileType: uploaded.type,
+        })
+      })
+      if (res.ok) {
+        const saved = await res.json()
+        setMessages(prev => [...prev, saved])
+        socket?.emit("send-message", { ...saved, conversationId: String(apiId), participantIds })
+      }
+    } catch { setUploadError("Upload failed") }
+    finally { setIsUploading(false) }
+  }, [session, apiId, socket, participantIds])
+
+  // ── Pin/unpin listeners ──
+  useEffect(() => {
+    if (!socket) return
+    const handlePinned = (data: any) => {
+      if (String(data.conversationId) === String(apiId)) setPinnedMessage(data.pinnedMessage)
+    }
+    const handleUnpinned = (data: any) => {
+      if (String(data.conversationId) === String(apiId)) setPinnedMessage(null)
+    }
+    socket.on("message-pinned", handlePinned)
+    socket.on("message-unpinned", handleUnpinned)
+    return () => { socket.off("message-pinned", handlePinned); socket.off("message-unpinned", handleUnpinned) }
+  }, [socket, apiId])
+
+  // ── Reaction listeners ──
+  useEffect(() => {
+    if (!socket) return
+    const handleReactionAdded = (data: any) => {
+      setMessages(prev => prev.map(m => {
+        if (m.id?.toString() === data.messageId?.toString()) {
+          const reactions = (m as any).reactions || []
+          return { ...m, reactions: [...reactions, data] }
+        }
+        return m
+      }))
+    }
+    const handleReactionRemoved = (data: any) => {
+      setMessages(prev => prev.map(m => {
+        if (m.id?.toString() === data.messageId?.toString()) {
+          const reactions = ((m as any).reactions || []).filter(
+            (r: any) => !(r.userId === data.userId && r.emoji === data.emoji)
+          )
+          return { ...m, reactions }
+        }
+        return m
+      }))
+    }
+    socket.on("reaction-added", handleReactionAdded)
+    socket.on("reaction-removed", handleReactionRemoved)
+    return () => { socket.off("reaction-added", handleReactionAdded); socket.off("reaction-removed", handleReactionRemoved) }
+  }, [socket])
+
   const lastSeenText = useMemo(() => {
     if (!otherUserLastSeen) return t('last_seen')
     const d = new Date(otherUserLastSeen)
@@ -656,7 +847,33 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 // 2. Добавляем проверку здесь (выше рендера)
 
   return (
-    <motion.div className="flex-1 flex flex-row h-full bg-[#1c242f] relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
+    <motion.div
+      className="flex-1 flex flex-row h-full bg-[#1c242f] relative"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag & Drop overlay */}
+      <AnimatePresence>
+        {isDragOver && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.8 }} animate={{ scale: 1 }} exit={{ scale: 0.8 }}
+              className="bg-[#1c242f] border-2 border-dashed border-[#7e85e1] rounded-3xl px-12 py-10 text-center"
+            >
+              <Paperclip size={48} className="mx-auto mb-3 text-[#7e85e1]" />
+              <p className="text-white text-lg font-bold">Перетащите файл сюда</p>
+              <p className="text-gray-400 text-sm mt-1">Максимум 50 МБ</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 flex flex-col h-full min-w-0 tg-bg">
 
         {/* ── Header ── */}
@@ -751,14 +968,77 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                 <Phone size={20} />
               </motion.button>
             )}
-            {/* Поиск — скрываем на узких экранах */}
-            <motion.button whileTap={{ scale: 0.88 }} className="hidden sm:flex hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"><Search size={20} /></motion.button>
+            {/* Поиск */}
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setShowSearch(s => !s)}
+              className="hidden sm:flex hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"><Search size={20} /></motion.button>
             <motion.button whileTap={{ scale: 0.88 }} className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"><EllipsisVertical size={20} /></motion.button>
           </div>
         </div>
 
+        {/* Search panel */}
+        <AnimatePresence>
+          {showSearch && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="bg-[#1c242f] border-b border-white/5 overflow-hidden"
+            >
+              <div className="flex items-center gap-2 px-4 py-2">
+                <Search size={16} className="text-gray-500 shrink-0" />
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Поиск по сообщениям..."
+                  className="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-500"
+                />
+                <motion.button whileTap={{ scale: 0.88 }} onClick={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]) }}
+                  className="text-gray-400 hover:text-white p-1"><X size={16} /></motion.button>
+              </div>
+              {searchResults.length > 0 && (
+                <div className="max-h-[200px] overflow-y-auto hide-scrollbar border-t border-white/5">
+                  {searchResults.map(r => (
+                    <div key={r.id.toString()} onClick={() => { scrollToMessage(r.id.toString()); setShowSearch(false) }}
+                      className="flex items-center gap-2 px-4 py-2 hover:bg-white/5 cursor-pointer">
+                      <span className="text-xs text-gray-500 shrink-0">{new Date(r.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                      <span className="text-sm text-white truncate">{r.content}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {isSearching && <div className="px-4 py-2 text-gray-500 text-xs">Поиск...</div>}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Pinned message banner */}
+        <AnimatePresence>
+          {pinnedMessage && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="bg-[#1c242f] border-b border-white/5 overflow-hidden cursor-pointer"
+              onClick={() => scrollToMessage(pinnedMessage.id.toString())}
+            >
+              <div className="flex items-center gap-2 px-4 py-2">
+                <Pin size={14} className="text-[#7e85e1] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-[#7e85e1]">Закреплённое сообщение</p>
+                  <p className="text-[12px] text-gray-400 truncate">{pinnedMessage.content}</p>
+                </div>
+                <motion.button whileTap={{ scale: 0.88 }} onClick={e => { e.stopPropagation(); handleUnpinMessage() }}
+                  className="text-gray-500 hover:text-white p-1 shrink-0"><X size={14} /></motion.button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ── Messages ── */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 hide-scrollbar relative" onScroll={handleScroll}>
+          {/* Loading more indicator */}
+          {loadingMore && (
+            <div className="flex justify-center py-2">
+              <Loader2 size={20} className="animate-spin text-[#7e85e1]" />
+            </div>
+          )}
           <div className="flex justify-center mb-4">
             <motion.span initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
               className="bg-black/20 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm">{t('today')}</motion.span>
@@ -832,6 +1112,31 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                       onDelete={handleDeleteMessage} onEdit={handleStartEdit}
                       onReply={handleReply} onForward={handleForwardOpen} onScrollToMessage={scrollToMessage}
                       openMenuId={openMenuId} onMenuOpen={handleMenuOpen} onMenuClose={handleMenuClose} menuPos={menuPos}
+                      reactions={(msg as any).reactions}
+                      currentUserId={session?.user?.id}
+                      selfDestructAt={(msg as any).selfDestructAt}
+                      onPin={handlePinMessage}
+                      onReaction={async (messageId, emoji) => {
+                        try {
+                          const res = await fetch("/api/messages/reactions", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ messageId, emoji }),
+                          })
+                          if (res.ok) {
+                            const data = await res.json()
+                            if (data.action === "added") {
+                              socket?.emit("reaction-added", { ...data, conversationId: String(apiId) })
+                            } else {
+                              socket?.emit("reaction-removed", { ...data, conversationId: String(apiId) })
+                            }
+                            // Re-fetch messages to update reactions
+                            const msgRes = await fetch(`/api/messages?conversationId=${apiId}&limit=100`)
+                            const msgData = await msgRes.json()
+                            setMessages(Array.isArray(msgData.messages) ? msgData.messages : [])
+                          }
+                        } catch {}
+                      }}
                     />
                   )}
                 </div>

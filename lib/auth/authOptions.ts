@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
+import { loginLimiter } from "@/lib/rateLimiter"
 
 // Helper — sends security notification to user's Vortex chat
 async function sendSystemNotification(userId: number, message: string) {
@@ -37,8 +38,17 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null
+
+        // ── Rate limiting: max 10 attempts per email per 5 minutes ──
+        const emailKey = `login:${credentials.email.toLowerCase().trim()}`
+        const ipKey = `login-ip:${(req?.headers?.["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? "unknown"}`
+
+        if (!loginLimiter.isAllowed(emailKey) || !loginLimiter.isAllowed(ipKey)) {
+          throw new Error("Too many login attempts. Please try again in a few minutes.")
+        }
+
         try {
           const user = await prisma.user.findUnique({
             where: { email: credentials.email.toLowerCase().trim() },

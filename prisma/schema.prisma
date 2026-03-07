@@ -15,6 +15,7 @@ model User {
   password         String
   avatar           String?
   bio              String?
+  lastSeen         DateTime?
   createdAt        DateTime                  @default(now())
   updatedAt        DateTime                  @updatedAt
   conversations    ConversationParticipant[]
@@ -24,22 +25,25 @@ model User {
   callsInitiated   Call[]                    @relation("CallInitiator")
   callsReceived    Call[]                    @relation("CallReceiver")
   messageReads     MessageRead[]
+  reactions        Reaction[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Conversation {
-  id           Int                       @id @default(autoincrement())
-  isGroup      Boolean                   @default(false)
-  name         String?
-  avatar       String?
-  description  String?
-  type         String                    @default("private")
-  maxMembers   Int                       @default(200000)
-  createdAt    DateTime                  @default(now())
-  updatedAt    DateTime                  @updatedAt
-  participants ConversationParticipant[]
-  messages     Message[]
-  drafts       Draft[]
-  calls        Call[]
+  id              Int                       @id @default(autoincrement())
+  isGroup         Boolean                   @default(false)
+  name            String?
+  avatar          String?
+  description     String?
+  type            String                    @default("private")
+  maxMembers      Int                       @default(200000)
+  pinnedMessageId Int?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  participants    ConversationParticipant[]
+  messages        Message[]
+  drafts          Draft[]
+  calls           Call[]
 }
 
 model ConversationParticipant {
@@ -52,24 +56,27 @@ model ConversationParticipant {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, conversationId])
+  @@index([userId])
+  @@index([conversationId])
 }
 
 model Message {
-  id             Int           @id @default(autoincrement())
-  content        String        @default("")
-  createdAt      DateTime      @default(now())
-  isRead         Boolean       @default(false)
-  senderId       Int
-  receiverId     Int?
-  conversationId Int
-  replyToId      Int?
-  forwardFromId  Int?
-  fileUrl        String?
-  fileName       String?
-  fileSize       Int?
-  fileType       String?
-  voiceUrl       String?
-  voiceDuration  Int?
+  id              Int           @id @default(autoincrement())
+  content         String        @default("")
+  createdAt       DateTime      @default(now())
+  isRead          Boolean       @default(false)
+  senderId        Int
+  receiverId      Int?
+  conversationId  Int
+  replyToId       Int?
+  forwardFromId   Int?
+  fileUrl         String?
+  fileName        String?
+  fileSize        Int?
+  fileType        String?
+  voiceUrl        String?
+  voiceDuration   Int?
+  selfDestructAt  DateTime?
 
   conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   receiver       User?         @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
@@ -77,6 +84,11 @@ model Message {
   replyTo        Message?      @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        Message[]     @relation("MessageReplies")
   readBy         MessageRead[]
+  reactions      Reaction[]
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([conversationId])
 }
 
 model MessageRead {
@@ -88,6 +100,19 @@ model MessageRead {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId])
+}
+
+model Reaction {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  userId    Int
+  emoji     String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 model Call {
@@ -116,4 +141,16 @@ model Draft {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, conversationId])
+}
+
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

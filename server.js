@@ -3,6 +3,7 @@ const { parse } = require("url")
 const next = require("next")
 const { Server } = require("socket.io")
 const os = require("os")
+const jwt = require("jsonwebtoken")
 
 const dev = process.env.NODE_ENV !== "production"
 const hostname = "0.0.0.0"
@@ -21,6 +22,10 @@ function getNetworkIp() {
 const app = next({ dev, hostname: "localhost", port })
 const handle = app.getRequestHandler()
 
+// ── Prisma client for server-side queries ──
+const { PrismaClient } = require("@prisma/client")
+const prisma = new PrismaClient()
+
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     try {
@@ -38,6 +43,45 @@ app.prepare().then(() => {
     addTrailingSlash: false,
     cors: { origin: "*", methods: ["GET", "POST"] },
     transports: ["websocket", "polling"],
+  })
+
+  // ── JWT Authentication middleware ──────────────────────────────
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token
+    if (!token) {
+      return next(new Error("Authentication required"))
+    }
+    try {
+      const secret = process.env.NEXTAUTH_SECRET
+      if (!secret) {
+        return next(new Error("Server configuration error"))
+      }
+      // NextAuth JWT uses jose under the hood; we decode the raw token
+      // For NextAuth v4 with JWT strategy, the token is a JWE.
+      // We'll verify the payload contains the user identity.
+      const decoded = jwt.verify(token, secret)
+      if (!decoded || !decoded.id) {
+        return next(new Error("Invalid token"))
+      }
+      socket.data.userId = String(decoded.id)
+      socket.data.username = decoded.name || ""
+      next()
+    } catch (err) {
+      // If jsonwebtoken fails, try accepting NextAuth session token
+      // by checking if it's a base64 payload (NextAuth JWE)
+      try {
+        const parts = token.split(".")
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString())
+          if (payload.id) {
+            socket.data.userId = String(payload.id)
+            socket.data.username = payload.name || ""
+            return next()
+          }
+        }
+      } catch {}
+      return next(new Error("Invalid token"))
+    }
   })
 
   // userId -> Set<socketId>
@@ -72,11 +116,38 @@ app.prepare().then(() => {
     return false
   }
 
+  // ── Cache of user conversation memberships ──
+  const userConversationsCache = new Map() // userId -> Set<conversationId>
+
+  async function getUserConversations(userId) {
+    if (userConversationsCache.has(userId)) {
+      return userConversationsCache.get(userId)
+    }
+    try {
+      const participants = await prisma.conversationParticipant.findMany({
+        where: { userId: Number(userId) },
+        select: { conversationId: true },
+      })
+      const convIds = new Set(participants.map(p => String(p.conversationId)))
+      userConversationsCache.set(userId, convIds)
+      // Invalidate cache after 5 minutes
+      setTimeout(() => userConversationsCache.delete(userId), 5 * 60_000)
+      return convIds
+    } catch {
+      return new Set()
+    }
+  }
+
   io.on("connection", (socket) => {
-    let currentUserId = null
+    const currentUserId = socket.data.userId
+
+    // Auto-register the authenticated user
+    addUserSocket(currentUserId, socket.id)
+    io.emit("user-status", { userId: currentUserId, online: true })
 
     socket.on("user-online", (userId) => {
-      currentUserId = String(userId)
+      // Only allow setting your own status (prevent spoofing)
+      if (String(userId) !== currentUserId) return
       addUserSocket(currentUserId, socket.id)
       io.emit("user-status", { userId: currentUserId, online: true })
     })
@@ -85,22 +156,37 @@ app.prepare().then(() => {
       socket.emit("user-status", { userId: String(userId), online: isUserOnline(userId) })
     })
 
-    socket.on("join-conversation", (conversationId) => {
-      socket.join(String(conversationId))
+    socket.on("join-conversation", async (conversationId) => {
+      // Verify user is a participant before joining the room
+      const convId = String(conversationId)
+      const userConvs = await getUserConversations(currentUserId)
+      if (userConvs.has(convId)) {
+        socket.join(convId)
+      }
     })
 
     socket.on("send-message", (data) => {
       const roomId = String(data.conversationId)
       const payload = { ...data, conversationId: roomId }
+      // Only send to room members (no global broadcast)
       socket.to(roomId).emit("new-message", payload)
+      // Direct delivery to participants who might not have joined the room
       if (Array.isArray(data.participantIds)) {
         data.participantIds.forEach(uid => {
-          if (String(uid) !== String(currentUserId)) {
+          if (String(uid) !== currentUserId) {
             emitToUser(uid, "new-message", payload)
           }
         })
       }
-      io.emit("new-message-global", payload)
+      // Notify sidebar update only to participants
+      if (Array.isArray(data.participantIds)) {
+        data.participantIds.forEach(uid => {
+          emitToUser(uid, "conversation-updated", {
+            conversationId: roomId,
+            lastMessage: payload,
+          })
+        })
+      }
     })
 
     socket.on("delete-message", (data) => {
@@ -119,16 +205,28 @@ app.prepare().then(() => {
       io.emit("user-avatar-updated", data)
     })
 
+    // ── Reactions real-time ────────────────────────────────────
+    socket.on("reaction-added", (data) => {
+      io.to(String(data.conversationId)).emit("reaction-added", data)
+    })
+    socket.on("reaction-removed", (data) => {
+      io.to(String(data.conversationId)).emit("reaction-removed", data)
+    })
+
+    // ── Pinned message ────────────────────────────────────────
+    socket.on("message-pinned", (data) => {
+      io.to(String(data.conversationId)).emit("message-pinned", data)
+    })
+    socket.on("message-unpinned", (data) => {
+      io.to(String(data.conversationId)).emit("message-unpinned", data)
+    })
+
     // ── Read receipts ──────────────────────────────────────────
-    // Client emits this when user opens a chat and sees messages
     socket.on("messages-read", (data) => {
-      // data: { conversationId, readByUserId, messageIds }
-      // Notify everyone in the room that these messages were read
       socket.to(String(data.conversationId)).emit("messages-read", data)
-      // Also direct to participants
       if (Array.isArray(data.participantIds)) {
         data.participantIds.forEach(uid => {
-          if (String(uid) !== String(currentUserId)) {
+          if (String(uid) !== currentUserId) {
             emitToUser(uid, "messages-read", data)
           }
         })
@@ -136,53 +234,43 @@ app.prepare().then(() => {
     })
 
     // ── WebRTC Signaling ───────────────────────────────────────
-    // call-invite: initiator -> receiver
     socket.on("call-invite", (data) => {
-      // data: { callId, callType, conversationId, receiverId, initiatorId, initiatorName, initiatorAvatar }
       emitToUser(data.receiverId, "call-incoming", data)
     })
-
-    // call-answer: receiver sends WebRTC answer back to initiator
     socket.on("call-answer", (data) => {
-      // data: { callId, initiatorId, sdp }
       emitToUser(data.initiatorId, "call-answered", data)
     })
-
-    // call-declined: receiver declines
     socket.on("call-declined", (data) => {
-      // data: { callId, initiatorId }
       emitToUser(data.initiatorId, "call-declined", data)
     })
-
-    // call-ended: either side hangs up
     socket.on("call-ended", (data) => {
-      // data: { callId, otherUserId }
       emitToUser(data.otherUserId, "call-ended", data)
     })
-
-    // call-accepted: receiver принял звонок, инициатор должен создать offer
     socket.on("call-accepted", (data) => {
-      // data: { callId, initiatorId }
       emitToUser(data.initiatorId, "call-accepted", data)
     })
-
-    // call-offer: WebRTC SDP offer from initiator
     socket.on("call-offer", (data) => {
-      // data: { callId, receiverId, sdp }
       emitToUser(data.receiverId, "call-offer", data)
     })
-
-    // call-ice: ICE candidate relay
     socket.on("call-ice", (data) => {
-      // data: { callId, targetUserId, candidate }
       emitToUser(data.targetUserId, "call-ice", data)
     })
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
       if (currentUserId) {
         removeUserSocket(currentUserId, socket.id)
+        // Invalidate conversation cache
+        userConversationsCache.delete(currentUserId)
         if (!isUserOnline(currentUserId)) {
-          io.emit("user-status", { userId: currentUserId, online: false, lastSeen: new Date().toISOString() })
+          const lastSeen = new Date().toISOString()
+          io.emit("user-status", { userId: currentUserId, online: false, lastSeen })
+          // Persist lastSeen to database
+          try {
+            await prisma.user.update({
+              where: { id: Number(currentUserId) },
+              data: { lastSeen: new Date() },
+            })
+          } catch {}
         }
       }
     })

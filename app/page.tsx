@@ -64,7 +64,10 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
 
+  const specialChatsCreated = useRef(false)
   const ensureSpecialChats = useCallback(async () => {
+    if (specialChatsCreated.current) return
+    specialChatsCreated.current = true
     await Promise.all([
       fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "saved" }) }),
       fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "system" }) }),
@@ -126,19 +129,24 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   useEffect(() => {
     if (status === "authenticated" && socket) {
-      const handleNewMessage = (message: any) => {
-        setMessagesCache(prev => ({
-          ...prev,
-          [message.conversationId]: [...(prev[message.conversationId] || []), message],
-        }))
+      // Targeted message delivery — only for conversations the user participates in
+      const handleConversationUpdated = (data: { conversationId: string; lastMessage: any }) => {
+        const message = data.lastMessage
+        if (!message) return
+        // Update messages cache (limit to 100 per conversation)
+        setMessagesCache(prev => {
+          const existing = prev[data.conversationId] || []
+          const updated = [...existing, message].slice(-100)
+          return { ...prev, [data.conversationId]: updated }
+        })
         if (
-          message.conversationId.toString() !== selectedIdRef.current?.toString() &&
-          message.sender.id.toString() !== session?.user?.id?.toString()
+          data.conversationId.toString() !== selectedIdRef.current?.toString() &&
+          message.sender?.id?.toString() !== session?.user?.id?.toString()
         ) {
-          setUnreadCounts(prev => ({ ...prev, [message.conversationId]: (prev[message.conversationId] || 0) + 1 }))
+          setUnreadCounts(prev => ({ ...prev, [data.conversationId]: (prev[data.conversationId] || 0) + 1 }))
         }
         setConversations(prev =>
-          prev.map(c => c.id.toString() === message.conversationId.toString() ? { ...c, messages: [message] } : c)
+          prev.map(c => c.id.toString() === data.conversationId.toString() ? { ...c, messages: [message] } : c)
         )
       }
       const handleAvatarUpdate = (data: { userId: number; avatar: string }) => {
@@ -151,10 +159,10 @@ export default function HomePage({ conversationId }: { conversationId?: string }
           }))
         )
       }
-      socket.on("new-message-global", handleNewMessage)
+      socket.on("conversation-updated", handleConversationUpdated)
       socket.on("user-avatar-updated", handleAvatarUpdate)
       return () => {
-        socket.off("new-message-global", handleNewMessage)
+        socket.off("conversation-updated", handleConversationUpdated)
         socket.off("user-avatar-updated", handleAvatarUpdate)
       }
     }

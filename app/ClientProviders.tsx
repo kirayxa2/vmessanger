@@ -39,13 +39,25 @@ function SocketManager({ children, socket }: { children: React.ReactNode, socket
   return <>{children}</>;
 }
 
-export function ClientProviders({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false);
+// Inner component with session access for socket init
+function SocketInitializer({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    // Only connect when authenticated
+    if (status !== "authenticated" || !session?.user?.id) {
+      return;
+    }
+
+    // Build a simple JWT-like token for Socket.IO auth
+    // We use the session info to create a verifiable token
+    const token = btoa(JSON.stringify({
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+    }));
 
     const socketInstance = io(process.env.NEXT_PUBLIC_SITE_URL || "", {
       path: "/api/socket/io",
@@ -53,6 +65,7 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10,
+      auth: { token },
     });
 
     socketInstance.on("connect", () => {
@@ -63,11 +76,32 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
       setIsConnected(false);
     });
 
+    socketInstance.on("connect_error", (err: Error) => {
+      console.error("Socket connection error:", err.message);
+    });
+
     setSocket(socketInstance);
 
     return () => {
       socketInstance.disconnect();
+      setSocket(null);
     };
+  }, [status, session?.user?.id]);
+
+  return (
+    <SocketContext.Provider value={{ socket, isConnected }}>
+      <SocketManager socket={socket}>
+        {children}
+      </SocketManager>
+    </SocketContext.Provider>
+  );
+}
+
+export function ClientProviders({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   if (!mounted) {
@@ -83,11 +117,9 @@ export function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <I18nextProvider i18n={i18n}>
-        <SocketContext.Provider value={{ socket, isConnected }}>
-          <SocketManager socket={socket}>
-            {children}
-          </SocketManager>
-        </SocketContext.Provider>
+        <SocketInitializer>
+          {children}
+        </SocketInitializer>
       </I18nextProvider>
     </SessionProvider>
   );

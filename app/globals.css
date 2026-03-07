@@ -1,7 +1,7 @@
 /* @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap'); */
 @import "tailwindcss";
 
-:root {
+:root, [data-theme="dark"] {
   --background: #0e1621;
   --foreground: #ffffff;
   --sidebar-bg: #1c242f;
@@ -15,6 +15,31 @@
   --input-bg: #242f3d;
   --pattern-color: rgba(255, 255, 255, 0.05);
   --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  --surface-primary: #1c242f;
+  --surface-secondary: #0a0f17;
+  --text-primary: #ffffff;
+  --text-secondary: #8896a5;
+  --border-subtle: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="light"] {
+  --background: #f0f2f5;
+  --foreground: #1a1a1a;
+  --sidebar-bg: #ffffff;
+  --sidebar-item-active: #7e85e1;
+  --header-bg: #ffffff;
+  --chat-bg: #e8ecf1;
+  --sender-bubble: #7e85e1;
+  --sender-text: #ffffff;
+  --recipient-bubble: #ffffff;
+  --recipient-text: #1a1a1a;
+  --input-bg: #ffffff;
+  --pattern-color: rgba(0, 0, 0, 0.03);
+  --surface-primary: #ffffff;
+  --surface-secondary: #f0f2f5;
+  --text-primary: #1a1a1a;
+  --text-secondary: #65737e;
+  --border-subtle: rgba(0, 0, 0, 0.08);
 }
 
 @theme inline {

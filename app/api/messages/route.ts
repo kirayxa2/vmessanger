@@ -2,20 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth/authOptions"
-
-// Простой in-memory rate limiter: не более 30 сообщений в минуту на пользователя
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now()
-  const entry = rateLimitMap.get(userId)
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + 60_000 })
-    return true
-  }
-  if (entry.count >= 30) return false
-  entry.count++
-  return true
-}
+import { messageLimiter } from "@/lib/rateLimiter"
 
 const messageInclude = {
   sender: { select: { id: true, username: true, avatar: true } },
@@ -23,14 +10,12 @@ const messageInclude = {
     include: {
       sender: { select: { id: true, username: true, avatar: true } }
     }
+  },
+  reactions: {
+    include: {
+      user: { select: { id: true, username: true } }
+    }
   }
-}
-
-const messageSelect = {
-  id: true, content: true, createdAt: true, isRead: true,
-  senderId: true, receiverId: true, conversationId: true,
-  replyToId: true, forwardFromId: true,
-  fileUrl: true, fileName: true, fileSize: true, fileType: true,
 }
 
 export async function POST(req: NextRequest) {
@@ -38,12 +23,12 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    if (!checkRateLimit(session.user.id)) {
+    if (!messageLimiter.isAllowed(session.user.id)) {
       return NextResponse.json({ error: "Too many messages, slow down" }, { status: 429 })
     }
 
     const body = await req.json()
-    const { content, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType, voiceUrl, voiceDuration } = body
+    const { content, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType, voiceUrl, voiceDuration, selfDestructSeconds } = body
 
     // ── Validate input ──
     const hasText = content && typeof content === "string" && content.trim().length > 0
@@ -67,6 +52,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    // ── Self-destruct timer ──
+    let selfDestructAt: Date | undefined
+    if (selfDestructSeconds && typeof selfDestructSeconds === "number" && selfDestructSeconds > 0) {
+      selfDestructAt = new Date(Date.now() + selfDestructSeconds * 1000)
+    }
+
     const message = await prisma.message.create({
       data: {
         content: hasText ? content : "",
@@ -76,6 +67,7 @@ export async function POST(req: NextRequest) {
         ...(forwardFromId ? { forwardFromId: Number(forwardFromId) } : {}),
         ...(fileUrl ? { fileUrl, fileName: fileName || "file", fileSize: fileSize || 0, fileType: fileType || "application/octet-stream" } : {}),
         ...(voiceUrl ? { voiceUrl, voiceDuration: voiceDuration || 0 } : {}),
+        ...(selfDestructAt ? { selfDestructAt } : {}),
       },
       include: messageInclude
     })
@@ -94,6 +86,8 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const conversationId = searchParams.get("conversationId")
+    const cursor = searchParams.get("cursor") // message ID for cursor-based pagination
+    const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100)
 
     if (!conversationId) {
       return NextResponse.json({ error: "conversationId is required" }, { status: 400 })
@@ -107,13 +101,34 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    // ── Cursor-based pagination ──
     const messages = await prisma.message.findMany({
-      where: { conversationId: Number(conversationId) },
+      where: {
+        conversationId: Number(conversationId),
+        // Filter out expired self-destructing messages
+        OR: [
+          { selfDestructAt: null },
+          { selfDestructAt: { gt: new Date() } },
+        ],
+        ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      },
       include: messageInclude,
-      orderBy: { createdAt: "asc" }
+      orderBy: { createdAt: "desc" },
+      take: limit,
     })
 
-    return NextResponse.json(messages)
+    // Reverse to show in chronological order
+    messages.reverse()
+
+    // Return with pagination info
+    const hasMore = messages.length === limit
+    const nextCursor = messages.length > 0 ? messages[0].id : null
+
+    return NextResponse.json({
+      messages,
+      hasMore,
+      nextCursor,
+    })
   } catch (error) {
     console.error("Messages fetch error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
@@ -132,7 +147,7 @@ export async function DELETE(req: NextRequest) {
     const message = await prisma.message.findUnique({ where: { id: Number(messageId) } })
     if (!message) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-    // Allow delete if sender OR participant in that conversation
+    // Allow delete if participant in that conversation (Telegram-style)
     const isParticipant = await prisma.conversationParticipant.findFirst({
       where: { conversationId: message.conversationId, userId: Number(session.user.id) }
     })
