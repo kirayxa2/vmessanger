@@ -5,15 +5,16 @@ import { authOptions } from "@/lib/auth/authOptions";
 
 export async function POST(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const session = await getServerSession(authOptions);
         if (!session?.user?.id) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        const conversationId = parseInt(params.id);
+        const conversationId = parseInt(id);
         const userId = parseInt(session.user.id);
 
         // Get the parsing state
