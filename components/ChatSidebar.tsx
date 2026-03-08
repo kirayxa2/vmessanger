@@ -5,7 +5,7 @@ import { useSession, signOut } from "next-auth/react"
 import {
   Search, Menu, LogOut, Moon, Globe, Bookmark,
   ArrowLeft, Camera, Loader2, Check, X, AtSign, Info,
-  Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus, Sun, Lock
+  Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus, Sun, Lock, QrCode
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
@@ -15,6 +15,7 @@ import { useProfanityFilter } from "@/hooks/useProfanityFilter"
 import { useNotificationSound, SOUND_LABELS, SoundType } from "@/hooks/useNotificationSound"
 import TitleBadge from "./TitleBadge"
 import CreateGroupModal from "./CreateGroupModal"
+import QRCodeSidebar from "./QRCodeSidebar"
 
 const ACCENT = "#7e85e1"
 
@@ -420,6 +421,7 @@ export default function ChatSidebar({
   const [passwordError, setPasswordError] = useState("")
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [passwordSaving, setPasswordSaving] = useState(false)
+  const [showQRCode, setShowQRCode] = useState(false)
 
   // Когда докбар меняет вкладку — обновляем view
   useEffect(() => {
@@ -592,10 +594,16 @@ export default function ChatSidebar({
             <ArrowLeft size={22} />
           </motion.button>
           <h2 className="text-[18px] font-bold text-white flex-1">{t("settings")}</h2>
-          <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowEditProfile(true)}
-            className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
-            <Edit3 size={19} />
-          </motion.button>
+          <div className="flex items-center gap-1">
+            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowQRCode(true)}
+              className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+              <QrCode size={19} />
+            </motion.button>
+            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowEditProfile(true)}
+              className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+              <Edit3 size={19} />
+            </motion.button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto hide-scrollbar">
@@ -724,6 +732,20 @@ export default function ChatSidebar({
                 </motion.button>
               </div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* QR Code overlay */}
+        <AnimatePresence>
+          {showQRCode && (
+            <QRCodeSidebar 
+              user={{ 
+                id: session?.user?.id || 0, 
+                username: displayName, 
+                avatar: session?.user?.image || undefined 
+              }} 
+              onBack={() => setShowQRCode(false)} 
+            />
           )}
         </AnimatePresence>
       </motion.div>
