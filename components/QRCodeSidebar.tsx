@@ -31,10 +31,10 @@ export default function QRCodeSidebar({ user, onBack }: QRCodeSidebarProps) {
   const [isSharing, setIsSharing] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  // URL for the profile - in a real app this would be a full URL
+  // URL for the profile - Corrected to root /ID format
   const profileUrl = typeof window !== 'undefined' 
-    ? `${window.location.origin}/user/${user.username}`
-    : `https://vortex.app/user/${user.username}`
+    ? `${window.location.origin}/${user.id}`
+    : `https://vortex.app/${user.id}`
 
   const handleShare = async () => {
     if (!qrRef.current) return

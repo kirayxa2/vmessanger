@@ -86,7 +86,7 @@ dist/
 В Railway → твой сервис → вкладка **Variables**, добавь все эти переменные:
 
 ```
-DATABASE_URL=postgresql://postgres.taozobjhniqhjukwgmvn:VortexDev2Brooo@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+DATABASE_URL=postgresql://postgres.taozobjhniqhjukwgmvn:VortexDev2Brooo@aws-1-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true
 DIRECT_URL=postgresql://postgres.taozobjhniqhjukwgmvn:VortexDev2Brooo@aws-1-us-east-1.pooler.supabase.com:5432/postgres
 NEXT_PUBLIC_SUPABASE_URL=https://taozobjhniqhjukwgmvn.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...твой_anon_key...
