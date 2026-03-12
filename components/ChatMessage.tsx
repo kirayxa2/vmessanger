@@ -64,12 +64,10 @@ const ChatMessage = React.memo(function ChatMessage({
   const messageId = id.toString();
   const displayContent = filter(content);
   const showMenu = openMenuId === messageId;
-  const [longPressTimer, setLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showQuickReactions, setShowQuickReactions] = useState(false);
   const quickReactionEmojis = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
 
-  // Свайп для ответа
   const swipeX = useMotionValue(0);
   const SWIPE_THRESHOLD = 64;
   const swipeTriggered = useRef(false);
@@ -77,11 +75,8 @@ const ChatMessage = React.memo(function ChatMessage({
   const touchStartY = useRef(0);
   const gestureDir = useRef<"none" | "horizontal" | "vertical">("none");
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Ref на сам bubble-wrapper для non-passive touch events
   const swipeWrapRef = useRef<HTMLDivElement>(null);
 
-  // Иконка ответа — появляется при свайпе
   const replyIconOpacity = useTransform(
     swipeX,
     isSender ? [-SWIPE_THRESHOLD, -24, 0] : [0, 24, SWIPE_THRESHOLD],
@@ -99,7 +94,6 @@ const ChatMessage = React.memo(function ChatMessage({
       senderId === DEV_USER_ID.toString() ||
       Number(senderId) === DEV_USER_ID);
 
-  // ── Non-passive touch handlers (через useEffect) ──────────────
   useEffect(() => {
     const el = swipeWrapRef.current;
     if (!el) return;
@@ -110,7 +104,6 @@ const ChatMessage = React.memo(function ChatMessage({
       gestureDir.current = "none";
       swipeTriggered.current = false;
 
-      // long-press для контекстного меню
       const touch = e.touches[0];
       longPressRef.current = setTimeout(() => {
         onMenuOpen(messageId, touch.clientX, touch.clientY);
@@ -118,7 +111,6 @@ const ChatMessage = React.memo(function ChatMessage({
     };
 
     const onMove = (e: TouchEvent) => {
-      // Отменяем long press при движении
       if (longPressRef.current) {
         clearTimeout(longPressRef.current);
         longPressRef.current = null;
@@ -127,27 +119,17 @@ const ChatMessage = React.memo(function ChatMessage({
       const dx = e.touches[0].clientX - touchStartX.current;
       const dy = e.touches[0].clientY - touchStartY.current;
 
-      // Определяем направление жеста один раз
       if (gestureDir.current === "none" && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-        gestureDir.current =
-          Math.abs(dx) > Math.abs(dy) * 1.4 ? "horizontal" : "vertical";
+        gestureDir.current = Math.abs(dx) > Math.abs(dy) * 1.4 ? "horizontal" : "vertical";
       }
 
-      // Вертикаль — отдаём скроллу, не трогаем
       if (gestureDir.current !== "horizontal") return;
-
-      // Проверяем правильное направление
       const correctDir = isSender ? dx < 0 : dx > 0;
       if (!correctDir) return;
 
-      // Блокируем скролл страницы — работает т.к. listener non-passive
       e.preventDefault();
-
       const max = SWIPE_THRESHOLD * 1.15;
-      const clamped = isSender
-        ? Math.max(dx, -max)
-        : Math.min(dx, max);
-
+      const clamped = isSender ? Math.max(dx, -max) : Math.min(dx, max);
       swipeX.set(clamped);
 
       if (Math.abs(clamped) >= SWIPE_THRESHOLD && !swipeTriggered.current) {
@@ -169,7 +151,6 @@ const ChatMessage = React.memo(function ChatMessage({
       gestureDir.current = "none";
     };
 
-    // passive: false — обязательно для e.preventDefault() в touchmove
     el.addEventListener("touchstart", onStart, { passive: true });
     el.addEventListener("touchmove", onMove, { passive: false });
     el.addEventListener("touchend", onEnd, { passive: true });
@@ -181,10 +162,8 @@ const ChatMessage = React.memo(function ChatMessage({
       el.removeEventListener("touchend", onEnd);
       el.removeEventListener("touchcancel", onEnd);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSender, messageId, content, senderName]);
+  }, [isSender, messageId, content, senderName, onMenuOpen, onReply, swipeX]);
 
-  // Voice player
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
@@ -221,9 +200,7 @@ const ChatMessage = React.memo(function ChatMessage({
     else { audioRef.current.play(); setIsPlaying(true); }
   }, [voiceUrl, isPlaying, audioDuration]);
 
-  const fmt = (s: number) =>
-    `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
-
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
   const bubbleColor = isSender ? SENDER_COLOR : RECIPIENT_COLOR;
 
   const particleData = useMemo(() => {
@@ -241,19 +218,7 @@ const ChatMessage = React.memo(function ChatMessage({
     });
   }, [id]);
 
-  // Рендерим @упоминания синим
-  const renderWithMentions = (text: string) => {
-    const parts = text.split(/(@\w+)/g)
-    return parts.map((part, i) =>
-      part.startsWith("@")
-        ? <span key={i} style={{ color: "#7e85e1", fontWeight: 600 }}>{part}</span>
-        : part
-    )
-  }
-
-  const timeStr = new Date(createdAt).toLocaleTimeString([], {
-    hour: "2-digit", minute: "2-digit",
-  });
+  const timeStr = new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const { menuStyle, transformOrigin } = useMemo(() => {
     if (typeof window === "undefined")
@@ -272,53 +237,24 @@ const ChatMessage = React.memo(function ChatMessage({
   const ReadIndicator = () => {
     if (!isSender) return null;
     if (failed) return (
-      <motion.span
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="ml-1 flex items-center text-red-400 cursor-pointer"
-        title="Не отправлено — нажми чтобы повторить"
-      >
+      <motion.span initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} className="ml-1 flex items-center text-red-400 cursor-pointer" title="Не отправлено">
         <span className="text-[11px] font-bold">!</span>
       </motion.span>
     );
     return (
       <AnimatePresence mode="wait">
         {isTemp ? (
-          <motion.span
-            key="clock"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 0.7, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ duration: 0.15 }}
-            className="ml-0.5 flex items-center"
-          >
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-            >
+          <motion.span key="clock" initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 0.7, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }} className="ml-0.5 flex items-center">
+            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}>
               <Clock size={11} strokeWidth={2.5} className="opacity-70" />
             </motion.div>
           </motion.span>
         ) : isRead ? (
-          <motion.span
-            key="read"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ type: "spring", stiffness: 500, damping: 28 }}
-            className="ml-0.5 flex items-center"
-          >
+          <motion.span key="read" initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }} className="ml-0.5 flex items-center">
             <CheckCheck size={13} strokeWidth={2.5} style={{ color: "#a8d8f0" }} />
           </motion.span>
         ) : (
-          <motion.span
-            key="sent"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 0.7, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ type: "spring", stiffness: 500, damping: 28 }}
-            className="ml-0.5 flex items-center"
-          >
+          <motion.span key="sent" initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 0.7, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }} className="ml-0.5 flex items-center">
             <Check size={12} strokeWidth={2.5} />
           </motion.span>
         )}
@@ -330,56 +266,25 @@ const ChatMessage = React.memo(function ChatMessage({
     <motion.div
       initial={isTemp ? { opacity: 0, scale: 0.92, y: 6, x: isSender ? 6 : -6 } : false}
       animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-      exit={
-        isDeleting
-          ? { opacity: 0, transition: { duration: 0.2, delay: 0.75 } }
-          : { opacity: 0, scale: 0.85, transition: { duration: 0.12 } }
-      }
+      exit={isDeleting ? { opacity: 0, transition: { duration: 0.2, delay: 0.75 } } : { opacity: 0, scale: 0.85, transition: { duration: 0.12 } }}
       transition={{ type: "spring", stiffness: 500, damping: 36, mass: 0.6 }}
       className={`flex w-full ${isSender ? "justify-end" : "justify-start"} mb-[2px] ${isFirstInGroup ? "mt-3" : "mt-0"} relative overflow-visible`}
     >
-      {/* ── Иконка Reply — появляется при свайпе, стоит позади бабла ── */}
-      <motion.div
-        style={{
-          opacity: replyIconOpacity,
-          scale: replyIconScale,
-          position: "absolute",
-          top: "50%",
-          translateY: "-50%",
-          ...(isSender ? { left: isGroupChat && !isSender && isLastInGroup ? 48 + 8 : 8 } : { right: isGroupChat && isSender && isLastInGroup ? 48 + 8 : 8 }),
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-      >
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center shadow-lg"
-          style={{ backgroundColor: ACCENT }}
-        >
+      <motion.div style={{ opacity: replyIconOpacity, scale: replyIconScale, position: "absolute", top: "50%", translateY: "-50%", ...(isSender ? { left: 8 } : { right: 8 }), pointerEvents: "none", zIndex: 0 }}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shadow-lg" style={{ backgroundColor: ACCENT }}>
           <Reply size={15} color="white" />
         </div>
       </motion.div>
 
-      {/* Avatar for non-sender in group chat (placed on the left of the bubble) */}
       {!isSender && isGroupChat && isLastInGroup && senderName && (
         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-1 mr-2 self-end overflow-hidden outline outline-1 outline-white/10" style={{ backgroundColor: ACCENT }}>
           <span className="text-white text-xs font-bold">{senderName[0]?.toUpperCase()}</span>
         </div>
       )}
-      {!isSender && isGroupChat && !isLastInGroup && senderName && (
-        /* Spacer for alignment when avatar is not shown */
-        <div className="w-8 h-8 mr-2 shrink-0"></div>
-      )}
+      {!isSender && isGroupChat && !isLastInGroup && senderName && <div className="w-8 h-8 mr-2 shrink-0"></div>}
 
-      {/* ── Bubble + хвостик двигаются вместе ── */}
       <div className="relative max-w-[80vw]" style={{ zIndex: 1 }}>
-        {/* swipeWrapRef — сюда вешаются non-passive touch listeners */}
-        <motion.div
-          ref={swipeWrapRef}
-          style={{ x: swipeX, willChange: "transform" }}
-          onContextMenu={handleContextMenu}
-          className="relative"
-        >
-          {/* Bubble */}
+        <motion.div ref={swipeWrapRef} style={{ x: swipeX, willChange: "transform" }} onContextMenu={handleContextMenu} className="relative">
           <div
             style={{
               borderTopLeftRadius: !isSender && hasAbove ? "5px" : "15px",
@@ -391,236 +296,91 @@ const ChatMessage = React.memo(function ChatMessage({
               transform: isDeleting ? "scale(0.8)" : "scale(1)",
               filter: isDeleting ? "blur(6px)" : "none",
               transition: isDeleting ? "opacity 0.3s, transform 0.3s, filter 0.3s" : "none",
-              willChange: "transform",
             }}
             className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px]"
           >
-            {/* Имя отправителя (only on the last message in Group Chats) */}
             {!isSender && isGroupChat && isLastInGroup && senderName && (
               <div className="flex items-center gap-1 mb-[3px] flex-wrap">
-                <span className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>
-                  {senderName}
-                </span>
+                <span className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{senderName}</span>
                 {isDevUser && <VerifiedBadge size={13} />}
                 <TitleBadge userId={senderId} />
               </div>
             )}
-
-            {/* Forwarded */}
             {isForwarded && (
               <div className="flex items-center gap-1 mb-1 opacity-70">
                 <Forward size={12} />
                 <span className="text-[11px] font-medium">Forwarded</span>
               </div>
             )}
-
-            {/* Reply preview */}
             {replyTo && (
-              <motion.div
-                onClick={e => { e.stopPropagation(); onScrollToMessage?.(replyTo.id.toString()); }}
-                className="mb-2 rounded-lg overflow-hidden cursor-pointer"
-                style={{ backgroundColor: "rgba(0,0,0,0.18)" }}
-                whileHover={{ backgroundColor: "rgba(0,0,0,0.28)" }}
-              >
+              <motion.div onClick={e => { e.stopPropagation(); onScrollToMessage?.(replyTo.id.toString()); }} className="mb-2 rounded-lg overflow-hidden cursor-pointer" style={{ backgroundColor: "rgba(0,0,0,0.18)" }} whileHover={{ backgroundColor: "rgba(0,0,0,0.28)" }}>
                 <div className="flex">
-                  <div className="w-[3px] rounded-l-lg shrink-0"
-                    style={{ backgroundColor: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
+                  <div className="w-[3px] rounded-l-lg shrink-0" style={{ backgroundColor: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
                   <div className="px-2 py-1.5 min-w-0">
-                    <p className="text-[12px] font-semibold truncate"
-                      style={{ color: isSender ? "rgba(255,255,255,0.85)" : ACCENT }}>
-                      {replyTo.sender.username}
-                    </p>
+                    <p className="text-[12px] font-semibold truncate" style={{ color: isSender ? "rgba(255,255,255,0.85)" : ACCENT }}>{replyTo.sender.username}</p>
                     <p className="text-[12px] opacity-70 truncate">{replyTo.content}</p>
                   </div>
                 </div>
               </motion.div>
             )}
-
-            {/* Voice */}
             {voiceUrl ? (
               <div className="flex items-center gap-2 min-w-[180px]">
-                <motion.button whileTap={{ scale: 0.85 }}
-                  onClick={e => { e.stopPropagation(); toggleAudio(); }}
-                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
-                  {isPlaying
-                    ? <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><rect x="2" y="1" width="4" height="12" rx="1.5" /><rect x="8" y="1" width="4" height="12" rx="1.5" /></svg>
-                    : <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M3 2l9 5-9 5V2z" /></svg>}
+                <motion.button whileTap={{ scale: 0.85 }} onClick={e => { e.stopPropagation(); toggleAudio(); }} className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
+                  {isPlaying ? <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><rect x="2" y="1" width="4" height="12" rx="1.5" /><rect x="8" y="1" width="4" height="12" rx="1.5" /></svg> : <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M3 2l9 5-9 5V2z" /></svg>}
                 </motion.button>
                 <div className="flex-1 min-w-0">
                   <div className="relative h-[28px] flex items-center gap-[2px]">
-                    {Array.from({ length: 28 }).map((_, i) => {
-                      const hs = [3, 5, 8, 12, 16, 20, 18, 14, 10, 7, 5, 8, 14, 20, 18, 12, 8, 5, 7, 11, 17, 20, 16, 11, 7, 5, 4, 3];
-                      return (
-                        <div key={i} className="rounded-full flex-1 transition-all duration-100"
-                          style={{
-                            height: `${hs[i % hs.length]}px`,
-                            backgroundColor: (i / 28) * 100 < audioProgress
-                              ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)"
-                          }} />
-                      );
-                    })}
+                    {Array.from({ length: 28 }).map((_, i) => (
+                      <div key={i} className="rounded-full flex-1 transition-all duration-100" style={{ height: `${[3, 5, 8, 12, 16, 20, 18, 14, 10, 7, 5, 8, 14, 20, 18, 12, 8, 5, 7, 11, 17, 20, 16, 11, 7, 5, 4, 3][i % 28]}px`, backgroundColor: (i / 28) * 100 < audioProgress ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }} />
+                    ))}
                   </div>
                   <span className="text-[10px] opacity-60">{fmt(audioDuration)}</span>
                 </div>
-                <span className="text-[10px] opacity-60 whitespace-nowrap flex items-center gap-0.5 shrink-0 self-end pb-0.5">
-                  {timeStr}<ReadIndicator />
-                </span>
+                <span className="text-[10px] opacity-60 whitespace-nowrap flex items-center gap-0.5 shrink-0 self-end pb-0.5">{timeStr}<ReadIndicator /></span>
               </div>
             ) : (
               <div className="flex items-end gap-x-2 flex-wrap">
-                <span className="leading-[1.4] text-[15px] flex-1"
-                  style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
                   <Linkify options={{ target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100" }}>
                     <WrappedText text={displayContent} />
                   </Linkify>
                 </span>
-                <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
-                  {timeStr}<ReadIndicator />
-                </span>
+                <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">{timeStr}<ReadIndicator /></span>
               </div>
             )}
           </div>
-
-          {/* Хвостик */}
           {isLastInGroup && !isDeleting && (
             <div className={`absolute bottom-0 w-[10px] h-4 ${isSender ? "-right-[10px]" : "-left-[9px]"} z-0`}>
               <svg width="10" height="16" viewBox="0 0 10 16">
-                {isSender
-                  ? <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill={SENDER_COLOR} />
-                  : <path d="M3 17h6V0c-.193 2.84-.876 5.767-2.05 8.782-.904 2.325-2.446 4.485-4.625 6.48A1 1 0 003 17z" fill={RECIPIENT_COLOR} />
-                }
+                {isSender ? <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill={SENDER_COLOR} /> : <path d="M3 17h6V0c-.193 2.84-.876 5.767-2.05 8.782-.904 2.325-2.446 4.485-4.625 6.48A1 1 0 003 17z" fill={RECIPIENT_COLOR} />}
               </svg>
             </div>
           )}
-
-          {/* Частицы при удалении */}
-          <AnimatePresence>
-            {isDeleting && (
-              <div className="absolute inset-0 pointer-events-none z-20 overflow-visible">
-                {particleData.map((p, i) => (
-                  <motion.div key={i}
-                    initial={{
-                      left: p.initialX, top: p.initialY, scale: 1, opacity: 1,
-                      backgroundColor: bubbleColor, borderRadius: "2px"
-                    }}
-                    animate={{ x: p.targetX, y: p.targetY, scale: 0, opacity: 0, rotate: p.rotate }}
-                    transition={{ duration: 0.8, ease: "easeOut", delay: p.delay }}
-                    className="absolute w-2 h-2" />
-                ))}
-              </div>
-            )}
-          </AnimatePresence>
         </motion.div>
 
-        {/* Reactions display */}
-        {reactions && reactions.length > 0 && (
-          <div className={`flex flex-wrap gap-1 mt-1 ${isSender ? 'justify-end' : 'justify-start'}`}
-            style={{ paddingLeft: isSender ? 0 : 8, paddingRight: isSender ? 8 : 0 }}>
-            {Object.entries(
-              reactions.reduce((acc, r) => {
-                acc[r.emoji] = acc[r.emoji] || { emoji: r.emoji, count: 0, users: [], hasOwn: false };
-                acc[r.emoji].count++;
-                acc[r.emoji].users.push(r.user?.username || 'user');
-                if (r.userId?.toString() === currentUserId?.toString()) acc[r.emoji].hasOwn = true;
-                return acc;
-              }, {} as Record<string, { emoji: string; count: number; users: string[]; hasOwn: boolean }>)
-            ).map(([emoji, data]) => (
-              <motion.button
-                key={emoji}
-                whileTap={{ scale: 0.85 }}
-                onClick={() => onReaction?.(messageId, emoji)}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-colors ${data.hasOwn ? 'bg-[#7e85e1]/30 border border-[#7e85e1]/50' : 'bg-white/10 border border-white/5'
-                  }`}
-                title={data.users.join(', ')}
-              >
-                <span>{emoji}</span>
-                <span className="text-white/80">{data.count}</span>
-              </motion.button>
-            ))}
-          </div>
-        )}
-
-        {/* Quick reaction bar on hover */}
         <AnimatePresence>
-          {showQuickReactions && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 4 }}
-              className={`absolute -top-10 ${isSender ? 'right-0' : 'left-0'} z-50 flex gap-1 bg-[#1e1e1e] rounded-full px-2 py-1.5 shadow-xl border border-white/10`}
-            >
-              {quickReactionEmojis.map(emoji => (
-                <motion.button
-                  key={emoji}
-                  whileHover={{ scale: 1.3 }}
-                  whileTap={{ scale: 0.8 }}
-                  onClick={() => { onReaction?.(messageId, emoji); setShowQuickReactions(false) }}
-                  className="text-lg hover:bg-white/10 rounded-full w-8 h-8 flex items-center justify-center"
-                >
-                  {emoji}
-                </motion.button>
-              ))}
+          {showMenu && (
+            <motion.div initial={{ opacity: 0, scale: 0.1 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.1 }} transition={{ type: "spring", stiffness: 500, damping: 26, mass: 0.65 }} className="fixed z-[100] w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden" style={{ ...menuStyle, transformOrigin }}>
+              <MenuItem icon={<Reply size={17} />} label={t("reply")} onClick={() => { onReply?.({ id: messageId, content, senderName: senderName || "" }); onMenuClose(); }} />
+              {isSender && <MenuItem icon={<Pencil size={17} />} label={t("edit")} onClick={() => { onEdit?.(messageId, content); onMenuClose(); }} />}
+              <MenuItem icon={<Copy size={17} />} label={t("copy")} onClick={() => { navigator.clipboard.writeText(content); onMenuClose(); }} />
+              <MenuItem icon={<Forward size={17} />} label={t("forward")} onClick={() => { onForward?.({ id: messageId, content }); onMenuClose(); }} />
+              <MenuItem icon={<Pin size={17} />} label="📌 Закрепить" onClick={() => { onPin?.(messageId); onMenuClose(); }} />
+              <div className="mx-3 my-1 border-t border-white/8" />
+              <MenuItem icon={<Trash2 size={17} />} label={t("delete")} color="text-red-400" onClick={handleDelete} />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
-
-      {/* Контекстное меню */}
-      <AnimatePresence>
-        {showMenu && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.1 }}
-            transition={{ type: "spring", stiffness: 500, damping: 26, mass: 0.65 }}
-            className="fixed z-[100] w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden"
-            style={{ ...menuStyle, transformOrigin }}
-          >
-            <MenuItem icon={<Reply size={17} />} label={t("reply")} onClick={() => {
-              onReply?.({ id: messageId, content, senderName: senderName || "" });
-              onMenuClose();
-            }} />
-            {isSender && (
-              <MenuItem icon={<Pencil size={17} />} label={t("edit")} onClick={() => {
-                onEdit?.(messageId, content);
-                onMenuClose();
-              }} />
-            )}
-            <MenuItem icon={<Copy size={17} />} label={t("copy")} onClick={() => {
-              navigator.clipboard.writeText(content);
-              onMenuClose();
-            }} />
-            <MenuItem icon={<Forward size={17} />} label={t("forward")} onClick={() => {
-              onForward?.({ id: messageId, content });
-              onMenuClose();
-            }} />
-            <MenuItem icon={<Pin size={17} />} label="📌 Закрепить" onClick={() => {
-              onPin?.(messageId);
-              onMenuClose();
-            }} />
-            <div className="mx-3 my-1 border-t border-white/8" />
-            <MenuItem icon={<Trash2 size={17} />} label={t("delete")} color="text-red-400" onClick={handleDelete} />
-            <div className="px-4 py-1.5">
-              <span className="text-[11px] text-gray-600">{timeStr}</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
-}
+});
 
-})
+export default ChatMessage;
 
-export default ChatMessage
-
-function MenuItem({ icon, label, color = "text-white", onClick }: {
-  icon: React.ReactNode; label: string; color?: string; onClick?: () => void;
-}) {
+function MenuItem({ icon, label, color = "text-white", onClick }: { icon: React.ReactNode; label: string; color?: string; onClick?: () => void; }) {
   return (
-    <div onClick={onClick}
-      className="px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-white/6 active:bg-white/10 transition-colors group">
+    <div onClick={onClick} className="px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-white/6 active:bg-white/10 transition-colors group">
       <div className={`${color} opacity-75 group-hover:opacity-100 transition-opacity shrink-0`}>{icon}</div>
       <span className={`text-[14px] font-medium ${color}`}>{label}</span>
     </div>

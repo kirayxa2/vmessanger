@@ -223,7 +223,7 @@ export default function CallModal({
     const handleCallAccepted = async (data: { callId: number }) => {
       if (data.callId !== callId) return
       setCallState("connected")
-      setStatusText(""Соединение...")
+      setStatusText("Соединение...")
 
       const stream = await getLocalStream()
       if (!stream) return
