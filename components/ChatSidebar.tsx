@@ -17,6 +17,7 @@ import TitleBadge from "./TitleBadge"
 import CreateGroupModal from "./CreateGroupModal"
 import DevicesScreen from "./DevicesScreen"
 import { useDeviceSession } from "@/hooks/useDeviceSession"
+import QRCodeSidebar from "./QRCodeSidebar"; // Или проверьте правильный путь к файлу
 
 const ACCENT = "#7e85e1"
 
