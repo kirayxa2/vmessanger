@@ -485,8 +485,55 @@ export default function ChatSidebar({
     return () => { window.removeEventListener('click', handler); window.removeEventListener('touchstart', handler) }
   }, [chatMenu])
 
+  // ── Pull-to-archive touch handlers ──────────────────────
+  const handlePullTouchStart = useCallback((e: React.TouchEvent) => {
+    const el = pullListRef.current
+    if (!el || el.scrollTop > 0) return // только если список в топе
+    pullStartY.current = e.touches[0].clientY
+    isPulling.current = false
+  }, [])
+
+  const handlePullTouchMove = useCallback((e: React.TouchEvent) => {
+    const el = pullListRef.current
+    if (!el || el.scrollTop > 0) return
+    const dy = e.touches[0].clientY - pullStartY.current
+    if (dy < 8) return
+    isPulling.current = true
+    e.preventDefault()
+    const clamped = Math.min(dy * 0.45, PULL_THRESHOLD * 1.3)
+    setPullY(clamped)
+    setPullState(clamped >= PULL_THRESHOLD ? 'ready' : 'pulling')
+    if (clamped >= PULL_THRESHOLD && pullState !== 'ready') {
+      if (navigator.vibrate) navigator.vibrate(18)
+    }
+  }, [pullState])
+
+  const handlePullTouchEnd = useCallback(() => {
+    if (!isPulling.current) return
+    if (pullState === 'ready') {
+      setPullState('triggered')
+      setTimeout(() => {
+        setActiveTab('archive')
+        setPullY(0)
+        setPullState('idle')
+      }, 350)
+    } else {
+      setPullY(0)
+      setPullState('idle')
+    }
+    isPulling.current = false
+  }, [pullState])
+
   // Вкладки: все / архив
   const [activeTab, setActiveTab] = useState<'all' | 'archive'>('all')
+
+  // ── Pull-to-archive (Telegram-style) ────────────────────────
+  const [pullY, setPullY] = useState(0) // текущий pull offset в px
+  const [pullState, setPullState] = useState<'idle' | 'pulling' | 'ready' | 'triggered'>('idle')
+  const PULL_THRESHOLD = 72 // px до триггера
+  const pullStartY = useRef(0)
+  const pullListRef = useRef<HTMLDivElement>(null)
+  const isPulling = useRef(false)
 
   // Когда докбар меняет вкладку — обновляем view
   useEffect(() => {
@@ -925,18 +972,21 @@ export default function ChatSidebar({
       </motion.div>
 
       {/* Вкладки все / архив */}
-      {!isSearchActive && (
-        <div className="flex gap-2 px-3 pb-2">
-          {(['all', 'archive'] as const).map(tab => (
-            <motion.button key={tab} onClick={() => setActiveTab(tab)}
-              whileTap={{ scale: 0.95 }}
-              className="px-3 py-1 rounded-full text-[13px] font-medium transition-colors"
-              style={activeTab === tab
-                ? { backgroundColor: ACCENT, color: 'white' }
-                : { backgroundColor: 'rgba(255,255,255,0.07)', color: '#8896a5' }}>
-              {tab === 'all' ? 'Все' : 'Архив'}
-            </motion.button>
-          ))}
+      {!isSearchActive && activeTab === 'archive' && (
+        <motion.button
+          initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+          onClick={() => setActiveTab('all')}
+          className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors"
+          style={{ backgroundColor: 'rgba(126,133,225,0.1)', border: '1px solid rgba(126,133,225,0.2)' }}
+        >
+          <ArrowLeft size={15} style={{ color: ACCENT }} />
+          <Archive size={15} style={{ color: ACCENT }} />
+          <span className="text-[14px] font-semibold" style={{ color: ACCENT }}>Архив</span>
+        </motion.button>
+      )}
+      {!isSearchActive && activeTab === 'all' && (
+        <div className="px-3 pb-2 text-[11px] text-gray-600 select-none pointer-events-none">
+          ↑ потяните вверх чтобы открыть Архив
         </div>
       )}
 
@@ -980,9 +1030,69 @@ export default function ChatSidebar({
         })()}
       </AnimatePresence>
 
-      <div className="flex-1 overflow-y-auto hide-scrollbar py-1 relative">
+      <div
+        ref={pullListRef}
+        className="flex-1 overflow-y-auto hide-scrollbar py-1 relative"
+        onTouchStart={activeTab === 'all' ? handlePullTouchStart : undefined}
+        onTouchMove={activeTab === 'all' ? handlePullTouchMove : undefined}
+        onTouchEnd={activeTab === 'all' ? handlePullTouchEnd : undefined}
+        style={{ overscrollBehavior: 'none' }}
+      >
+        {/* ── Pull-to-archive indicator ── */}
+        {activeTab === 'all' && pullY > 0 && (
+          <div
+            className="flex items-center justify-center gap-2 overflow-hidden transition-all"
+            style={{ height: pullY, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}
+          >
+            <motion.div
+              animate={{ rotate: pullState === 'ready' ? 180 : 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: pullState === 'ready' ? ACCENT : 'rgba(255,255,255,0.12)' }}
+            >
+              <Archive size={16} className="text-white" />
+            </motion.div>
+            <motion.span
+              animate={{ opacity: pullState === 'ready' ? 1 : 0.55 }}
+              className="text-[13px] font-medium"
+              style={{ color: pullState === 'ready' ? ACCENT : '#8896a5' }}
+            >
+              {pullState === 'ready' ? 'Отпустите — открыть Архив' : 'Потяните, чтобы открыть Архив'}
+            </motion.span>
+          </div>
+        )}
         {!isSearchActive ? (
           <div className="flex flex-col">
+            {/* Telegram-style: Archive entry at bottom of normal list */}
+            {activeTab === 'all' && (() => {
+              const archivedCount = filteredConversations.filter(c => c._folder === 'archive').length
+              if (archivedCount === 0) return null
+              return (
+                <motion.div
+                  key="__archive_entry__"
+                  onClick={() => setActiveTab('archive')}
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] hover:bg-white/5 transition-all select-none"
+                >
+                  <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 text-white shadow-md"
+                    style={{ backgroundColor: 'rgba(126,133,225,0.2)', border: '1.5px solid rgba(126,133,225,0.35)' }}>
+                    <Archive size={22} style={{ color: ACCENT }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-semibold text-[16px] text-white">Архив</span>
+                      <motion.div
+                        className="text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center"
+                        style={{ backgroundColor: ACCENT, color: 'white' }}
+                        initial={{ scale: 0 }} animate={{ scale: 1 }}
+                      >{archivedCount}</motion.div>
+                    </div>
+                    <p className="text-[14px] opacity-60 text-white">{archivedCount} чат{archivedCount === 1 ? '' : archivedCount < 5 ? 'а' : 'ов'}</p>
+                  </div>
+                </motion.div>
+              )
+            })()}
             {filteredConversations.filter(c => {
               if (activeTab === 'archive') return c._folder === 'archive'
               return c._folder !== 'archive'

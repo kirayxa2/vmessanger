@@ -1162,14 +1162,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         </AnimatePresence>
 
         {/* ── Messages ── */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 hide-scrollbar relative" onScroll={handleScroll}
-          style={{
-            backgroundImage: `radial-gradient(circle at 20% 50%, rgba(126,133,225,0.04) 0%, transparent 50%),
-              radial-gradient(circle at 80% 20%, rgba(198,124,120,0.04) 0%, transparent 50%),
-              radial-gradient(circle at 60% 80%, rgba(78,140,222,0.03) 0%, transparent 50%)`,
-            backgroundColor: "#0e1621",
-            WebkitOverflowScrolling: "touch",
-          }}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 hide-scrollbar relative tg-bg" onScroll={handleScroll}
+          style={{ WebkitOverflowScrolling: "touch", backgroundColor: "var(--chat-bg)" }}
         >
           {/* Loading more indicator */}
           {loadingMore && (
