@@ -50,9 +50,8 @@ const DropdownItem = ({ icon, label, isToggle, toggleEnabled, danger, onClick }:
 }) => (
   <div
     onClick={onClick}
-    className={`px-3 py-[7px] mx-1 rounded-lg flex items-center gap-3 cursor-pointer transition-colors ${
-      danger ? "hover:bg-red-500/10" : "hover:bg-white/5"
-    }`}
+    className={`px-3 py-[7px] mx-1 rounded-lg flex items-center gap-3 cursor-pointer transition-colors ${danger ? "hover:bg-red-500/10" : "hover:bg-white/5"
+      }`}
   >
     <div className={`w-5 flex items-center justify-center shrink-0 ${danger ? "text-red-400" : "text-gray-400"}`}>
       {icon}
@@ -246,9 +245,8 @@ function NotificationsScreen({ onBack }: { onBack: () => void }) {
               key={type}
               onClick={() => { setSoundType(type); preview(type) }}
               whileTap={{ scale: 0.98 }}
-              className={`px-4 py-3.5 flex items-center gap-4 cursor-pointer transition-colors ${
-                i < sounds.length - 1 ? "border-b border-white/5" : ""
-              } hover:bg-white/5`}
+              className={`px-4 py-3.5 flex items-center gap-4 cursor-pointer transition-colors ${i < sounds.length - 1 ? "border-b border-white/5" : ""
+                } hover:bg-white/5`}
             >
               {/* Иконка звука */}
               <motion.div
@@ -258,16 +256,16 @@ function NotificationsScreen({ onBack }: { onBack: () => void }) {
               >
                 {type === "none" ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
-                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
-                    <line x1="12" y1="19" x2="12" y2="23"/>
-                    <line x1="8" y1="23" x2="16" y2="23"/>
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
                   </svg>
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-                    <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
-                    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+                    <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                    <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
                   </svg>
                 )}
               </motion.div>
@@ -452,7 +450,7 @@ export default function ChatSidebar({
       setLocalConversations(prev => prev.map(c =>
         c.id.toString() === id ? { ...c, _folder: archive ? 'archive' : null } : c
       ))
-    } catch {}
+    } catch { }
   }, [])
 
   const handleMuteChat = useCallback(async (id: string, mute: boolean) => {
@@ -466,7 +464,7 @@ export default function ChatSidebar({
       setLocalConversations(prev => prev.map(c =>
         c.id.toString() === id ? { ...c, _isMuted: mute } : c
       ))
-    } catch {}
+    } catch { }
   }, [])
 
   const handleDeleteChat = useCallback(async (id: string) => {
@@ -474,7 +472,7 @@ export default function ChatSidebar({
     try {
       await fetch(`/api/conversations?conversationId=${id}`, { method: 'DELETE' })
       setLocalConversations(prev => prev.filter(c => c.id.toString() !== id))
-    } catch {}
+    } catch { }
   }, [])
 
   // Закрывать меню при клике снаружи
@@ -558,7 +556,7 @@ export default function ChatSidebar({
       fetch("/api/users/profile")
         .then(r => r.json())
         .then(d => setProfile({ username: d.username || session?.user?.name || "", bio: d.bio || "" }))
-        .catch(() => {})
+        .catch(() => { })
     }
   }, [view, session?.user?.name])
 
@@ -639,7 +637,7 @@ export default function ChatSidebar({
         onSelect?.(conversation.id.toString())
         setIsSearchActive(false); setSearchQuery("")
       }
-    } catch {}
+    } catch { }
     finally { isCreatingConversation.current = false }
   }
 
@@ -658,7 +656,7 @@ export default function ChatSidebar({
           socket.emit("avatar-update", { userId: parseInt(session.user.id), avatar: data.avatar })
         }
       }
-    } catch {}
+    } catch { }
     finally { setIsUploading(false); if (fileInputRef.current) fileInputRef.current.value = "" }
   }
 
@@ -694,187 +692,187 @@ export default function ChatSidebar({
 
   // ── SETTINGS SCREEN ──────────────────────────────────────────
   if (view === "settings") {
-  return (
-    <div className="w-full h-full flex flex-col relative overflow-hidden">
-      <motion.div className="w-full h-full flex flex-col bg-[#1c242f] relative overflow-hidden"
-        initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
-        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+    return (
+      <div className="w-full h-full flex flex-col relative overflow-hidden">
+        <motion.div className="w-full h-full flex flex-col bg-[#1c242f] relative overflow-hidden"
+          initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
+          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
 
-        {/* Header */}
-        <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
-          <motion.button onClick={() => { setView("chats"); setShowEditProfile(false); setShowPrivacy(false) }}
-            whileTap={{ scale: 0.9 }} className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
-            <ArrowLeft size={22} />
-          </motion.button>
-          <h2 className="text-[18px] font-bold text-white flex-1">{t("settings")}</h2>
-          <div className="flex items-center gap-1">
-            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowQRCode(true)}
-              className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
-              <QrCode size={19} />
+          {/* Header */}
+          <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
+            <motion.button onClick={() => { setView("chats"); setShowEditProfile(false); setShowPrivacy(false) }}
+              whileTap={{ scale: 0.9 }} className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
+              <ArrowLeft size={22} />
             </motion.button>
-            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowEditProfile(true)}
-              className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
-              <Edit3 size={19} />
-            </motion.button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto hide-scrollbar">
-          {/* Profile card */}
-          <div className="pt-6 pb-4 flex flex-col items-center gap-3 border-b border-white/5">
-            <div className="relative w-[90px] h-[90px] rounded-full overflow-hidden shadow-xl flex items-center justify-center text-3xl font-bold text-white"
-              style={{ backgroundColor: ACCENT }}>
-              {session?.user?.image
-                ? <img src={session.user.image} className="w-full h-full object-cover" alt="avatar" />
-                : <span>{displayName[0]?.toUpperCase()}</span>}
-            </div>
-            <div className="text-center">
-              <h3 className="text-[22px] font-bold text-white leading-tight">{displayName}</h3>
-              <p className="text-[13px] mt-0.5" style={{ color: ACCENT }}>{t("online")}</p>
+            <h2 className="text-[18px] font-bold text-white flex-1">{t("settings")}</h2>
+            <div className="flex items-center gap-1">
+              <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowQRCode(true)}
+                className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+                <QrCode size={19} />
+              </motion.button>
+              <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowEditProfile(true)}
+                className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+                <Edit3 size={19} />
+              </motion.button>
             </div>
           </div>
 
-          {/* Info rows */}
-          <div className="py-2 border-b border-white/5">
-            <InfoRow icon={<AtSign size={18} />} value={`@${displayName}`} label="Username" />
-            <InfoRow icon={<Info size={18} />} value={displayBio} label="Bio" />
-          </div>
+          <div className="flex-1 overflow-y-auto hide-scrollbar">
+            {/* Profile card */}
+            <div className="pt-6 pb-4 flex flex-col items-center gap-3 border-b border-white/5">
+              <div className="relative w-[90px] h-[90px] rounded-full overflow-hidden shadow-xl flex items-center justify-center text-3xl font-bold text-white"
+                style={{ backgroundColor: ACCENT }}>
+                {session?.user?.image
+                  ? <img src={session.user.image} className="w-full h-full object-cover" alt="avatar" />
+                  : <span>{displayName[0]?.toUpperCase()}</span>}
+              </div>
+              <div className="text-center">
+                <h3 className="text-[22px] font-bold text-white leading-tight">{displayName}</h3>
+                <p className="text-[13px] mt-0.5" style={{ color: ACCENT }}>{t("online")}</p>
+              </div>
+            </div>
 
-          {/* Settings rows */}
-          <div className="py-2 border-b border-white/5">
-            <SettingsRow icon={<Bell size={17} />} iconColor="#5B9BD5" label={t("notifications")} onClick={() => setShowNotifications(true)} />
-            <SettingsRow
-              icon={<Shield size={17} />}
-              iconColor={profanityEnabled ? ACCENT : "#3a8a6e"}
-              label={t("privacy")}
-              badge={profanityEnabled ? t("anti_profanity_on") : undefined}
-              onClick={() => setShowPrivacy(true)}
-            />
-            <SettingsRow
-              icon={theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
-              iconColor="#e0a83c"
-              label={theme === "dark" ? "Тёмная тема" : "Светлая тема"}
-              rightEl={
-                <ToggleSwitch enabled={theme === "dark"} onToggle={toggleTheme} />
-              }
-              onClick={toggleTheme}
-            />
-            <SettingsRow icon={<Lock size={17} />} iconColor="#d45555" label="Сменить пароль" onClick={() => setShowPasswordChange(true)} />
-            <SettingsRow icon={<Monitor size={17} />} iconColor="#e08a3c" label={t("devices")} onClick={() => setShowDevices(true)} />
-            <SettingsRow icon={<Folder size={17} />} iconColor="#8b6fd6" label={t("chat_folders")} />
-          </div>
+            {/* Info rows */}
+            <div className="py-2 border-b border-white/5">
+              <InfoRow icon={<AtSign size={18} />} value={`@${displayName}`} label="Username" />
+              <InfoRow icon={<Info size={18} />} value={displayBio} label="Bio" />
+            </div>
 
-          {/* Language */}
-          <div className="py-2 border-b border-white/5">
-            <p className="px-5 pb-1.5 text-[12px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
-              Language
-            </p>
-            {[{ code: "en", label: "English" }, { code: "ru", label: "Русский" }].map(lang => (
-              <button key={lang.code} onClick={() => i18n.changeLanguage(lang.code)}
-                className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
-                style={i18n.language.startsWith(lang.code) ? { color: ACCENT } : { color: "white" }}>
-                <div className="flex items-center gap-3">
-                  <Globe size={18} className="text-gray-500" />
-                  <span className="text-[15px]">{lang.label}</span>
-                </div>
-                {i18n.language.startsWith(lang.code) && <Check size={16} style={{ color: ACCENT }} />}
+            {/* Settings rows */}
+            <div className="py-2 border-b border-white/5">
+              <SettingsRow icon={<Bell size={17} />} iconColor="#5B9BD5" label={t("notifications")} onClick={() => setShowNotifications(true)} />
+              <SettingsRow
+                icon={<Shield size={17} />}
+                iconColor={profanityEnabled ? ACCENT : "#3a8a6e"}
+                label={t("privacy")}
+                badge={profanityEnabled ? t("anti_profanity_on") : undefined}
+                onClick={() => setShowPrivacy(true)}
+              />
+              <SettingsRow
+                icon={theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
+                iconColor="#e0a83c"
+                label={theme === "dark" ? "Тёмная тема" : "Светлая тема"}
+                rightEl={
+                  <ToggleSwitch enabled={theme === "dark"} onToggle={toggleTheme} />
+                }
+                onClick={toggleTheme}
+              />
+              <SettingsRow icon={<Lock size={17} />} iconColor="#d45555" label="Сменить пароль" onClick={() => setShowPasswordChange(true)} />
+              <SettingsRow icon={<Monitor size={17} />} iconColor="#e08a3c" label={t("devices")} onClick={() => setShowDevices(true)} />
+              <SettingsRow icon={<Folder size={17} />} iconColor="#8b6fd6" label={t("chat_folders")} />
+            </div>
+
+            {/* Language */}
+            <div className="py-2 border-b border-white/5">
+              <p className="px-5 pb-1.5 text-[12px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
+                Language
+              </p>
+              {[{ code: "en", label: "English" }, { code: "ru", label: "Русский" }].map(lang => (
+                <button key={lang.code} onClick={() => i18n.changeLanguage(lang.code)}
+                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
+                  style={i18n.language.startsWith(lang.code) ? { color: ACCENT } : { color: "white" }}>
+                  <div className="flex items-center gap-3">
+                    <Globe size={18} className="text-gray-500" />
+                    <span className="text-[15px]">{lang.label}</span>
+                  </div>
+                  {i18n.language.startsWith(lang.code) && <Check size={16} style={{ color: ACCENT }} />}
+                </button>
+              ))}
+            </div>
+
+            {/* Logout */}
+            <div className="py-2">
+              <button onClick={() => signOut()}
+                className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-red-400 hover:text-red-300">
+                <LogOut size={18} />
+                <span className="text-[15px]">Log Out</span>
               </button>
-            ))}
+            </div>
+            <div className="h-6" />
           </div>
 
-          {/* Logout */}
-          <div className="py-2">
-            <button onClick={() => signOut()}
-              className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-red-400 hover:text-red-300">
-              <LogOut size={18} />
-              <span className="text-[15px]">Log Out</span>
-            </button>
-          </div>
-          <div className="h-6" />
-        </div>
+          {/* Edit profile overlay */}
+          <AnimatePresence>
+            {showEditProfile && (
+              <EditProfileScreen session={session} profile={profile} onSave={handleSaveProfile}
+                onBack={() => setShowEditProfile(false)} isUploading={isUploading}
+                fileInputRef={fileInputRef as React.RefObject<HTMLInputElement>}
+                onAvatarClick={() => fileInputRef.current?.click()} />
+            )}
+          </AnimatePresence>
 
-        {/* Edit profile overlay */}
-        <AnimatePresence>
-          {showEditProfile && (
-            <EditProfileScreen session={session} profile={profile} onSave={handleSaveProfile}
-              onBack={() => setShowEditProfile(false)} isUploading={isUploading}
-              fileInputRef={fileInputRef as React.RefObject<HTMLInputElement>}
-              onAvatarClick={() => fileInputRef.current?.click()} />
-          )}
-        </AnimatePresence>
+          {/* Notifications overlay */}
+          <AnimatePresence>
+            {showNotifications && <NotificationsScreen onBack={() => setShowNotifications(false)} />}
+          </AnimatePresence>
 
-        {/* Notifications overlay */}
-        <AnimatePresence>
-          {showNotifications && <NotificationsScreen onBack={() => setShowNotifications(false)} />}
-        </AnimatePresence>
+          {/* Privacy overlay */}
+          <AnimatePresence>
+            {showPrivacy && <PrivacyScreen onBack={() => setShowPrivacy(false)} />}
+          </AnimatePresence>
 
-        {/* Privacy overlay */}
-        <AnimatePresence>
-          {showPrivacy && <PrivacyScreen onBack={() => setShowPrivacy(false)} />}
-        </AnimatePresence>
+          {/* Devices overlay */}
+          <AnimatePresence>
+            {showDevices && (
+              <DevicesScreen
+                onBack={() => setShowDevices(false)}
+                currentSessionId={sessionId}
+              />
+            )}
+          </AnimatePresence>
 
-        {/* Devices overlay */}
-        <AnimatePresence>
-          {showDevices && (
-            <DevicesScreen
-              onBack={() => setShowDevices(false)}
-              currentSessionId={sessionId}
-            />
-          )}
-        </AnimatePresence>
+          {/* Password change overlay */}
+          <AnimatePresence>
+            {showPasswordChange && (
+              <motion.div className="absolute inset-0 z-50 flex flex-col bg-[#1c242f]"
+                initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}>
+                <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
+                  <motion.button onClick={() => { setShowPasswordChange(false); setPasswordError(""); setPasswordSuccess(false) }}
+                    whileTap={{ scale: 0.9 }} className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
+                    <ArrowLeft size={22} />
+                  </motion.button>
+                  <h2 className="text-[18px] font-bold text-white flex-1">Смена пароля</h2>
+                </div>
+                <div className="flex-1 overflow-y-auto hide-scrollbar p-5 flex flex-col gap-4">
+                  <FloatInput label="Текущий пароль" value={currentPassword} onChange={setCurrentPassword} />
+                  <FloatInput label="Новый пароль" value={newPassword} onChange={setNewPassword} />
+                  <FloatInput label="Подтвердите пароль" value={confirmPassword} onChange={setConfirmPassword} />
+                  {passwordError && <p className="text-red-400 text-[13px]">{passwordError}</p>}
+                  {passwordSuccess && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      className="text-green-400 text-[13px] flex items-center gap-2">
+                      <Check size={14} /> Пароль изменён
+                    </motion.p>
+                  )}
+                  <motion.button onClick={handlePasswordChange} disabled={passwordSaving}
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    className="mt-2 w-full py-3 rounded-xl text-white font-semibold text-[15px] shadow-lg"
+                    style={{ backgroundColor: ACCENT }}>
+                    {passwordSaving ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Сменить пароль"}
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* Password change overlay */}
-        <AnimatePresence>
-          {showPasswordChange && (
-            <motion.div className="absolute inset-0 z-50 flex flex-col bg-[#1c242f]"
-              initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
-              transition={{ type: "spring", stiffness: 380, damping: 32 }}>
-              <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
-                <motion.button onClick={() => { setShowPasswordChange(false); setPasswordError(""); setPasswordSuccess(false) }}
-                  whileTap={{ scale: 0.9 }} className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
-                  <ArrowLeft size={22} />
-                </motion.button>
-                <h2 className="text-[18px] font-bold text-white flex-1">Смена пароля</h2>
-              </div>
-              <div className="flex-1 overflow-y-auto hide-scrollbar p-5 flex flex-col gap-4">
-                <FloatInput label="Текущий пароль" value={currentPassword} onChange={setCurrentPassword} />
-                <FloatInput label="Новый пароль" value={newPassword} onChange={setNewPassword} />
-                <FloatInput label="Подтвердите пароль" value={confirmPassword} onChange={setConfirmPassword} />
-                {passwordError && <p className="text-red-400 text-[13px]">{passwordError}</p>}
-                {passwordSuccess && (
-                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="text-green-400 text-[13px] flex items-center gap-2">
-                    <Check size={14} /> Пароль изменён
-                  </motion.p>
-                )}
-                <motion.button onClick={handlePasswordChange} disabled={passwordSaving}
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  className="mt-2 w-full py-3 rounded-xl text-white font-semibold text-[15px] shadow-lg"
-                  style={{ backgroundColor: ACCENT }}>
-                  {passwordSaving ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Сменить пароль"}
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* QR Code overlay */}
-        <AnimatePresence>
-          {showQRCode && (
-            <QRCodeSidebar 
-              user={{ 
-                id: session?.user?.id || 0, 
-                username: displayName, 
-                avatar: session?.user?.image || undefined 
-              }} 
-              onBack={() => setShowQRCode(false)} 
-            />
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </div>
-  )
-}
+          {/* QR Code overlay */}
+          <AnimatePresence>
+            {showQRCode && (
+              <QRCodeSidebar
+                user={{
+                  id: session?.user?.id || 0,
+                  username: displayName,
+                  avatar: session?.user?.image || undefined
+                }}
+                onBack={() => setShowQRCode(false)}
+              />
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </div>
+    )
+  }
 
   // ── detect isMobile inside component ─────────────────────────
   const [isMobile, setIsMobile] = useState(false)
@@ -966,7 +964,7 @@ export default function ChatSidebar({
               >
                 {/* dots icon */}
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+                  <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
                 </svg>
               </motion.button>
               <AnimatePresence>
@@ -1054,351 +1052,353 @@ export default function ChatSidebar({
       ) : (
         /* ── DESKTOP HEADER ── */
         <div>
-        {/* Stories row на ПК — горизонтальная лента под поиском */}
-        <motion.div className="px-3 flex items-center gap-2 relative bg-[#1c242f] overflow-hidden"
-        layout style={{ height: 56 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
-        <div className="relative w-10 h-10 shrink-0">
-          <motion.button onClick={() => setShowDropdown(v => !v)}
-            animate={{ opacity: isSearchActive ? 0 : 1, rotate: isSearchActive ? -90 : 0 }}
-            transition={{ duration: 0.2 }} style={{ pointerEvents: isSearchActive ? "none" : "auto" }}
-            className="absolute inset-0 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400">
-            <Menu size={20} />
-          </motion.button>
-          <motion.button onClick={() => { setIsSearchActive(false); setSearchQuery("") }}
-            animate={{ opacity: isSearchActive ? 1 : 0, rotate: isSearchActive ? 0 : 90 }}
-            transition={{ duration: 0.2 }} style={{ pointerEvents: isSearchActive ? "auto" : "none" }}
-            className="absolute inset-0 flex items-center justify-center rounded-full hover:bg-white/10 text-[#7e85e1]">
-            <ArrowLeft size={20} />
-          </motion.button>
+          {/* Stories row на ПК — горизонтальная лента под поиском */}
+          <motion.div className="px-3 flex items-center gap-2 relative bg-[#1c242f] overflow-hidden"
+            layout style={{ height: 56 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
+            <div className="relative w-10 h-10 shrink-0">
+              <motion.button onClick={() => setShowDropdown(v => !v)}
+                animate={{ opacity: isSearchActive ? 0 : 1, rotate: isSearchActive ? -90 : 0 }}
+                transition={{ duration: 0.2 }} style={{ pointerEvents: isSearchActive ? "none" : "auto" }}
+                className="absolute inset-0 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400">
+                <Menu size={20} />
+              </motion.button>
+              <motion.button onClick={() => { setIsSearchActive(false); setSearchQuery("") }}
+                animate={{ opacity: isSearchActive ? 1 : 0, rotate: isSearchActive ? 0 : 90 }}
+                transition={{ duration: 0.2 }} style={{ pointerEvents: isSearchActive ? "auto" : "none" }}
+                className="absolute inset-0 flex items-center justify-center rounded-full hover:bg-white/10 text-[#7e85e1]">
+                <ArrowLeft size={20} />
+              </motion.button>
 
-          <AnimatePresence>
-            {showDropdown && (
-              <>
-                <div className="fixed inset-0 z-[200]" onClick={() => setShowDropdown(false)} />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: -8 }}
-                  style={{ transformOrigin: "top left", position: "fixed", top: 76, left: 26 }}
-                  transition={{ type: "spring", stiffness: 420, damping: 28, mass: 0.8 }}
-                  className="w-56 z-[201] rounded-xl shadow-2xl overflow-hidden">
-                  <div className="absolute inset-0 rounded-xl"
-                    style={{ backgroundColor: "rgba(18,24,35,0.82)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }} />
-                  <div className="relative z-10">
-                    <div onClick={() => { setView("settings"); setShowDropdown(false) }}
-                      className="px-3 py-2.5 flex items-center gap-2.5 cursor-pointer hover:bg-white/5 transition-colors">
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold overflow-hidden shrink-0" style={{ backgroundColor: ACCENT }}>
-                        {session?.user?.image
-                          ? <img src={session.user.image} className="w-full h-full object-cover" alt="avatar" />
-                          : <span className="text-white text-sm">{session?.user?.name?.[0]?.toUpperCase()}</span>}
+              <AnimatePresence>
+                {showDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-[200]" onClick={() => setShowDropdown(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: -8 }}
+                      style={{ transformOrigin: "top left", position: "fixed", top: 76, left: 26 }}
+                      transition={{ type: "spring", stiffness: 420, damping: 28, mass: 0.8 }}
+                      className="w-56 z-[201] rounded-xl shadow-2xl overflow-hidden">
+                      <div className="absolute inset-0 rounded-xl"
+                        style={{ backgroundColor: "rgba(18,24,35,0.82)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }} />
+                      <div className="relative z-10">
+                        <div onClick={() => { setView("settings"); setShowDropdown(false) }}
+                          className="px-3 py-2.5 flex items-center gap-2.5 cursor-pointer hover:bg-white/5 transition-colors">
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold overflow-hidden shrink-0" style={{ backgroundColor: ACCENT }}>
+                            {session?.user?.image
+                              ? <img src={session.user.image} className="w-full h-full object-cover" alt="avatar" />
+                              : <span className="text-white text-sm">{session?.user?.name?.[0]?.toUpperCase()}</span>}
+                          </div>
+                          <span className="font-semibold text-[14px] text-white truncate">{session?.user?.name}</span>
+                        </div>
+                        <div className="h-px" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
+                        <div className="py-1">
+                          <DropdownItem icon={<Bookmark size={16} />} label={t("saved_messages")} />
+                          <DropdownItem icon={theme === "dark" ? <Moon size={16} /> : <Sun size={16} />} label={theme === "dark" ? t("night_mode") : "Светлая тема"}
+                            isToggle toggleEnabled={theme === "dark"} onClick={() => { toggleTheme(); setShowDropdown(false) }} />
+                        </div>
+                        <div className="h-px mx-2" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
+                        <div className="py-1">
+                          <DropdownItem icon={<LogOut size={16} />} label={t("logout")} danger onClick={() => signOut()} />
+                        </div>
                       </div>
-                      <span className="font-semibold text-[14px] text-white truncate">{session?.user?.name}</span>
-                    </div>
-                    <div className="h-px" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
-                    <div className="py-1">
-                      <DropdownItem icon={<Bookmark size={16} />} label={t("saved_messages")} />
-                      <DropdownItem icon={theme === "dark" ? <Moon size={16} /> : <Sun size={16} />} label={theme === "dark" ? t("night_mode") : "Светлая тема"}
-                        isToggle toggleEnabled={theme === "dark"} onClick={() => { toggleTheme(); setShowDropdown(false) }} />
-                    </div>
-                    <div className="h-px mx-2" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
-                    <div className="py-1">
-                      <DropdownItem icon={<LogOut size={16} />} label={t("logout")} danger onClick={() => signOut()} />
-                    </div>
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
 
-        {/* Create group button */}
-        <motion.button
-          onClick={() => setShowCreateGroup(true)}
-          whileTap={{ scale: 0.9 }}
-          className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-          title="Создать группу"
-        >
-          <Plus size={20} />
-        </motion.button>
-
-        {/* Search bar */}
-        <motion.div className="relative flex-1"
-          animate={isSearchActive ? { scaleX: 1, opacity: 1 } : { scaleX: 0.97, opacity: 0.92 }}
-          style={{ transformOrigin: "center" }} transition={{ type: "spring", stiffness: 340, damping: 28 }}>
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" size={16}
-            style={{ color: isSearchActive ? ACCENT : "#6b7280", transition: "color 0.2s" }} />
-          <input type="text" placeholder={t("search_placeholder")} value={searchQuery}
-            onFocus={() => setIsSearchActive(true)} onChange={e => setSearchQuery(e.target.value)}
-            className="w-full py-[9px] pl-10 pr-4 rounded-full text-[15px] outline-none text-white placeholder-gray-500"
-            style={{
-              backgroundColor: isSearchActive ? "#2c3a4d" : "#242f3d",
-              border: isSearchActive ? `1.5px solid ${ACCENT}55` : "1.5px solid transparent",
-              transition: "background-color 0.25s, border-color 0.25s",
-            }} />
-        </motion.div>
-      </motion.div>
-
-      {/* Вкладки все / архив */}
-      {!isSearchActive && activeTab === 'archive' && (
-        <motion.button
-          initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-          onClick={() => setActiveTab('all')}
-          className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors"
-          style={{ backgroundColor: 'rgba(126,133,225,0.1)', border: '1px solid rgba(126,133,225,0.2)' }}
-        >
-          <ArrowLeft size={15} style={{ color: ACCENT }} />
-          <Archive size={15} style={{ color: ACCENT }} />
-          <span className="text-[14px] font-semibold" style={{ color: ACCENT }}>Архив</span>
-        </motion.button>
-      )}
-      {!isSearchActive && activeTab === 'all' && (
-        <div className="px-3 pb-2 text-[11px] text-gray-600 select-none pointer-events-none">
-          ↑ потяните вверх чтобы открыть Архив
-        </div>
-      )}
-
-      {/* Контекстное меню чата */}
-      <AnimatePresence>
-        {chatMenu && (() => {
-          const mW = 200, mH = 160, mg = 8
-          const top = chatMenu.y + mH > window.innerHeight - mg ? chatMenu.y - mH : chatMenu.y + 4
-          const left = Math.min(Math.max(chatMenu.x - mW / 2, mg), window.innerWidth - mW - mg)
-          return (
-            <>
-              <div className="fixed inset-0 z-[198]" onClick={e => { e.stopPropagation(); setChatMenu(null) }} />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.88 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.88 }}
-                transition={{ type: 'spring', stiffness: 460, damping: 26 }}
-                onClick={e => e.stopPropagation()}
-                className="fixed z-[199] w-[200px] rounded-2xl shadow-2xl overflow-hidden py-1.5 border border-white/8"
-                style={{ top, left, backgroundColor: 'rgba(22,28,40,0.96)', backdropFilter: 'blur(16px)' }}
-              >
-                <button onClick={() => handleArchiveChat(chatMenu.id, !chatMenu.isArchived)}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/6 transition-colors">
-                  <Archive size={16} className="text-gray-400" />
-                  <span className="text-[14px] text-white">{chatMenu.isArchived ? 'Из архива' : 'В архив'}</span>
-                </button>
-                <button onClick={() => handleMuteChat(chatMenu.id, !chatMenu.isMuted)}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/6 transition-colors">
-                  {chatMenu.isMuted
-                    ? <BellRing size={16} className="text-gray-400" />
-                    : <BellOff size={16} className="text-gray-400" />}
-                  <span className="text-[14px] text-white">{chatMenu.isMuted ? 'Включить звук' : 'Заглушить'}</span>
-                </button>
-                <div className="my-1 mx-3 border-t border-white/8" />
-                <button onClick={() => handleDeleteChat(chatMenu.id)}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 transition-colors">
-                  <Trash2 size={16} className="text-red-400" />
-                  <span className="text-[14px] text-red-400">Удалить чат</span>
-                </button>
-              </motion.div>
-            </>
-          )
-        })()}
-      </AnimatePresence>
-
-      <div
-        ref={pullListRef}
-        className="flex-1 overflow-y-auto hide-scrollbar py-1 relative"
-        onTouchStart={activeTab === 'all' ? handlePullTouchStart : undefined}
-        onTouchMove={activeTab === 'all' ? handlePullTouchMove : undefined}
-        onTouchEnd={activeTab === 'all' ? handlePullTouchEnd : undefined}
-        style={{ overscrollBehavior: 'none' }}
-      >
-        {/* ── Pull-to-archive indicator ── */}
-        {activeTab === 'all' && pullY > 0 && (
-          <div
-            className="flex items-center justify-center gap-2 overflow-hidden transition-all"
-            style={{ height: pullY, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}
-          >
-            <motion.div
-              animate={{ rotate: pullState === 'ready' ? 180 : 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: pullState === 'ready' ? ACCENT : 'rgba(255,255,255,0.12)' }}
+            {/* Create group button */}
+            <motion.button
+              onClick={() => setShowCreateGroup(true)}
+              whileTap={{ scale: 0.9 }}
+              className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+              title="Создать группу"
             >
-              <Archive size={16} className="text-white" />
+              <Plus size={20} />
+            </motion.button>
+
+            {/* Search bar */}
+            <motion.div className="relative flex-1"
+              animate={isSearchActive ? { scaleX: 1, opacity: 1 } : { scaleX: 0.97, opacity: 0.92 }}
+              style={{ transformOrigin: "center" }} transition={{ type: "spring", stiffness: 340, damping: 28 }}>
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" size={16}
+                style={{ color: isSearchActive ? ACCENT : "#6b7280", transition: "color 0.2s" }} />
+              <input type="text" placeholder={t("search_placeholder")} value={searchQuery}
+                onFocus={() => setIsSearchActive(true)} onChange={e => setSearchQuery(e.target.value)}
+                className="w-full py-[9px] pl-10 pr-4 rounded-full text-[15px] outline-none text-white placeholder-gray-500"
+                style={{
+                  backgroundColor: isSearchActive ? "#2c3a4d" : "#242f3d",
+                  border: isSearchActive ? `1.5px solid ${ACCENT}55` : "1.5px solid transparent",
+                  transition: "background-color 0.25s, border-color 0.25s",
+                }} />
             </motion.div>
-            <motion.span
-              animate={{ opacity: pullState === 'ready' ? 1 : 0.55 }}
-              className="text-[13px] font-medium"
-              style={{ color: pullState === 'ready' ? ACCENT : '#8896a5' }}
+          </motion.div>
+
+          {/* Вкладки все / архив */}
+          {!isSearchActive && activeTab === 'archive' && (
+            <motion.button
+              initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+              onClick={() => setActiveTab('all')}
+              className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors"
+              style={{ backgroundColor: 'rgba(126,133,225,0.1)', border: '1px solid rgba(126,133,225,0.2)' }}
             >
-              {pullState === 'ready' ? 'Отпустите — открыть Архив' : 'Потяните, чтобы открыть Архив'}
-            </motion.span>
-          </div>
-        )}
-        {!isSearchActive ? (
-          <div className="flex flex-col">
-            {/* Telegram-style: Archive entry at bottom of normal list */}
-            {activeTab === 'all' && (() => {
-              const archivedCount = filteredConversations.filter(c => c._folder === 'archive').length
-              if (archivedCount === 0) return null
+              <ArrowLeft size={15} style={{ color: ACCENT }} />
+              <Archive size={15} style={{ color: ACCENT }} />
+              <span className="text-[14px] font-semibold" style={{ color: ACCENT }}>Архив</span>
+            </motion.button>
+          )}
+          {!isSearchActive && activeTab === 'all' && (
+            <div className="px-3 pb-2 text-[11px] text-gray-600 select-none pointer-events-none">
+              ↑ потяните вверх чтобы открыть Архив
+            </div>
+          )}
+
+          {/* Контекстное меню чата */}
+          <AnimatePresence>
+            {chatMenu && (() => {
+              const mW = 200, mH = 160, mg = 8
+              const top = chatMenu.y + mH > window.innerHeight - mg ? chatMenu.y - mH : chatMenu.y + 4
+              const left = Math.min(Math.max(chatMenu.x - mW / 2, mg), window.innerWidth - mW - mg)
               return (
-                <motion.div
-                  key="__archive_entry__"
-                  onClick={() => setActiveTab('archive')}
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] hover:bg-white/5 transition-all select-none"
-                >
-                  <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 text-white shadow-md"
-                    style={{ backgroundColor: 'rgba(126,133,225,0.2)', border: '1.5px solid rgba(126,133,225,0.35)' }}>
-                    <Archive size={22} style={{ color: ACCENT }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-semibold text-[16px] text-white">Архив</span>
-                      <motion.div
-                        className="text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center"
-                        style={{ backgroundColor: ACCENT, color: 'white' }}
-                        initial={{ scale: 0 }} animate={{ scale: 1 }}
-                      >{archivedCount}</motion.div>
-                    </div>
-                    <p className="text-[14px] opacity-60 text-white">{archivedCount} чат{archivedCount === 1 ? '' : archivedCount < 5 ? 'а' : 'ов'}</p>
-                  </div>
-                </motion.div>
+                <>
+                  <div className="fixed inset-0 z-[198]" onClick={e => { e.stopPropagation(); setChatMenu(null) }} />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.88 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.88 }}
+                    transition={{ type: 'spring', stiffness: 460, damping: 26 }}
+                    onClick={e => e.stopPropagation()}
+                    className="fixed z-[199] w-[200px] rounded-2xl shadow-2xl overflow-hidden py-1.5 border border-white/8"
+                    style={{ top, left, backgroundColor: 'rgba(22,28,40,0.96)', backdropFilter: 'blur(16px)' }}
+                  >
+                    <button onClick={() => handleArchiveChat(chatMenu.id, !chatMenu.isArchived)}
+                      className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/6 transition-colors">
+                      <Archive size={16} className="text-gray-400" />
+                      <span className="text-[14px] text-white">{chatMenu.isArchived ? 'Из архива' : 'В архив'}</span>
+                    </button>
+                    <button onClick={() => handleMuteChat(chatMenu.id, !chatMenu.isMuted)}
+                      className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/6 transition-colors">
+                      {chatMenu.isMuted
+                        ? <BellRing size={16} className="text-gray-400" />
+                        : <BellOff size={16} className="text-gray-400" />}
+                      <span className="text-[14px] text-white">{chatMenu.isMuted ? 'Включить звук' : 'Заглушить'}</span>
+                    </button>
+                    <div className="my-1 mx-3 border-t border-white/8" />
+                    <button onClick={() => handleDeleteChat(chatMenu.id)}
+                      className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 transition-colors">
+                      <Trash2 size={16} className="text-red-400" />
+                      <span className="text-[14px] text-red-400">Удалить чат</span>
+                    </button>
+                  </motion.div>
+                </>
               )
             })()}
-            {filteredConversations.filter(c => {
-              if (activeTab === 'archive') return c._folder === 'archive'
-              return c._folder !== 'archive'
-            }).map((chat, index) => {
-              const isSelected = selectedId === chat.id.toString()
-              const unread = unreadCounts[chat.id] || 0
-              const isSaved = chat.type === "saved"
-              const isSystem = chat.type === "system"
-              const otherUser = (!isSaved && !isSystem)
-                ? chat.participants?.find((p: any) => p.userId?.toString() !== currentUser?.id?.toString())?.user
-                : null
+          </AnimatePresence>
 
-              const isGroup = chat.type === "group"
-
-              let avatarContent = null
-              let avatarBg = ACCENT
-              let displayNameEl = null
-
-              if (isSaved) {
-                avatarContent = <Bookmark size={22} className="text-white" />
-                avatarBg = "#4e8cde"
-                displayNameEl = <span>{t("saved_messages")}</span>
-              } else if (isSystem) {
-                avatarContent = <img src="/logo (1).ico" alt="Vortex" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
-                avatarBg = "#7e85e1"
-                displayNameEl = <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
-              } else if (isGroup) {
-                // Group avatar and name
-                avatarContent = <span className="font-bold text-xl">{chat.name?.[0]?.toUpperCase() || "G"}</span>
-                avatarBg = "#7e85e1" // distinct color for groups
-                displayNameEl = <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
-              } else {
-                // Private chat
-                avatarContent = otherUser?.avatar ? <img src={otherUser.avatar} className="w-full h-full object-cover" />
-                  : <span className="font-bold text-xl">{otherUser?.username?.[0]?.toUpperCase() || "U"}</span>
-                const isDevUser = otherUser?.id !== undefined && (
-                  otherUser.id === DEV_USER_ID ||
-                  otherUser.id === DEV_USER_ID.toString() ||
-                  Number(otherUser.id) === DEV_USER_ID
-                )
-                displayNameEl = <span className="flex items-center gap-1">
-                                  <span>{otherUser?.username}</span>
-                                  {isDevUser && <VerifiedBadge size={15} />}
-                                  <TitleBadge userId={otherUser?.id} />
-                                </span>
-              }
-
-              const lastMsg = chat.messages?.[0]
-              const previewText = isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
-                : isSystem ? t("service_notifications")
-                : isGroup
-                  ? lastMsg ? `${lastMsg.sender?.username || ""}: ${lastMsg.content || "📎"}` : t("no_messages")
-                  : (lastMsg?.content || t("no_messages"))
-
-              
-
-              // Лонгпресс на мобильному
-              const lpTimer = { current: 0 as any }
-              const handleTouchStart = (e: React.TouchEvent) => {
-                if (isSaved || isSystem) return
-                lpTimer.current = setTimeout(() => {
-                  if (navigator.vibrate) navigator.vibrate(40)
-                  openChatMenu(e, chat)
-                }, 500)
-              }
-              const handleTouchEnd = () => clearTimeout(lpTimer.current)
-              const handleTouchMove = () => clearTimeout(lpTimer.current)
-
-              return (
+          <div
+            ref={pullListRef}
+            className="flex-1 overflow-y-auto hide-scrollbar py-1 relative"
+            onTouchStart={activeTab === 'all' ? handlePullTouchStart : undefined}
+            onTouchMove={activeTab === 'all' ? handlePullTouchMove : undefined}
+            onTouchEnd={activeTab === 'all' ? handlePullTouchEnd : undefined}
+            style={{ overscrollBehavior: 'none' }}
+          >
+            {/* ── Pull-to-archive indicator ── */}
+            {activeTab === 'all' && pullY > 0 && (
+              <div
+                className="flex items-center justify-center gap-2 overflow-hidden transition-all"
+                style={{ height: pullY, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}
+              >
                 <motion.div
-                  key={chat.id}
-                  onClick={() => onSelect?.(chat.id.toString())}
-                  onContextMenu={e => { if (!isSaved && !isSystem) { e.preventDefault(); openChatMenu(e, chat) } }}
-                  onTouchStart={handleTouchStart}
-                  onTouchEnd={handleTouchEnd}
-                  onTouchMove={handleTouchMove}
-                  initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.03, duration: 0.2 }}
-                  className={`p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] transition-all select-none ${
-                    isSelected ? "text-white shadow-lg scale-[1.02]" : "bg-transparent hover:bg-white/5"
-                  }`}
-                  style={isSelected ? { backgroundColor: ACCENT } : {}}>
-                  <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 overflow-hidden text-white shadow-md"
-                    style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : avatarBg }}>
-                    {avatarContent}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <div className="font-semibold text-[16px] truncate text-white flex items-center gap-1">
-                        {displayNameEl}
-                        {chat._isMuted && <BellOff size={12} className="opacity-50 shrink-0" />}
-                      </div>
-                      <span className="text-[12px] opacity-60 shrink-0 ml-1">
-                        {chat.messages?.[0] ? new Date(chat.messages[0].createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-[1px]">
-                      <div className={`text-[14px] truncate pr-2 ${isSystem ? "text-gray-500" : "opacity-80 text-white"}`}>
-                        {chat.drafts?.[0] && !isSystem ? (
-                          <span className="flex items-center gap-1">
-                            <span className="text-red-400 font-medium">{t("draft")}:</span>
-                            <span className="opacity-70">{chat.drafts[0].text}</span>
-                          </span>
-                        ) : previewText}
-                      </div>
-                      {unread > 0 && !isSelected && (
-                        <div className="text-white text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center shadow-sm shrink-0"
-                          style={{ backgroundColor: isSystem ? "#5B9BD5" : ACCENT }}>
-                          {unread}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  animate={{ rotate: pullState === 'ready' ? 180 : 0 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: pullState === 'ready' ? ACCENT : 'rgba(255,255,255,0.12)' }}
+                >
+                  <Archive size={16} className="text-white" />
                 </motion.div>
-              )
-            })}
-          </div>
-        ) : (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col">
-            <div className="px-4 py-2 text-[13px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
-              {t("global_search")}
-            </div>
-            {isSearching
-              ? <div className="p-4 text-center text-gray-500 text-[14px]">{t("searching")}</div>
-              : globalUsers.map(user => (
-                <div key={user.id} onClick={() => handleUserClick(user)}
-                  className="px-4 py-2 flex items-center gap-3 hover:bg-white/5 cursor-pointer mx-2 rounded-xl transition-colors">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shrink-0 overflow-hidden"
-                    style={{ backgroundColor: ACCENT }}>
-                    {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.username?.[0].toUpperCase()}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-bold text-[15px] text-white">{user.username}</span>
-                    <span className="text-[13px] text-gray-500">@{user.username?.toLowerCase()}</span>
-                  </div>
+                <motion.span
+                  animate={{ opacity: pullState === 'ready' ? 1 : 0.55 }}
+                  className="text-[13px] font-medium"
+                  style={{ color: pullState === 'ready' ? ACCENT : '#8896a5' }}
+                >
+                  {pullState === 'ready' ? 'Отпустите — открыть Архив' : 'Потяните, чтобы открыть Архив'}
+                </motion.span>
+              </div>
+            )}
+            {!isSearchActive ? (
+              <div className="flex flex-col">
+                {/* Telegram-style: Archive entry at bottom of normal list */}
+                {activeTab === 'all' && (() => {
+                  const archivedCount = filteredConversations.filter(c => c._folder === 'archive').length
+                  if (archivedCount === 0) return null
+                  return (
+                    <motion.div
+                      key="__archive_entry__"
+                      onClick={() => setActiveTab('archive')}
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] hover:bg-white/5 transition-all select-none"
+                    >
+                      <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 text-white shadow-md"
+                        style={{ backgroundColor: 'rgba(126,133,225,0.2)', border: '1.5px solid rgba(126,133,225,0.35)' }}>
+                        <Archive size={22} style={{ color: ACCENT }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-semibold text-[16px] text-white">Архив</span>
+                          <motion.div
+                            className="text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center"
+                            style={{ backgroundColor: ACCENT, color: 'white' }}
+                            initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          >{archivedCount}</motion.div>
+                        </div>
+                        <p className="text-[14px] opacity-60 text-white">{archivedCount} чат{archivedCount === 1 ? '' : archivedCount < 5 ? 'а' : 'ов'}</p>
+                      </div>
+                    </motion.div>
+                  )
+                })()}
+                {filteredConversations.filter(c => {
+                  if (activeTab === 'archive') return c._folder === 'archive'
+                  return c._folder !== 'archive'
+                }).map((chat, index) => {
+                  const isSelected = selectedId === chat.id.toString()
+                  const unread = unreadCounts[chat.id] || 0
+                  const isSaved = chat.type === "saved"
+                  const isSystem = chat.type === "system"
+                  const otherUser = (!isSaved && !isSystem)
+                    ? chat.participants?.find((p: any) => p.userId?.toString() !== currentUser?.id?.toString())?.user
+                    : null
+
+                  const isGroup = chat.type === "group"
+
+                  let avatarContent = null
+                  let avatarBg = ACCENT
+                  let displayNameEl = null
+
+                  if (isSaved) {
+                    avatarContent = <Bookmark size={22} className="text-white" />
+                    avatarBg = "#4e8cde"
+                    displayNameEl = <span>{t("saved_messages")}</span>
+                  } else if (isSystem) {
+                    avatarContent = <img src="/logo (1).ico" alt="Vortex" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
+                    avatarBg = "#7e85e1"
+                    displayNameEl = <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
+                  } else if (isGroup) {
+                    // Group avatar and name
+                    avatarContent = <span className="font-bold text-xl">{chat.name?.[0]?.toUpperCase() || "G"}</span>
+                    avatarBg = "#7e85e1" // distinct color for groups
+                    displayNameEl = <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
+                  } else {
+                    // Private chat
+                    avatarContent = otherUser?.avatar ? <img src={otherUser.avatar} className="w-full h-full object-cover" />
+                      : <span className="font-bold text-xl">{otherUser?.username?.[0]?.toUpperCase() || "U"}</span>
+                    const isDevUser = otherUser?.id !== undefined && (
+                      otherUser.id === DEV_USER_ID ||
+                      otherUser.id === DEV_USER_ID.toString() ||
+                      Number(otherUser.id) === DEV_USER_ID
+                    )
+                    displayNameEl = <span className="flex items-center gap-1">
+                      <span>{otherUser?.username}</span>
+                      {isDevUser && <VerifiedBadge size={15} />}
+                      <TitleBadge userId={otherUser?.id} />
+                    </span>
+                  }
+
+                  const lastMsg = chat.messages?.[0]
+                  const previewText = isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
+                    : isSystem ? t("service_notifications")
+                      : isGroup
+                        ? lastMsg ? `${lastMsg.sender?.username || ""}: ${lastMsg.content || "📎"}` : t("no_messages")
+                        : (lastMsg?.content || t("no_messages"))
+
+
+
+                  // Лонгпресс на мобильному
+                  const lpTimer = { current: 0 as any }
+                  const handleTouchStart = (e: React.TouchEvent) => {
+                    if (isSaved || isSystem) return
+                    lpTimer.current = setTimeout(() => {
+                      if (navigator.vibrate) navigator.vibrate(40)
+                      openChatMenu(e, chat)
+                    }, 500)
+                  }
+                  const handleTouchEnd = () => clearTimeout(lpTimer.current)
+                  const handleTouchMove = () => clearTimeout(lpTimer.current)
+
+                  return (
+                    <motion.div
+                      key={chat.id}
+                      onClick={() => onSelect?.(chat.id.toString())}
+                      onContextMenu={e => { if (!isSaved && !isSystem) { e.preventDefault(); openChatMenu(e, chat) } }}
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchMove={handleTouchMove}
+                      initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.03, duration: 0.2 }}
+                      className={`p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] transition-all select-none ${isSelected ? "text-white shadow-lg scale-[1.02]" : "bg-transparent hover:bg-white/5"
+                        }`}
+                      style={isSelected ? { backgroundColor: ACCENT } : {}}>
+                      <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 overflow-hidden text-white shadow-md"
+                        style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : avatarBg }}>
+                        {avatarContent}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <div className="font-semibold text-[16px] truncate text-white flex items-center gap-1">
+                            {displayNameEl}
+                            {chat._isMuted && <BellOff size={12} className="opacity-50 shrink-0" />}
+                          </div>
+                          <span className="text-[12px] opacity-60 shrink-0 ml-1">
+                            {chat.messages?.[0] ? new Date(chat.messages[0].createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between mt-[1px]">
+                          <div className={`text-[14px] truncate pr-2 ${isSystem ? "text-gray-500" : "opacity-80 text-white"}`}>
+                            {chat.drafts?.[0] && !isSystem ? (
+                              <span className="flex items-center gap-1">
+                                <span className="text-red-400 font-medium">{t("draft")}:</span>
+                                <span className="opacity-70">{chat.drafts[0].text}</span>
+                              </span>
+                            ) : previewText}
+                          </div>
+                          {unread > 0 && !isSelected && (
+                            <div className="text-white text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center shadow-sm shrink-0"
+                              style={{ backgroundColor: isSystem ? "#5B9BD5" : ACCENT }}>
+                              {unread}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            ) : (
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col">
+                <div className="px-4 py-2 text-[13px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
+                  {t("global_search")}
                 </div>
-              ))}
-          </motion.div>
-        )}
-      </div>
+                {isSearching
+                  ? <div className="p-4 text-center text-gray-500 text-[14px]">{t("searching")}</div>
+                  : globalUsers.map(user => (
+                    <div key={user.id} onClick={() => handleUserClick(user)}
+                      className="px-4 py-2 flex items-center gap-3 hover:bg-white/5 cursor-pointer mx-2 rounded-xl transition-colors">
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shrink-0 overflow-hidden"
+                        style={{ backgroundColor: ACCENT }}>
+                        {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.username?.[0].toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-[15px] text-white">{user.username}</span>
+                        <span className="text-[13px] text-gray-500">@{user.username?.toLowerCase()}</span>
+                      </div>
+                    </div>
+                  ))}
+              </motion.div>
+            )}
+          </div>
+        </div>
+      )
+      }
     </div>
   )
 }
