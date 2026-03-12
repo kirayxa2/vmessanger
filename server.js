@@ -175,12 +175,75 @@ app.prepare().then(() => {
       }
     })
 
-    socket.on("send-message", (data) => {
+    socket.on("send-message", async (data) => {
       const roomId = String(data.conversationId)
+
+      // ── If message has a tempId it came directly from client (no HTTP POST) ──
+      if (data.tempId) {
+        // Validate sender
+        if (String(data.senderId) !== currentUserId) return
+
+        // Validate content
+        const hasText = data.content && typeof data.content === "string" && data.content.trim().length > 0
+        const hasFile = data.fileUrl && typeof data.fileUrl === "string"
+        const hasVoice = data.voiceUrl && typeof data.voiceUrl === "string"
+        if (!hasText && !hasFile && !hasVoice) return
+        if (hasText && data.content.length > 4096) return
+
+        // Verify participant
+        try {
+          const participant = await prisma.conversationParticipant.findFirst({
+            where: { conversationId: Number(data.conversationId), userId: Number(currentUserId) }
+          })
+          if (!participant) return
+
+          // Save to DB
+          const message = await prisma.message.create({
+            data: {
+              content: hasText ? data.content : "",
+              conversationId: Number(data.conversationId),
+              senderId: Number(currentUserId),
+              ...(data.replyToId ? { replyToId: Number(data.replyToId) } : {}),
+              ...(data.forwardFromId ? { forwardFromId: Number(data.forwardFromId) } : {}),
+              ...(data.fileUrl ? { fileUrl: data.fileUrl, fileName: data.fileName || "file", fileSize: data.fileSize || 0, fileType: data.fileType || "application/octet-stream" } : {}),
+              ...(data.voiceUrl ? { voiceUrl: data.voiceUrl, voiceDuration: data.voiceDuration || 0 } : {}),
+            },
+            include: {
+              sender: { select: { id: true, username: true, avatar: true } },
+              replyTo: { include: { sender: { select: { id: true, username: true, avatar: true } } } },
+              reactions: { include: { user: { select: { id: true, username: true } } } }
+            }
+          })
+
+          const saved = { ...message, conversationId: message.conversationId }
+
+          // Confirm to sender: replace temp with real message
+          socket.emit("message-confirmed", { tempId: data.tempId, message: saved })
+
+          // Deliver to other participants
+          socket.to(roomId).emit("new-message", saved)
+          if (Array.isArray(data.participantIds)) {
+            data.participantIds.forEach(uid => {
+              if (String(uid) !== currentUserId) {
+                emitToUser(uid, "new-message", saved)
+                emitToUser(uid, "conversation-updated", { conversationId: roomId, lastMessage: saved })
+              }
+            })
+          }
+          // Notify sender sidebar too
+          socket.emit("conversation-updated", { conversationId: roomId, lastMessage: saved })
+
+        } catch (err) {
+          console.error("Socket send-message DB error:", err)
+          // Notify sender of failure so they can show error state
+          socket.emit("message-failed", { tempId: data.tempId })
+        }
+        return
+      }
+
+      // ── Legacy path: message already saved via HTTP POST, just broadcast ──
       const payload = { ...data, conversationId: roomId }
-      // Only send to room members (no global broadcast)
       socket.to(roomId).emit("new-message", payload)
-      // Direct delivery to participants who might not have joined the room
       if (Array.isArray(data.participantIds)) {
         data.participantIds.forEach(uid => {
           if (String(uid) !== currentUserId) {
@@ -188,7 +251,6 @@ app.prepare().then(() => {
           }
         })
       }
-      // Notify sidebar update only to participants
       if (Array.isArray(data.participantIds)) {
         data.participantIds.forEach(uid => {
           emitToUser(uid, "conversation-updated", {
@@ -199,16 +261,114 @@ app.prepare().then(() => {
       }
     })
 
-    socket.on("delete-message", (data) => {
-      io.to(String(data.conversationId)).emit("message-deleted", String(data.id))
+    socket.on("delete-message", async (data) => {
+      const roomId = String(data.conversationId)
+      // Verify sender owns the message
+      try {
+        const msg = await prisma.message.findUnique({ where: { id: Number(data.id) } })
+        if (!msg) return
+        const isParticipant = await prisma.conversationParticipant.findFirst({
+          where: { conversationId: msg.conversationId, userId: Number(currentUserId) }
+        })
+        if (!isParticipant) return
+        const deleteForAll = data.deleteForAll && String(msg.senderId) === currentUserId
+        if (deleteForAll) {
+          await prisma.message.delete({ where: { id: Number(data.id) } })
+          io.to(roomId).emit("message-deleted", String(data.id))
+        } else {
+          // Delete only for self — not implemented in DB yet, just emit to sender
+          socket.emit("message-deleted", String(data.id))
+        }
+      } catch {}
     })
 
-    socket.on("edit-message", (data) => {
-      io.to(String(data.conversationId)).emit("message-edited", data)
+    socket.on("edit-message", async (data) => {
+      const roomId = String(data.conversationId)
+      if (data.tempEditId) {
+        // Socket-based edit (no HTTP)
+        try {
+          const msg = await prisma.message.findUnique({ where: { id: Number(data.id) } })
+          if (!msg || String(msg.senderId) !== currentUserId) return
+          if (!data.content || data.content.length > 4096) return
+          const updated = await prisma.message.update({
+            where: { id: Number(data.id) },
+            data: { content: data.content },
+            include: {
+              sender: { select: { id: true, username: true, avatar: true } },
+              replyTo: { include: { sender: { select: { id: true, username: true, avatar: true } } } },
+              reactions: { include: { user: { select: { id: true, username: true } } } }
+            }
+          })
+          socket.emit("edit-confirmed", { tempEditId: data.tempEditId, message: updated })
+          socket.to(roomId).emit("message-edited", updated)
+        } catch {}
+        return
+      }
+      io.to(roomId).emit("message-edited", data)
+    })
+
+    socket.on("forward-message", async (data) => {
+      // data: { fromMessageId, toConversationIds[], content }
+      if (!Array.isArray(data.toConversationIds)) return
+      try {
+        const original = await prisma.message.findUnique({ where: { id: Number(data.fromMessageId) } })
+        if (!original) return
+        for (const convId of data.toConversationIds) {
+          const participant = await prisma.conversationParticipant.findFirst({
+            where: { conversationId: Number(convId), userId: Number(currentUserId) }
+          })
+          if (!participant) continue
+          const forwarded = await prisma.message.create({
+            data: {
+              content: original.content || "",
+              conversationId: Number(convId),
+              senderId: Number(currentUserId),
+              forwardFromId: original.id,
+              fileUrl: original.fileUrl || undefined,
+              fileName: original.fileName || undefined,
+              fileSize: original.fileSize || undefined,
+              fileType: original.fileType || undefined,
+            },
+            include: {
+              sender: { select: { id: true, username: true, avatar: true } },
+              replyTo: { include: { sender: { select: { id: true, username: true, avatar: true } } } },
+              reactions: { include: { user: { select: { id: true, username: true } } } }
+            }
+          })
+          const saved = { ...forwarded, conversationId: forwarded.conversationId }
+          socket.to(String(convId)).emit("new-message", saved)
+          socket.emit("new-message", saved)
+          // Notify participants
+          const participants = await prisma.conversationParticipant.findMany({
+            where: { conversationId: Number(convId) }
+          })
+          participants.forEach(p => {
+            if (String(p.userId) !== currentUserId) {
+              emitToUser(String(p.userId), "new-message", saved)
+              emitToUser(String(p.userId), "conversation-updated", { conversationId: String(convId), lastMessage: saved })
+            }
+          })
+        }
+      } catch (err) { console.error("forward-message error:", err) }
     })
 
     socket.on("typing", (data) => {
       socket.to(String(data.conversationId)).emit("user-typing", data)
+    })
+
+    // ── @mentions: notify mentioned users ──
+    socket.on("mention", async (data) => {
+      // data: { mentionedUserIds: number[], conversationId, messageId }
+      if (!Array.isArray(data.mentionedUserIds)) return
+      data.mentionedUserIds.forEach(uid => {
+        if (String(uid) !== currentUserId) {
+          emitToUser(String(uid), "you-were-mentioned", {
+            conversationId: String(data.conversationId),
+            messageId: data.messageId,
+            byUserId: currentUserId,
+          })
+        }
+      })
     })
 
     socket.on("avatar-update", (data) => {
@@ -264,6 +424,13 @@ app.prepare().then(() => {
     })
     socket.on("call-ice", (data) => {
       emitToUser(data.targetUserId, "call-ice", data)
+    })
+
+    // ── Session management ────────────────────────────────────
+    socket.on("terminate-session", (data) => {
+      // data: { targetUserId, sessionId }
+      // Отправляем force-logout конкретному пользователю
+      emitToUser(String(data.targetUserId), "force-logout", { sessionId: data.sessionId })
     })
 
     socket.on("disconnect", async () => {

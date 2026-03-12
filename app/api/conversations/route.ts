@@ -144,8 +144,13 @@ export async function GET(req: NextRequest) {
 
     const conversations = await prisma.conversation.findMany({
       where: {
-        participants: { some: { userId: currentUserId } },
-        NOT: { isGroup: true, type: "private" }, // не старые групповые
+        participants: {
+          some: {
+            userId: currentUserId,
+            deletedAt: null, // скрытые не показываем
+          }
+        },
+        NOT: { isGroup: true, type: "private" },
         OR: [
           { type: "private" },
           { type: "saved" },
@@ -165,30 +170,75 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    return NextResponse.json(conversations)
+    // Добавляем folder/isMuted в каждый чат для текущего юзера
+    const result = conversations.map(conv => {
+      const myParticipant = conv.participants.find((p: any) => p.userId === currentUserId)
+      return {
+        ...conv,
+        _folder: myParticipant?.folder ?? null,
+        _isMuted: myParticipant?.isMuted ?? false,
+      }
+    })
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Conversations fetch error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
 
-// PATCH — update group (name, avatar, description)
+// DELETE — скрыть чат у себя (софт delete)
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const currentUserId = parseInt(session.user.id)
+    const { searchParams } = new URL(req.url)
+    const conversationId = searchParams.get("conversationId")
+    if (!conversationId) return NextResponse.json({ error: "conversationId required" }, { status: 400 })
+
+    await prisma.conversationParticipant.updateMany({
+      where: { conversationId: parseInt(conversationId), userId: currentUserId },
+      data: { deletedAt: new Date(), clearedAt: new Date() }
+    })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+  }
+}
+
+// PATCH — update group OR archive/mute/folder
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
     const currentUserId = parseInt(session.user.id)
     const body = await req.json()
-    const { conversationId, name, avatar, description } = body
+    const { conversationId, name, avatar, description, action, folder, mutedUntil } = body
 
+    // ── Архив, мют, папка — обновляем participant ──
+    if (action === "archive" || action === "unarchive" || action === "mute" || action === "unmute" || action === "folder") {
+      const updateData: any = {}
+      if (action === "archive") updateData.folder = "archive"
+      if (action === "unarchive") updateData.folder = null
+      if (action === "mute") updateData.isMuted = true, updateData.mutedUntil = mutedUntil ? new Date(mutedUntil) : null
+      if (action === "unmute") updateData.isMuted = false, updateData.mutedUntil = null
+      if (action === "folder") updateData.folder = folder ?? null
+
+      await prisma.conversationParticipant.updateMany({
+        where: { conversationId: parseInt(conversationId), userId: currentUserId },
+        data: updateData
+      })
+      return NextResponse.json({ success: true })
+    }
+
+    // ── Редактирование группы ──
     const participant = await prisma.conversationParticipant.findFirst({
       where: { conversationId: parseInt(conversationId), userId: currentUserId },
     })
     if (!participant || !["owner", "admin"].includes(participant.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
-
     const updated = await prisma.conversation.update({
       where: { id: parseInt(conversationId) },
       data: { name, avatar, description },

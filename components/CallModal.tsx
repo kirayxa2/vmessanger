@@ -1,8 +1,8 @@
 "use client"
-
+// CallModal v3 — full rewrite with quality monitor, speaker, video toggle
 import { useEffect, useRef, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Phone, PhoneOff, Video, VideoOff, Mic, MicOff, Volume2 } from "lucide-react"
+import { Phone, PhoneOff, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Signal } from "lucide-react"
 
 const ACCENT = "#7e85e1"
 
@@ -30,27 +30,26 @@ interface CallModalProps {
 
 type CallState = "incoming" | "outgoing" | "connected" | "ended"
 
+// Бесплатные публичные STUN + несколько TURN для прохода через NAT/файерволл
+// Для production заменить на свой TURN (coturn) или metered.ca ($0.4/GB)
 const ICE_SERVERS = {
   iceServers: [
+    // Google STUN — бесплатно, работает когда оба пользователя за обычным NAT
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: "stun:stun2.l.google.com:19302" },
-    {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443?transport=tcp",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    }
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
+    // Cloudflare STUN
+    { urls: "stun:stun.cloudflare.com:3478" },
+    // Open Relay TURN — бесплатно для тестирования
+    // Для прода заменить на metered.ca или свой coturn
+    { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turns:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+    { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
   ],
+  iceCandidatePoolSize: 10,
 }
 
 export default function CallModal({
@@ -63,24 +62,29 @@ export default function CallModal({
     otherName: incomingCall?.initiatorName ?? outgoingCall?.receiverName ?? "",
     otherAvatar: incomingCall?.initiatorAvatar ?? outgoingCall?.receiverAvatar,
     isIncoming: !!incomingCall,
+    callType: incomingCall?.callType ?? outgoingCall?.callType ?? "audio",
   })
-  const { callId, otherUserId, otherName, otherAvatar, isIncoming } = callDataRef.current
+  const { callId, otherUserId, otherName, otherAvatar, isIncoming, callType } = callDataRef.current
+  const isVideoCall = callType === "video"
 
   const [callState, setCallState] = useState<CallState>(isIncoming ? "incoming" : "outgoing")
   const [isMuted, setIsMuted] = useState(false)
-  const [isVideoOn, setIsVideoOn] = useState(false)
+  const [isVideoOn, setIsVideoOn] = useState(isVideoCall)
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false)
   const [callDuration, setCallDuration] = useState(0)
   const [statusText, setStatusText] = useState(isIncoming ? "Входящий звонок" : "Вызов...")
   const [hasCamera, setHasCamera] = useState(false)
+  const [quality, setQuality] = useState<"good"|"medium"|"poor"|null>(null)
 
-  const localVideoRef = useRef<HTMLVideoElement>(null)
-  const remoteVideoRef = useRef<HTMLVideoElement>(null)
-  const peerRef = useRef<RTCPeerConnection | null>(null)
-  const localStreamRef = useRef<MediaStream | null>(null)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timerStarted = useRef(false)
-  // Буфер ICE-кандидатов до setRemoteDescription
-  const iceBufRef = useRef<RTCIceCandidateInit[]>([])
+  const localVideoRef   = useRef<HTMLVideoElement>(null)
+  const remoteVideoRef  = useRef<HTMLVideoElement>(null)
+  const remoteAudioRef  = useRef<HTMLAudioElement>(null)
+  const peerRef         = useRef<RTCPeerConnection | null>(null)
+  const localStreamRef  = useRef<MediaStream | null>(null)
+  const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null)
+  const qualityTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerStarted    = useRef(false)
+  const iceBufRef       = useRef<RTCIceCandidateInit[]>([])
 
   useEffect(() => {
     navigator.mediaDevices?.enumerateDevices?.()
@@ -99,12 +103,43 @@ export default function CallModal({
   const fmt = (s: number) =>
     `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`
 
+  const startQualityMonitor = useCallback(() => {
+    qualityTimerRef.current = setInterval(async () => {
+      const peer = peerRef.current
+      if (!peer) return
+      try {
+        const stats = await peer.getStats()
+        let rtt: number | undefined, lost: number | undefined
+        stats.forEach((s: any) => {
+          if (s.type === "remote-inbound-rtp" && s.kind === "audio") {
+            rtt = s.roundTripTime; lost = s.fractionLost
+          }
+        })
+        if (rtt === undefined) return
+        if (rtt < 0.15 && (lost ?? 0) < 0.02)     setQuality("good")
+        else if (rtt < 0.4 && (lost ?? 0) < 0.08) setQuality("medium")
+        else                                        setQuality("poor")
+      } catch {}
+    }, 3000)
+  }, [])
+
+  const toggleSpeaker = useCallback(() => {
+    const audio = remoteAudioRef.current as any
+    if (audio?.setSinkId) audio.setSinkId(isSpeakerOn ? "" : "default").catch(() => {})
+    setIsSpeakerOn(s => !s)
+  }, [isSpeakerOn])
+
   // ── Микрофон ──────────────────────────────────────────────────
-  const getLocalStream = useCallback(async (): Promise<MediaStream | null> => {
-    if (localStreamRef.current) return localStreamRef.current
+  const getLocalStream = useCallback(async (withVideo = false): Promise<MediaStream | null> => {
+    if (localStreamRef.current && !withVideo) return localStreamRef.current
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: withVideo ? { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+      })
+      if (localStreamRef.current) localStreamRef.current.getTracks().forEach(t => t.stop())
       localStreamRef.current = stream
+      if (withVideo && localVideoRef.current) localVideoRef.current.srcObject = stream
       return stream
     } catch (err: any) {
       console.error("getUserMedia:", err?.name)
@@ -129,12 +164,15 @@ export default function CallModal({
       setCallState("connected")
       setStatusText("")
       startTimer()
+      startQualityMonitor()
     }
 
     peer.ontrack = e => {
-      if (remoteVideoRef.current && e.streams[0])
-        remoteVideoRef.current.srcObject = e.streams[0]
-      // Как только пошёл трек — соединение точно есть
+      const [remStream] = e.streams
+      if (remStream) {
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remStream
+        if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remStream
+      }
       onConnectedOnce()
     }
 
@@ -165,7 +203,7 @@ export default function CallModal({
     })
 
     return peer
-  }, [socket, otherUserId, callId, startTimer])
+  }, [socket, otherUserId, callId, startTimer, startQualityMonitor])
 
   // ── Применяем буферизованные ICE после setRemoteDescription ──
   const flushIceBuf = useCallback(async () => {
@@ -185,7 +223,7 @@ export default function CallModal({
     const handleCallAccepted = async (data: { callId: number }) => {
       if (data.callId !== callId) return
       setCallState("connected")
-      setStatusText("Соединение...")
+      setStatusText(""Соединение...")
 
       const stream = await getLocalStream()
       if (!stream) return
@@ -297,7 +335,8 @@ export default function CallModal({
 
   // ── Завершить ─────────────────────────────────────────────────
   const hangup = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current)
+    if (timerRef.current)        clearInterval(timerRef.current)
+    if (qualityTimerRef.current) clearInterval(qualityTimerRef.current)
     localStreamRef.current?.getTracks().forEach(t => t.stop())
     peerRef.current?.close()
     peerRef.current = null
@@ -336,10 +375,10 @@ export default function CallModal({
     }
   }, [isVideoOn])
 
-  // Cleanup при размонтировании
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
+      if (timerRef.current)        clearInterval(timerRef.current)
+      if (qualityTimerRef.current) clearInterval(qualityTimerRef.current)
       localStreamRef.current?.getTracks().forEach(t => t.stop())
       peerRef.current?.close()
     }
@@ -358,6 +397,9 @@ export default function CallModal({
       className="fixed inset-0 z-[300] flex flex-col items-center justify-between"
       style={{ background: "linear-gradient(160deg, #1a1f2e 0%, #0d1117 100%)" }}
     >
+      {/* Hidden audio element for remote audio — works even without video */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
+
       {/* Remote video */}
       <video ref={remoteVideoRef} autoPlay playsInline
         className="absolute inset-0 w-full h-full object-cover"
@@ -454,16 +496,29 @@ export default function CallModal({
             )}
 
             <div className="flex flex-col items-center gap-2">
-              <motion.button whileTap={{ scale: 0.88 }}
+              <motion.button whileTap={{ scale: 0.85 }} onClick={toggleSpeaker}
                 className="w-14 h-14 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <Volume2 size={22} color="white" />
+                style={{ backgroundColor: isSpeakerOn ? ACCENT : "rgba(255,255,255,0.12)" }}>
+                {isSpeakerOn ? <Volume2 size={22} color="white" /> : <VolumeX size={22} color="white" />}
               </motion.button>
-              <span className="text-white/60 text-[11px]">Динамик</span>
+              <span className="text-white/60 text-[11px]">{isSpeakerOn ? "Speaker on" : "Speaker"}</span>
             </div>
           </div>
         )}
       </div>
+
+      {/* Quality badge */}
+      <AnimatePresence>
+        {quality && callState === "connected" && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-black/40 rounded-full px-2.5 py-1">
+            <Signal size={12} style={{ color: quality === "good" ? "#4caf50" : quality === "medium" ? "#ff9800" : "#f44336" }} />
+            <span className="text-[11px]" style={{ color: quality === "good" ? "#4caf50" : quality === "medium" ? "#ff9800" : "#f44336" }}>
+              {quality === "good" ? "Good" : quality === "medium" ? "Fair" : "Poor"}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

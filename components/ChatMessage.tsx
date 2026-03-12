@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Pin } from "lucide-react";
+import Linkify from "linkify-react";
+import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Pin, Clock } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useProfanityFilter } from "@/hooks/useProfanityFilter";
@@ -22,6 +23,7 @@ interface ChatMessageProps {
   content: string;
   createdAt: string;
   isSender: boolean;
+  failed?: boolean;
   isFirstInGroup: boolean;
   isLastInGroup: boolean;
   hasAbove: boolean;
@@ -50,9 +52,9 @@ interface ChatMessageProps {
   isGroupChat?: boolean;
 }
 
-export default function ChatMessage({
+const ChatMessage = React.memo(function ChatMessage({
   id, content, createdAt, isSender, isFirstInGroup, isLastInGroup, hasAbove,
-  replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp,
+  replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp, failed,
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
   openMenuId, onMenuOpen, onMenuClose, menuPos, senderName, senderId,
   reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat
@@ -239,6 +241,16 @@ export default function ChatMessage({
     });
   }, [id]);
 
+  // Рендерим @упоминания синим
+  const renderWithMentions = (text: string) => {
+    const parts = text.split(/(@\w+)/g)
+    return parts.map((part, i) =>
+      part.startsWith("@")
+        ? <span key={i} style={{ color: "#7e85e1", fontWeight: 600 }}>{part}</span>
+        : part
+    )
+  }
+
   const timeStr = new Date(createdAt).toLocaleTimeString([], {
     hour: "2-digit", minute: "2-digit",
   });
@@ -259,22 +271,71 @@ export default function ChatMessage({
 
   const ReadIndicator = () => {
     if (!isSender) return null;
-    if (isTemp) return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-60" />;
-    if (isRead) return <CheckCheck size={13} strokeWidth={2.5} className="ml-0.5" style={{ color: "#a8d8f0" }} />;
-    return <Check size={12} strokeWidth={2.5} className="ml-0.5 opacity-70" />;
+    if (failed) return (
+      <motion.span
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="ml-1 flex items-center text-red-400 cursor-pointer"
+        title="Не отправлено — нажми чтобы повторить"
+      >
+        <span className="text-[11px] font-bold">!</span>
+      </motion.span>
+    );
+    return (
+      <AnimatePresence mode="wait">
+        {isTemp ? (
+          <motion.span
+            key="clock"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 0.7, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.15 }}
+            className="ml-0.5 flex items-center"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+            >
+              <Clock size={11} strokeWidth={2.5} className="opacity-70" />
+            </motion.div>
+          </motion.span>
+        ) : isRead ? (
+          <motion.span
+            key="read"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ type: "spring", stiffness: 500, damping: 28 }}
+            className="ml-0.5 flex items-center"
+          >
+            <CheckCheck size={13} strokeWidth={2.5} style={{ color: "#a8d8f0" }} />
+          </motion.span>
+        ) : (
+          <motion.span
+            key="sent"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 0.7, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ type: "spring", stiffness: 500, damping: 28 }}
+            className="ml-0.5 flex items-center"
+          >
+            <Check size={12} strokeWidth={2.5} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    );
   };
 
   return (
     <motion.div
-      layout="position"
-      initial={isTemp ? { opacity: 0, scale: 0.88, y: 10, x: isSender ? 10 : -10 } : false}
+      initial={isTemp ? { opacity: 0, scale: 0.92, y: 6, x: isSender ? 6 : -6 } : false}
       animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
       exit={
         isDeleting
           ? { opacity: 0, transition: { duration: 0.2, delay: 0.75 } }
-          : { opacity: 0, scale: 0.8, transition: { duration: 0.15 } }
+          : { opacity: 0, scale: 0.85, transition: { duration: 0.12 } }
       }
-      transition={{ type: "spring", stiffness: 420, damping: 32 }}
+      transition={{ type: "spring", stiffness: 500, damping: 36, mass: 0.6 }}
       className={`flex w-full ${isSender ? "justify-end" : "justify-start"} mb-[2px] ${isFirstInGroup ? "mt-3" : "mt-0"} relative overflow-visible`}
     >
       {/* ── Иконка Reply — появляется при свайпе, стоит позади бабла ── */}
@@ -314,21 +375,23 @@ export default function ChatMessage({
         {/* swipeWrapRef — сюда вешаются non-passive touch listeners */}
         <motion.div
           ref={swipeWrapRef}
-          style={{ x: swipeX }}
+          style={{ x: swipeX, willChange: "transform" }}
           onContextMenu={handleContextMenu}
           className="relative"
         >
           {/* Bubble */}
-          <motion.div
-            animate={isDeleting
-              ? { opacity: 0, scale: 0.8, filter: "blur(6px)", transition: { duration: 0.3 } }
-              : {}}
+          <div
             style={{
               borderTopLeftRadius: !isSender && hasAbove ? "5px" : "15px",
               borderTopRightRadius: isSender && hasAbove ? "5px" : "15px",
               borderBottomLeftRadius: !isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
               borderBottomRightRadius: isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
               backgroundColor: bubbleColor,
+              opacity: isDeleting ? 0 : 1,
+              transform: isDeleting ? "scale(0.8)" : "scale(1)",
+              filter: isDeleting ? "blur(6px)" : "none",
+              transition: isDeleting ? "opacity 0.3s, transform 0.3s, filter 0.3s" : "none",
+              willChange: "transform",
             }}
             className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px]"
           >
@@ -408,14 +471,16 @@ export default function ChatMessage({
               <div className="flex items-end gap-x-2 flex-wrap">
                 <span className="leading-[1.4] text-[15px] flex-1"
                   style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                  <WrappedText text={displayContent} />
+                  <Linkify options={{ target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100" }}>
+                    <WrappedText text={displayContent} />
+                  </Linkify>
                 </span>
                 <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">
                   {timeStr}<ReadIndicator />
                 </span>
               </div>
             )}
-          </motion.div>
+          </div>
 
           {/* Хвостик */}
           {isLastInGroup && !isDeleting && (
@@ -545,6 +610,10 @@ export default function ChatMessage({
     </motion.div>
   );
 }
+
+})
+
+export default ChatMessage
 
 function MenuItem({ icon, label, color = "text-white", onClick }: {
   icon: React.ReactNode; label: string; color?: string; onClick?: () => void;

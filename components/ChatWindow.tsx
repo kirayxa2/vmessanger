@@ -3,6 +3,10 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock } from "lucide-react"
+import { Virtuoso } from "react-virtuoso"
+import Linkify from "linkify-react"
+import EmojiGifPicker from "./EmojiGifPicker"
+import useSound from "use-sound"
 import ChatMessage from "./ChatMessage"
 import FileMessage from "./FileMessage"
 import CallModal from "./CallModal"
@@ -120,6 +124,11 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
   // ── Self-destruct timer ────────────────────────────────────
   const [selfDestructSeconds, setSelfDestructSeconds] = useState<number | null>(null)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+
+  // ── Sounds (один файл, разный pitchrate) ──
+  const [playSend] = useSound("/sounds/send.wav", { volume: 0.5 })
+  const [playReceive] = useSound("/sounds/notification.mp3", { volume: 0.35 })
 
   // ── Voice recording ──────────────────────────────────────────
 
@@ -335,6 +344,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       })
       // Auto-mark as read if chat is visible
       if (message.sender.id?.toString() !== session?.user?.id?.toString()) {
+        try { playReceive() } catch {}
         fetch("/api/messages/read", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -362,6 +372,22 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       ))
     }
 
+    const handleMessageConfirmed = (data: { tempId: string; message: Message }) => {
+      const { tempId, message: saved } = data
+      const sk = stableKeys.current.get(tempId) || tempId
+      stableKeys.current.set(saved.id.toString(), sk)
+      stableKeys.current.delete(tempId)
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...saved } : m))
+      try { playSend() } catch {}
+    }
+
+    const handleMessageFailed = (data: { tempId: string }) => {
+      // Показываем ошибку — схлапываем сообщение и показываем иконку ошибки
+      setMessages(prev => prev.map(m =>
+        m.id === data.tempId ? { ...m, failed: true } : m
+      ) as Message[])
+    }
+
     const handleTyping = (data: { userId: string; conversationId: string }) => {
       if (data.conversationId !== roomId) return
       if (data.userId?.toString() === session?.user?.id?.toString()) return
@@ -382,6 +408,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     socket.on("messages-read", handleMessagesRead)
     socket.on("user-typing", handleTyping)
     socket.on("user-stop-typing", handleStopTyping)
+    socket.on("message-confirmed", handleMessageConfirmed)
+    socket.on("message-failed", handleMessageFailed)
     return () => {
       socket.off("new-message", handleNewMessage)
       socket.off("message-deleted", handleMessageDeleted)
@@ -389,6 +417,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       socket.off("messages-read", handleMessagesRead)
       socket.off("user-typing", handleTyping)
       socket.off("user-stop-typing", handleStopTyping)
+      socket.off("message-confirmed", handleMessageConfirmed)
+      socket.off("message-failed", handleMessageFailed)
     }
   }, [apiId, socket, session?.user?.id])
 
@@ -649,26 +679,28 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     }
   }, [session, apiId, socket, participantIds, input, t])
 
-  // ── Send text message ────────────────────────────────────────
+  // ── Send text message — через сокет, без HTTP POST ────────────
   const sendMessage = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!input.trim() || !session?.user) return
 
+    // Редактирование — через сокет (без HTTP)
     if (editingMessageId) {
-      try {
-        const res = await fetch("/api/messages", {
-          method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingMessageId, content: input })
-        })
-        if (res.ok) {
-          const updated = await res.json()
-          setMessages(prev => prev.map(m => m.id?.toString() === updated.id?.toString() ? updated : m))
-          socket?.emit("edit-message", { ...updated, conversationId: String(apiId) })
-          setEditingMessageId(null); setInput("")
-        }
-      } catch { }
+      if (!socket) return
+      const tempEditId = "edit-" + Date.now()
+      // Обновляем оптимистично — сразу показываем изменение в UI
+      setMessages(prev => prev.map(m => m.id?.toString() === editingMessageId ? { ...m, content: input } : m))
+      socket.emit("edit-message", {
+        tempEditId,
+        id: editingMessageId,
+        content: input,
+        conversationId: String(apiId),
+      })
+      setEditingMessageId(null); setInput("")
       return
     }
+
+    if (!socket) return
 
     const tempId = "temp-" + Date.now()
     const optimisticMsg: Message = {
@@ -678,40 +710,37 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       sender: { id: session.user.id, username: session.user.name || "Me", avatar: session.user.image || undefined }
     }
     stableKeys.current.set(tempId, tempId)
+
+    // 1. Показываем сообщение МГНОВЕННО с часиками
     setMessages(prev => [...prev, optimisticMsg])
     if (onNewMessage) onNewMessage(optimisticMsg)
-    const currentInput = input; const currentReplyTo = replyingTo
+    const currentInput = input
+    const currentReplyTo = replyingTo
     setInput(""); setReplyingTo(null)
 
-    try {
-      const res = await fetch("/api/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: currentInput, conversationId: apiId, replyToId: currentReplyTo ? parseInt(currentReplyTo.id) : undefined })
-      })
-      if (res.ok) {
-        const saved = await res.json()
-        const sk = stableKeys.current.get(tempId) || tempId
-        stableKeys.current.set(saved.id.toString(), sk); stableKeys.current.delete(tempId)
-        setMessages(prev => prev.map(m => m.id === tempId ? { ...saved } : m))
-        socket?.emit("send-message", { ...saved, conversationId: String(apiId), participantIds })
-        fetch(`/api/drafts?conversationId=${apiId}`, { method: "DELETE" }).catch(() => { })
-      } else { setMessages(prev => prev.filter(m => m.id !== tempId)) }
-    } catch { setMessages(prev => prev.filter(m => m.id !== tempId)) }
+    // 2. Отправляем через сокет — без HTTP запроса
+    socket.emit("send-message", {
+      tempId,
+      content: currentInput,
+      conversationId: String(apiId),
+      senderId: session.user.id,
+      participantIds,
+      ...(currentReplyTo ? { replyToId: parseInt(currentReplyTo.id) } : {}),
+    })
+
+    // 3. Удаляем черновик в фоне (не блокирует UI)
+    fetch(`/api/drafts?conversationId=${apiId}`, { method: "DELETE" }).catch(() => {})
   }, [input, session, editingMessageId, apiId, socket, onNewMessage, participantIds, replyingTo])
 
   const handleForwardTo = useCallback(async (targetConvId: string) => {
-    if (!forwardingMsg || !session?.user) return
-    const res = await fetch("/api/messages", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: forwardingMsg.content, conversationId: targetConvId, forwardFromId: parseInt(forwardingMsg.id) || null })
+    if (!forwardingMsg || !session?.user || !socket) return
+    // Пересылка через сокет — без HTTP
+    socket.emit("forward-message", {
+      fromMessageId: parseInt(forwardingMsg.id),
+      toConversationIds: [targetConvId],
     })
-    if (res.ok) {
-      const saved = await res.json()
-      if (targetConvId === conversationId) setMessages(prev => [...prev, saved])
-      socket?.emit("send-message", { ...saved, conversationId: String(targetConvId), participantIds })
-    }
     setForwardingMsg(null)
-  }, [forwardingMsg, session, conversationId, socket, participantIds])
+  }, [forwardingMsg, session, socket])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage() }
@@ -1081,7 +1110,15 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         </AnimatePresence>
 
         {/* ── Messages ── */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 hide-scrollbar relative" onScroll={handleScroll}>
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 hide-scrollbar relative" onScroll={handleScroll}
+          style={{
+            backgroundImage: `radial-gradient(circle at 20% 50%, rgba(126,133,225,0.04) 0%, transparent 50%),
+              radial-gradient(circle at 80% 20%, rgba(198,124,120,0.04) 0%, transparent 50%),
+              radial-gradient(circle at 60% 80%, rgba(78,140,222,0.03) 0%, transparent 50%)`,
+            backgroundColor: "#0e1621",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
           {/* Loading more indicator */}
           {loadingMore && (
             <div className="flex justify-center py-2">
@@ -1125,7 +1162,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               const isFirstInGroup = idx === 0 || messages[idx - 1]?.sender.id?.toString() !== msg.sender.id?.toString()
               const isLastInGroup = idx === messages.length - 1 || messages[idx + 1]?.sender.id?.toString() !== msg.sender.id?.toString()
               const msgIdStr = msg.id.toString()
-              const isNew = msgIdStr.startsWith("temp-") || newMsgIds.current.has(msgIdStr)
+              const isNew = msgIdStr.startsWith("temp-")
               const sk = stableKeys.current.get(msgIdStr) || msgIdStr
 
 
@@ -1158,6 +1195,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                       hasAbove={!isFirstInGroup} replyTo={msg.replyTo} isForwarded={!!msg.forwardFromId}
                       isRead={msg.isRead} voiceUrl={msg.voiceUrl} voiceDuration={msg.voiceDuration}
                       senderName={isGroupChat ? msg.sender.username : undefined} senderId={msg.sender.id} isTemp={isNew}
+                      failed={(msg as any).failed}
                       isGroupChat={isGroupChat}
                       onDelete={handleDeleteMessage} onEdit={handleStartEdit}
                       onReply={handleReply} onForward={handleForwardOpen} onScrollToMessage={scrollToMessage}
@@ -1315,7 +1353,13 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                   }}
                   className="relative flex items-center w-full px-2 py-1 min-h-[46px] shadow-lg"
                 >
-                  <motion.button type="button" whileTap={{ scale: 0.85, rotate: 15 }} className="text-gray-400 hover:text-white transition-colors shrink-0 p-1">
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.85, rotate: 15 }}
+                    onClick={() => setShowEmojiPicker(v => !v)}
+                    className="text-gray-400 hover:text-white transition-colors shrink-0 p-1"
+                    style={{ color: showEmojiPicker ? ACCENT : undefined }}
+                  >
                     <Smile size={24} />
                   </motion.button>
                   <input
@@ -1446,6 +1490,37 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
           </>
         )}
       </AnimatePresence>
+
+      {/* ── Emoji/GIF picker ── */}
+      <EmojiGifPicker
+        open={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onEmojiSelect={(emoji) => {
+          setInput(prev => prev + emoji)
+          setShowEmojiPicker(false)
+          inputRef.current?.focus()
+        }}
+        onGifSelect={async (url) => {
+          if (!session?.user) return
+          setIsUploading(true)
+          try {
+            const res = await fetch("/api/messages", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: url, conversationId: apiId, fileUrl: url, fileType: "image/gif", fileName: "gif" })
+            })
+            if (res.ok) {
+              const saved = await res.json()
+              setMessages(prev => [...prev, saved])
+              socket?.emit("send-message", { ...saved, conversationId: String(apiId), participantIds })
+            }
+          } finally { setIsUploading(false) }
+        }}
+        onStickerSelect={(sticker) => {
+          setInput(prev => prev + sticker)
+          inputRef.current?.focus()
+        }}
+      />
 
       {/* ── Call modal ── */}
       <AnimatePresence>

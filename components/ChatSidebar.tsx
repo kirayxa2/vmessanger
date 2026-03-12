@@ -15,6 +15,8 @@ import { useProfanityFilter } from "@/hooks/useProfanityFilter"
 import { useNotificationSound, SOUND_LABELS, SoundType } from "@/hooks/useNotificationSound"
 import TitleBadge from "./TitleBadge"
 import CreateGroupModal from "./CreateGroupModal"
+import DevicesScreen from "./DevicesScreen"
+import { useDeviceSession } from "@/hooks/useDeviceSession"
 
 const ACCENT = "#7e85e1"
 
@@ -414,6 +416,8 @@ export default function ChatSidebar({
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [showDevices, setShowDevices] = useState(false)
+  const { sessionId } = useDeviceSession()
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -639,7 +643,7 @@ export default function ChatSidebar({
               onClick={toggleTheme}
             />
             <SettingsRow icon={<Lock size={17} />} iconColor="#d45555" label="Сменить пароль" onClick={() => setShowPasswordChange(true)} />
-            <SettingsRow icon={<Monitor size={17} />} iconColor="#e08a3c" label={t("devices")} badge="2" />
+            <SettingsRow icon={<Monitor size={17} />} iconColor="#e08a3c" label={t("devices")} onClick={() => setShowDevices(true)} />
             <SettingsRow icon={<Folder size={17} />} iconColor="#8b6fd6" label={t("chat_folders")} />
           </div>
 
@@ -690,6 +694,16 @@ export default function ChatSidebar({
         {/* Privacy overlay */}
         <AnimatePresence>
           {showPrivacy && <PrivacyScreen onBack={() => setShowPrivacy(false)} />}
+        </AnimatePresence>
+
+        {/* Devices overlay */}
+        <AnimatePresence>
+          {showDevices && (
+            <DevicesScreen
+              onBack={() => setShowDevices(false)}
+              currentSessionId={sessionId}
+            />
+          )}
         </AnimatePresence>
 
         {/* Password change overlay */}

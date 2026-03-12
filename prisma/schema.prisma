@@ -27,6 +27,7 @@ model User {
   messageReads     MessageRead[]
   reactions        Reaction[]
   pushSubscriptions PushSubscription[]
+  sessions          UserSession[]
 }
 
 model Conversation {
@@ -38,6 +39,7 @@ model Conversation {
   type            String                    @default("private")
   maxMembers      Int                       @default(200000)
   pinnedMessageId Int?
+  pinnedMessageIds Int[]                    @default([])
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
   participants    ConversationParticipant[]
@@ -53,7 +55,11 @@ model ConversationParticipant {
   role           String       @default("member") // "owner" | "admin" | "member"
   joinedAt       DateTime     @default(now())
   isArchived     Boolean      @default(false)
+  isMuted        Boolean      @default(false)
+  mutedUntil     DateTime?
+  folder         String?      // "archive" | null
   clearedAt      DateTime?
+  deletedAt      DateTime?    // soft delete — чат скрыт только у этого юзера
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -153,6 +159,21 @@ model PushSubscription {
   auth      String
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       Int
+  deviceName   String
+  deviceType   String   @default("desktop") // desktop | mobile | tablet
+  os           String?
+  browser      String?
+  ip           String?
+  lastActive   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }

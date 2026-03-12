@@ -29,11 +29,17 @@ export async function POST(req: NextRequest) {
     })
     if (!message) return NextResponse.json({ error: "Message not found" }, { status: 404 })
 
-    // Update conversation with pinned message ID
-    await prisma.conversation.update({
-      where: { id: Number(conversationId) },
-      data: { pinnedMessageId: Number(messageId) },
-    })
+    // Добавляем в массив pinnedMessageIds (макс 5 как в Telegram)
+    const conv = await prisma.conversation.findUnique({ where: { id: Number(conversationId) } })
+    const currentPinned: number[] = (conv?.pinnedMessageIds as number[]) || []
+    const msgId = Number(messageId)
+    if (!currentPinned.includes(msgId)) {
+      const newPinned = [msgId, ...currentPinned].slice(0, 5) // макс 5
+      await prisma.conversation.update({
+        where: { id: Number(conversationId) },
+        data: { pinnedMessageId: msgId, pinnedMessageIds: newPinned },
+      })
+    }
 
     return NextResponse.json({
       pinnedMessageId: Number(messageId),
@@ -64,10 +70,25 @@ export async function DELETE(req: NextRequest) {
     })
     if (!participant) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    await prisma.conversation.update({
-      where: { id: Number(conversationId) },
-      data: { pinnedMessageId: null },
-    })
+    const { searchParams: sp2 } = new URL(req.url)
+    const messageId = sp2.get("messageId")
+
+    if (messageId) {
+      // Удаляем конкретное сообщение из закреплённых
+      const conv = await prisma.conversation.findUnique({ where: { id: Number(conversationId) } })
+      const current: number[] = (conv?.pinnedMessageIds as number[]) || []
+      const newPinned = current.filter(id => id !== Number(messageId))
+      await prisma.conversation.update({
+        where: { id: Number(conversationId) },
+        data: { pinnedMessageIds: newPinned, pinnedMessageId: newPinned[0] ?? null },
+      })
+    } else {
+      // Снять все закреплённые
+      await prisma.conversation.update({
+        where: { id: Number(conversationId) },
+        data: { pinnedMessageId: null, pinnedMessageIds: [] },
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
