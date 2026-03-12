@@ -342,7 +342,7 @@ const ChatMessage = React.memo(function ChatMessage({
               <div className="flex items-end gap-x-2 flex-wrap">
                 <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
                   <Linkify options={{ target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100" }}>
-                    <WrappedText text={displayContent} />
+                    {renderWithMentions(displayContent)}
                   </Linkify>
                 </span>
                 <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">{timeStr}<ReadIndicator /></span>
@@ -385,6 +385,16 @@ function MenuItem({ icon, label, color = "text-white", onClick }: { icon: React.
       <span className={`text-[14px] font-medium ${color}`}>{label}</span>
     </div>
   );
+}
+
+// Парсим @упоминания — подсвечиваем синим
+ function renderWithMentions(text: string): React.ReactNode[] {
+  const parts = text.split(/(@\w+)/g)
+  return parts.map((part, i) =>
+    /^@\w+$/.test(part)
+      ? <span key={i} style={{ color: '#7e85e1', fontWeight: 600 }}>{part}</span>
+      : <span key={i}>{part}</span>
+  )
 }
 
 function WrappedText({ text }: { text: string }) {

@@ -5,7 +5,8 @@ import { useSession, signOut } from "next-auth/react"
 import {
   Search, Menu, LogOut, Moon, Globe, Bookmark,
   ArrowLeft, Camera, Loader2, Check, X, AtSign, Info,
-  Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus, Sun, Lock, QrCode
+  Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus, Sun, Lock, QrCode,
+  Archive, BellOff, Trash2, BellRing
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
@@ -426,6 +427,66 @@ export default function ChatSidebar({
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [showQRCode, setShowQRCode] = useState(false)
+
+  // ── Контекстное меню чата ────────────────────────────────────
+  const [chatMenu, setChatMenu] = useState<{ id: string; x: number; y: number; isArchived: boolean; isMuted: boolean } | null>(null)
+  const chatMenuRef = useRef<HTMLDivElement>(null)
+
+  const openChatMenu = useCallback((e: React.MouseEvent | React.TouchEvent, chat: any) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const x = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX
+    const y = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY
+    setChatMenu({ id: chat.id.toString(), x, y, isArchived: chat._folder === 'archive', isMuted: !!chat._isMuted })
+  }, [])
+
+  const handleArchiveChat = useCallback(async (id: string, archive: boolean) => {
+    setChatMenu(null)
+    try {
+      await fetch('/api/conversations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: id, action: archive ? 'archive' : 'unarchive' }),
+      })
+      setLocalConversations(prev => prev.map(c =>
+        c.id.toString() === id ? { ...c, _folder: archive ? 'archive' : null } : c
+      ))
+    } catch {}
+  }, [])
+
+  const handleMuteChat = useCallback(async (id: string, mute: boolean) => {
+    setChatMenu(null)
+    try {
+      await fetch('/api/conversations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: id, action: mute ? 'mute' : 'unmute' }),
+      })
+      setLocalConversations(prev => prev.map(c =>
+        c.id.toString() === id ? { ...c, _isMuted: mute } : c
+      ))
+    } catch {}
+  }, [])
+
+  const handleDeleteChat = useCallback(async (id: string) => {
+    setChatMenu(null)
+    try {
+      await fetch(`/api/conversations?conversationId=${id}`, { method: 'DELETE' })
+      setLocalConversations(prev => prev.filter(c => c.id.toString() !== id))
+    } catch {}
+  }, [])
+
+  // Закрывать меню при клике снаружи
+  useEffect(() => {
+    if (!chatMenu) return
+    const handler = () => setChatMenu(null)
+    window.addEventListener('click', handler)
+    window.addEventListener('touchstart', handler)
+    return () => { window.removeEventListener('click', handler); window.removeEventListener('touchstart', handler) }
+  }, [chatMenu])
+
+  // Вкладки: все / архив
+  const [activeTab, setActiveTab] = useState<'all' | 'archive'>('all')
 
   // Когда докбар меняет вкладку — обновляем view
   useEffect(() => {
@@ -863,10 +924,69 @@ export default function ChatSidebar({
         </motion.div>
       </motion.div>
 
+      {/* Вкладки все / архив */}
+      {!isSearchActive && (
+        <div className="flex gap-2 px-3 pb-2">
+          {(['all', 'archive'] as const).map(tab => (
+            <motion.button key={tab} onClick={() => setActiveTab(tab)}
+              whileTap={{ scale: 0.95 }}
+              className="px-3 py-1 rounded-full text-[13px] font-medium transition-colors"
+              style={activeTab === tab
+                ? { backgroundColor: ACCENT, color: 'white' }
+                : { backgroundColor: 'rgba(255,255,255,0.07)', color: '#8896a5' }}>
+              {tab === 'all' ? 'Все' : 'Архив'}
+            </motion.button>
+          ))}
+        </div>
+      )}
+
+      {/* Контекстное меню чата */}
+      <AnimatePresence>
+        {chatMenu && (() => {
+          const mW = 200, mH = 160, mg = 8
+          const top = chatMenu.y + mH > window.innerHeight - mg ? chatMenu.y - mH : chatMenu.y + 4
+          const left = Math.min(Math.max(chatMenu.x - mW / 2, mg), window.innerWidth - mW - mg)
+          return (
+            <>
+              <div className="fixed inset-0 z-[198]" onClick={e => { e.stopPropagation(); setChatMenu(null) }} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.88 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.88 }}
+                transition={{ type: 'spring', stiffness: 460, damping: 26 }}
+                onClick={e => e.stopPropagation()}
+                className="fixed z-[199] w-[200px] rounded-2xl shadow-2xl overflow-hidden py-1.5 border border-white/8"
+                style={{ top, left, backgroundColor: 'rgba(22,28,40,0.96)', backdropFilter: 'blur(16px)' }}
+              >
+                <button onClick={() => handleArchiveChat(chatMenu.id, !chatMenu.isArchived)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/6 transition-colors">
+                  <Archive size={16} className="text-gray-400" />
+                  <span className="text-[14px] text-white">{chatMenu.isArchived ? 'Из архива' : 'В архив'}</span>
+                </button>
+                <button onClick={() => handleMuteChat(chatMenu.id, !chatMenu.isMuted)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/6 transition-colors">
+                  {chatMenu.isMuted
+                    ? <BellRing size={16} className="text-gray-400" />
+                    : <BellOff size={16} className="text-gray-400" />}
+                  <span className="text-[14px] text-white">{chatMenu.isMuted ? 'Включить звук' : 'Заглушить'}</span>
+                </button>
+                <div className="my-1 mx-3 border-t border-white/8" />
+                <button onClick={() => handleDeleteChat(chatMenu.id)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 transition-colors">
+                  <Trash2 size={16} className="text-red-400" />
+                  <span className="text-[14px] text-red-400">Удалить чат</span>
+                </button>
+              </motion.div>
+            </>
+          )
+        })()}
+      </AnimatePresence>
+
       <div className="flex-1 overflow-y-auto hide-scrollbar py-1 relative">
         {!isSearchActive ? (
           <div className="flex flex-col">
-            {filteredConversations.map((chat, index) => {
+            {filteredConversations.filter(c => {
+              if (activeTab === 'archive') return c._folder === 'archive'
+              return c._folder !== 'archive'
+            }).map((chat, index) => {
               const isSelected = selectedId === chat.id.toString()
               const unread = unreadCounts[chat.id] || 0
               const isSaved = chat.type === "saved"
@@ -919,11 +1039,29 @@ export default function ChatSidebar({
 
               
 
+              // Лонгпресс на мобильному
+              const lpTimer = { current: 0 as any }
+              const handleTouchStart = (e: React.TouchEvent) => {
+                if (isSaved || isSystem) return
+                lpTimer.current = setTimeout(() => {
+                  if (navigator.vibrate) navigator.vibrate(40)
+                  openChatMenu(e, chat)
+                }, 500)
+              }
+              const handleTouchEnd = () => clearTimeout(lpTimer.current)
+              const handleTouchMove = () => clearTimeout(lpTimer.current)
+
               return (
-                <motion.div key={chat.id} onClick={() => onSelect?.(chat.id.toString())}
+                <motion.div
+                  key={chat.id}
+                  onClick={() => onSelect?.(chat.id.toString())}
+                  onContextMenu={e => { if (!isSaved && !isSystem) { e.preventDefault(); openChatMenu(e, chat) } }}
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchMove={handleTouchMove}
                   initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.03, duration: 0.2 }}
-                  className={`p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] transition-all ${
+                  className={`p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] transition-all select-none ${
                     isSelected ? "text-white shadow-lg scale-[1.02]" : "bg-transparent hover:bg-white/5"
                   }`}
                   style={isSelected ? { backgroundColor: ACCENT } : {}}>
@@ -935,6 +1073,7 @@ export default function ChatSidebar({
                     <div className="flex items-center justify-between gap-1">
                       <div className="font-semibold text-[16px] truncate text-white flex items-center gap-1">
                         {displayNameEl}
+                        {chat._isMuted && <BellOff size={12} className="opacity-50 shrink-0" />}
                       </div>
                       <span className="text-[12px] opacity-60 shrink-0 ml-1">
                         {chat.messages?.[0] ? new Date(chat.messages[0].createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}

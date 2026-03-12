@@ -126,6 +126,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [selfDestructSeconds, setSelfDestructSeconds] = useState<number | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
+  // ── Mention toast ─────────────────────────────────────────────
+  const [mentionToast, setMentionToast] = useState<{ senderName: string; messageId: string } | null>(null)
+
   // ── Sounds (один файл, разный pitchrate) ──
   const [playSend] = useSound("/sounds/send.wav", { volume: 0.5 })
   const [playReceive] = useSound("/sounds/notification.mp3", { volume: 0.35 })
@@ -382,11 +385,28 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     }
 
     const handleMessageFailed = (data: { tempId: string }) => {
-      // Показываем ошибку — схлапываем сообщение и показываем иконку ошибки
       setMessages(prev => prev.map(m =>
         m.id === data.tempId ? { ...m, failed: true } : m
       ) as Message[])
     }
+
+    // Подтверждение редактирования сервером
+    const handleEditConfirmed = (data: { tempEditId: string; message: Message }) => {
+      setMessages(prev => prev.map(m =>
+        m.id?.toString() === data.message.id?.toString() ? { ...data.message } : m
+      ))
+    }
+
+    // Упоминание — баннер сверху (toast)
+    const handleMentioned = (data: { messageId: number; senderId: string; senderName: string; conversationId: string }) => {
+      if (data.conversationId !== roomId) return
+      // Подсвечиваем сообщение с упоминанием
+      setMentionToast({ senderName: data.senderName, messageId: String(data.messageId) })
+      setTimeout(() => setMentionToast(null), 3500)
+    }
+
+    socket.on("edit-confirmed", handleEditConfirmed)
+    socket.on("you-were-mentioned", handleMentioned)
 
     const handleTyping = (data: { userId: string; conversationId: string }) => {
       if (data.conversationId !== roomId) return
@@ -419,6 +439,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       socket.off("user-stop-typing", handleStopTyping)
       socket.off("message-confirmed", handleMessageConfirmed)
       socket.off("message-failed", handleMessageFailed)
+      socket.off("edit-confirmed", handleEditConfirmed)
+      socket.off("you-were-mentioned", handleMentioned)
     }
   }, [apiId, socket, session?.user?.id])
 
@@ -725,6 +747,18 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       ...(currentReplyTo ? { replyToId: parseInt(currentReplyTo.id) } : {}),
     })
 
+    // 2b. Если в тексте есть @упоминания — шлём событие
+    const mentionMatches = currentInput.match(/@(\w+)/g)
+    if (mentionMatches && participantIds.length > 0) {
+      socket.emit("mention", {
+        conversationId: String(apiId),
+        senderId: session.user.id,
+        senderName: session.user.name || 'User',
+        mentions: mentionMatches.map(m => m.slice(1)), // убираем @
+        participantIds,
+      })
+    }
+
     // 3. Удаляем черновик в фоне (не блокирует UI)
     fetch(`/api/drafts?conversationId=${apiId}`, { method: "DELETE" }).catch(() => {})
   }, [input, session, editingMessageId, apiId, socket, onNewMessage, participantIds, replyingTo])
@@ -918,6 +952,27 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               <p className="text-white text-lg font-bold">Перетащите файл сюда</p>
               <p className="text-gray-400 text-sm mt-1">Максимум 50 МБ</p>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Mention toast ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {mentionToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+            className="absolute top-[70px] left-1/2 z-[150] cursor-pointer"
+            style={{ transform: 'translateX(-50%)' }}
+            onClick={() => { scrollToMessage(mentionToast.messageId); setMentionToast(null) }}
+          >
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full shadow-xl text-white text-[13px] font-medium"
+              style={{ backgroundColor: ACCENT }}>
+              <span>@</span>
+              <span>{mentionToast.senderName} упомянул вас</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
