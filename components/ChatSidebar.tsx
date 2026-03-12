@@ -18,7 +18,8 @@ import TitleBadge from "./TitleBadge"
 import CreateGroupModal from "./CreateGroupModal"
 import DevicesScreen from "./DevicesScreen"
 import { useDeviceSession } from "@/hooks/useDeviceSession"
-import QRCodeSidebar from "./QRCodeSidebar"; // Или проверьте правильный путь к файлу
+import QRCodeSidebar from "./QRCodeSidebar"
+import StoriesRow from "./StoriesRow"; // Или проверьте правильный путь к файлу
 
 const ACCENT = "#7e85e1"
 
@@ -485,6 +486,14 @@ export default function ChatSidebar({
     return () => { window.removeEventListener('click', handler); window.removeEventListener('touchstart', handler) }
   }, [chatMenu])
 
+  // ── Pull-to-archive (Telegram-style) ────────────────────────
+  const [pullY, setPullY] = useState(0)
+  const [pullState, setPullState] = useState<'idle' | 'pulling' | 'ready' | 'triggered'>('idle')
+  const PULL_THRESHOLD = 72
+  const pullStartY = useRef(0)
+  const pullListRef = useRef<HTMLDivElement>(null)
+  const isPulling = useRef(false)
+
   // ── Pull-to-archive touch handlers ──────────────────────
   const handlePullTouchStart = useCallback((e: React.TouchEvent) => {
     const el = pullListRef.current
@@ -526,14 +535,6 @@ export default function ChatSidebar({
 
   // Вкладки: все / архив
   const [activeTab, setActiveTab] = useState<'all' | 'archive'>('all')
-
-  // ── Pull-to-archive (Telegram-style) ────────────────────────
-  const [pullY, setPullY] = useState(0) // текущий pull offset в px
-  const [pullState, setPullState] = useState<'idle' | 'pulling' | 'ready' | 'triggered'>('idle')
-  const PULL_THRESHOLD = 72 // px до триггера
-  const pullStartY = useRef(0)
-  const pullListRef = useRef<HTMLDivElement>(null)
-  const isPulling = useRef(false)
 
   // Когда докбар меняет вкладку — обновляем view
   useEffect(() => {
@@ -875,6 +876,32 @@ export default function ChatSidebar({
   )
 }
 
+  // ── detect isMobile inside component ─────────────────────────
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
+
+  // ── Mobile Stories expanded state ───────────────────────────
+  // storiesPhase: 'collapsed'=next to title | 'expanding'=animating out | 'expanded'=full row | 'collapsing'=back
+  const [storiesPhase, setStoriesPhase] = useState<'collapsed' | 'expanded'>('collapsed')
+  const listScrollRef = useRef<HTMLDivElement>(null)
+  // Pull-to-reveal search (архив) — отдельный ref для скролла списка чатов
+  const [mobileSearchReveal, setMobileSearchReveal] = useState(0) // 0–1 progress
+  const mobileSearchStartY = useRef(0)
+  const mobileSearchIsPulling = useRef(false)
+  const SEARCH_REVEAL_THRESHOLD = 56
+
+  const handleMobileListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    // Если в архиве и тянем вниз — раскрываем поиск
+    if (activeTab === 'archive') return
+    // Скрываем иконку поиска если скролл вниз
+  }, [activeTab])
+
   // ── CHATS SCREEN ─────────────────────────────────────────────
   return (
     <div className="w-full h-full flex flex-col relative bg-[#1c242f]">
@@ -889,6 +916,145 @@ export default function ChatSidebar({
         )}
       </AnimatePresence>
 
+      {/* ── MOBILE HEADER (Telegram-style) ── */}
+      {isMobile ? (
+        <div className="shrink-0">
+          {/* Title bar: Vortex + Stories (compact) + Search icon + Dots */}
+          <div className="flex items-center px-4 gap-2" style={{ height: 56 }}>
+            {/* Compact stories (collapsed) — слева от названия */}
+            <AnimatePresence>
+              {storiesPhase === 'collapsed' && (
+                <motion.div
+                  key="stories-compact"
+                  initial={{ opacity: 0, x: -20, scale: 0.8 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: -20, scale: 0.8 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                  className="shrink-0"
+                >
+                  <StoriesRow compact className="" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Название */}
+            <motion.span
+              layout
+              className="text-white font-bold text-[20px] shrink-0"
+              style={{ letterSpacing: -0.3 }}
+            >
+              Vortex
+            </motion.span>
+
+            <div className="flex-1" />
+
+            {/* Search icon — скрывается при скролле вниз */}
+            <motion.button
+              onClick={() => { setIsSearchActive(true) }}
+              whileTap={{ scale: 0.88 }}
+              className="p-2 rounded-full hover:bg-white/10 text-gray-400"
+            >
+              <Search size={20} />
+            </motion.button>
+
+            {/* Three dots: только создать группу */}
+            <div className="relative">
+              <motion.button
+                onClick={() => setShowDropdown(v => !v)}
+                whileTap={{ scale: 0.88 }}
+                className="p-2 rounded-full hover:bg-white/10 text-gray-400"
+              >
+                {/* dots icon */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+                </svg>
+              </motion.button>
+              <AnimatePresence>
+                {showDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-[200]" onClick={() => setShowDropdown(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: -8 }}
+                      style={{ transformOrigin: "top right", position: "fixed", top: 60, right: 12 }}
+                      transition={{ type: "spring", stiffness: 420, damping: 28 }}
+                      className="w-48 z-[201] rounded-xl shadow-2xl overflow-hidden"
+                    >
+                      <div className="absolute inset-0 rounded-xl"
+                        style={{ backgroundColor: "rgba(18,24,35,0.92)", backdropFilter: "blur(12px)" }} />
+                      <div className="relative z-10 py-1">
+                        <div onClick={() => { setShowCreateGroup(true); setShowDropdown(false) }}
+                          className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-white/5 transition-colors">
+                          <Users size={17} className="text-gray-400" />
+                          <span className="text-white text-[14px]">Создать группу</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Expanded Stories row — появляется под title bar */}
+          <AnimatePresence>
+            {storiesPhase === 'expanded' && (
+              <motion.div
+                key="stories-expanded"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 360, damping: 32 }}
+                className="overflow-hidden px-3 pb-2"
+              >
+                <StoriesRow />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Search bar — показывается когда isSearchActive */}
+          <AnimatePresence>
+            {isSearchActive && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 44, opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                className="overflow-hidden px-3 pb-2"
+              >
+                <div className="flex items-center gap-2 px-3 rounded-xl h-9"
+                  style={{ backgroundColor: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <Search size={15} className="text-gray-500 shrink-0" />
+                  <input
+                    autoFocus
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Поиск"
+                    className="flex-1 bg-transparent text-white text-[14px] outline-none placeholder:text-gray-600"
+                  />
+                  <button onClick={() => { setIsSearchActive(false); setSearchQuery("") }} className="text-gray-500">
+                    <X size={14} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Archive header */}
+          {activeTab === 'archive' && (
+            <div className="flex items-center gap-2 px-4 pb-2">
+              <motion.button onClick={() => setActiveTab('all')} whileTap={{ scale: 0.9 }}
+                className="flex items-center gap-1.5 text-[13px] font-medium"
+                style={{ color: ACCENT }}>
+                <ArrowLeft size={15} /> Архив
+              </motion.button>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── DESKTOP HEADER ── */
+        <div>
+        {/* Stories row на ПК — горизонтальная лента под поиском */}
         <motion.div className="px-3 flex items-center gap-2 relative bg-[#1c242f] overflow-hidden"
         layout style={{ height: 56 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
         <div className="relative w-10 h-10 shrink-0">

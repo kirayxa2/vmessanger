@@ -28,6 +28,8 @@ model User {
   reactions        Reaction[]
   pushSubscriptions PushSubscription[]
   sessions          UserSession[]
+  stories           Story[]
+  storyViews        StoryView[]
 }
 
 model Conversation {
@@ -161,6 +163,32 @@ model PushSubscription {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model Story {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  mediaUrl    String
+  mediaType   String   @default("image") // "image" | "video"
+  text        String?
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  views       StoryView[]
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model StoryView {
+  id        Int      @id @default(autoincrement())
+  storyId   Int
+  userId    Int
+  viewedAt  DateTime @default(now())
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId])
 }
 
 model UserSession {
