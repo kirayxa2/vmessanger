@@ -1,5 +1,5 @@
 "use client"
-// CallModal v3 — full rewrite with quality monitor, speaker, video toggle
+// CallModal v4 — fixed camera, PiP always visible when video on, proper audio element
 import { useEffect, useRef, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Phone, PhoneOff, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Signal } from "lucide-react"
@@ -139,14 +139,25 @@ export default function CallModal({
       })
       if (localStreamRef.current) localStreamRef.current.getTracks().forEach(t => t.stop())
       localStreamRef.current = stream
-      if (withVideo && localVideoRef.current) localVideoRef.current.srcObject = stream
+      if (withVideo) {
+        // localVideoRef может ещё не быть в DOM — ждём тик
+        setTimeout(() => {
+          if (localVideoRef.current) localVideoRef.current.srcObject = stream
+        }, 80)
+      }
       return stream
     } catch (err: any) {
       console.error("getUserMedia:", err?.name)
-      setStatusText("Нет доступа к микрофону")
+      if (err?.name === "NotAllowedError") setStatusText("Mic/camera access denied")
+      else if (err?.name === "NotFoundError") setStatusText("Microphone not found")
+      else setStatusText("Media error")
       return null
     }
   }, [])
+
+  // Если видеозвонок — сразу запрашиваем камеру при монтировании
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (isVideoCall) getLocalStream(true) }, [])
 
   // ── Создаём RTCPeerConnection ─────────────────────────────────
   const createPeer = useCallback((stream: MediaStream): RTCPeerConnection => {
@@ -222,14 +233,16 @@ export default function CallModal({
     // Инициатор: receiver принял → создаём offer
     const handleCallAccepted = async (data: { callId: number }) => {
       if (data.callId !== callId) return
-      setCallState("connected")
-      setStatusText("Соединение...")
-
-      const stream = await getLocalStream()
+      setStatusText("Connecting...")
+      // Используем уже запрошенный стрим (если видеозвонок — уже есть видео)
+      const stream = await getLocalStream(isVideoCall)
       if (!stream) return
       const peer = createPeer(stream)
       try {
-        const offer = await peer.createOffer()
+        const offer = await peer.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: isVideoCall,
+        })
         await peer.setLocalDescription(offer)
         socket.emit("call-offer", { callId, receiverId: otherUserId, sdp: offer })
       } catch (err) {
@@ -253,7 +266,7 @@ export default function CallModal({
     // Receiver: получил SDP offer → отвечаем
     const handleCallOffer = async (data: { callId: number; sdp: RTCSessionDescriptionInit }) => {
       if (data.callId !== callId) return
-      const stream = localStreamRef.current ?? await getLocalStream()
+      const stream = localStreamRef.current ?? await getLocalStream(isVideoCall)
       if (!stream) return
       const peer = createPeer(stream)
       try {
@@ -313,14 +326,13 @@ export default function CallModal({
 
   // ── Принять ───────────────────────────────────────────────────
   const acceptCall = useCallback(async () => {
-    // Получаем микрофон заранее — сохраняется в localStreamRef
-    await getLocalStream()
-    // Сообщаем инициатору — он создаст и пришлёт offer
+    // Получаем стрим (с видео если видеозвонок)
+    await getLocalStream(isVideoCall)
     socket?.emit("call-accepted", { callId, initiatorId: otherUserId })
     setCallState("connected")
-    setStatusText("Соединение...")
-    // НЕ вызываем onAccept здесь: он закрыл бы модал раньше call-offer
-  }, [socket, callId, otherUserId, getLocalStream])
+    setStatusText("Connecting...")
+    // НЕ вызываем onAccept здесь — модал должен дожить до call-offer
+  }, [socket, callId, otherUserId, isVideoCall, getLocalStream])
 
   // ── Отклонить ─────────────────────────────────────────────────
   const declineCall = useCallback(() => {
@@ -435,8 +447,8 @@ export default function CallModal({
         </motion.p>
       </div>
 
-      {/* Local video PiP */}
-      {isVideoOn && callState === "connected" && (
+      {/* Local video PiP — показываем как только камера включена */}
+      {isVideoOn && (
         <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
           className="absolute top-20 right-4 z-20 w-28 h-40 rounded-2xl overflow-hidden border-2 border-white/20 shadow-xl">
           <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />

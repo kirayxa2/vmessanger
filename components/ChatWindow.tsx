@@ -460,14 +460,11 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     }
   }, [])
 
-  const handleDeleteMessage = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`/api/messages?id=${id}`, { method: "DELETE" })
-      if (res.ok) {
-        setMessages(prev => prev.filter(m => m.id?.toString() !== id))
-        socket?.emit("delete-message", { id, conversationId: String(apiId) })
-      }
-    } catch { }
+  const handleDeleteMessage = useCallback((id: string, deleteForAll = true) => {
+    // Оптимистично убираем сразу в UI
+    setMessages(prev => prev.filter(m => m.id?.toString() !== id))
+    // Сервер удалит из БД и нотифицирует всех
+    socket?.emit("delete-message", { id, conversationId: String(apiId), deleteForAll })
   }, [socket, apiId])
 
   const handleStartEdit = useCallback((id: string, content: string) => {
@@ -925,7 +922,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col h-full min-w-0 tg-bg">
+      <div className="flex-1 flex flex-col h-full min-w-0" style={{ background: "transparent" }}>
 
         {/* ── Header ── */}
         <div
