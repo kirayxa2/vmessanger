@@ -96,14 +96,16 @@ export default function EmojiGifPicker({
           <div className="fixed inset-0 z-[150]" onClick={onClose} />
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.92, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 8 }}
-            transition={{ type: "spring", stiffness: 440, damping: 28, mass: 0.7 }}
-            style={{ transformOrigin: "bottom left" }}
-            className="fixed z-[151] bottom-[80px] left-[60px] w-[340px] rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col"
-            style={{ backgroundColor: "#1a2332" }}
-          >
+  initial={{ opacity: 0, scale: 0.92, y: 8 }}
+  animate={{ opacity: 1, scale: 1, y: 0 }}
+  exit={{ opacity: 0, scale: 0.92, y: 8 }}
+  transition={{ type: "spring", stiffness: 440, damping: 28, mass: 0.7 }}
+  className="fixed z-[151] bottom-[80px] left-[60px] w-[340px] rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col"
+  style={{ 
+    transformOrigin: "bottom left", 
+    backgroundColor: "#1a2332" 
+     }}
+>
             {/* Tab bar */}
             <div className="flex items-center gap-1 px-3 pt-3 pb-2 border-b border-white/5">
               {TABS.map(t => (
