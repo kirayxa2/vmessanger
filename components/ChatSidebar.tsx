@@ -19,7 +19,8 @@ import CreateGroupModal from "./CreateGroupModal"
 import DevicesScreen from "./DevicesScreen"
 import { useDeviceSession } from "@/hooks/useDeviceSession"
 import QRCodeSidebar from "./QRCodeSidebar"
-import StoriesRow from "./StoriesRow"; // Или проверьте правильный путь к файлу
+import StoriesRow from "./StoriesRow"
+import { useTheme } from "@/lib/theme"
 
 const ACCENT = "#7e85e1"
 
@@ -401,9 +402,7 @@ export default function ChatSidebar({
   const { t, i18n } = useTranslation()
   const { socket } = useSocket()
 
-  // Import theme
-  const themeModule = require("@/lib/theme")
-  const { theme, toggleTheme } = themeModule.useTheme()
+  const { theme, toggleTheme } = useTheme()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [isSearchActive, setIsSearchActive] = useState(false)
@@ -1052,7 +1051,6 @@ export default function ChatSidebar({
       ) : (
         /* ── DESKTOP HEADER ── */
         <div>
-          {/* Stories row на ПК — горизонтальная лента под поиском */}
           <motion.div className="px-3 flex items-center gap-2 relative bg-[#1c242f] overflow-hidden"
             layout style={{ height: 56 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
             <div className="relative w-10 h-10 shrink-0">
@@ -1135,6 +1133,21 @@ export default function ChatSidebar({
             </motion.div>
           </motion.div>
 
+          {/* Stories на ПК — под поиском, скрыто если поиск активен */}
+          <AnimatePresence>
+            {!isSearchActive && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 360, damping: 32 }}
+                className="overflow-hidden px-3 pb-2"
+              >
+                <StoriesRow />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Вкладки все / архив */}
           {!isSearchActive && activeTab === 'archive' && (
             <motion.button
@@ -1154,77 +1167,80 @@ export default function ChatSidebar({
             </div>
           )}
 
-          {/* Контекстное меню чата */}
-          <AnimatePresence>
-            {chatMenu && (() => {
-              const mW = 200, mH = 160, mg = 8
-              const top = chatMenu.y + mH > window.innerHeight - mg ? chatMenu.y - mH : chatMenu.y + 4
-              const left = Math.min(Math.max(chatMenu.x - mW / 2, mg), window.innerWidth - mW - mg)
-              return (
-                <>
-                  <div className="fixed inset-0 z-[198]" onClick={e => { e.stopPropagation(); setChatMenu(null) }} />
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.88 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.88 }}
-                    transition={{ type: 'spring', stiffness: 460, damping: 26 }}
-                    onClick={e => e.stopPropagation()}
-                    className="fixed z-[199] w-[200px] rounded-2xl shadow-2xl overflow-hidden py-1.5 border border-white/8"
-                    style={{ top, left, backgroundColor: 'rgba(22,28,40,0.96)', backdropFilter: 'blur(16px)' }}
-                  >
-                    <button onClick={() => handleArchiveChat(chatMenu.id, !chatMenu.isArchived)}
-                      className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/6 transition-colors">
-                      <Archive size={16} className="text-gray-400" />
-                      <span className="text-[14px] text-white">{chatMenu.isArchived ? 'Из архива' : 'В архив'}</span>
-                    </button>
-                    <button onClick={() => handleMuteChat(chatMenu.id, !chatMenu.isMuted)}
-                      className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/6 transition-colors">
-                      {chatMenu.isMuted
-                        ? <BellRing size={16} className="text-gray-400" />
-                        : <BellOff size={16} className="text-gray-400" />}
-                      <span className="text-[14px] text-white">{chatMenu.isMuted ? 'Включить звук' : 'Заглушить'}</span>
-                    </button>
-                    <div className="my-1 mx-3 border-t border-white/8" />
-                    <button onClick={() => handleDeleteChat(chatMenu.id)}
-                      className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 transition-colors">
-                      <Trash2 size={16} className="text-red-400" />
-                      <span className="text-[14px] text-red-400">Удалить чат</span>
-                    </button>
-                  </motion.div>
-                </>
-              )
-            })()}
-          </AnimatePresence>
+        </div>
+      )}
 
-          <div
-            ref={pullListRef}
-            className="flex-1 overflow-y-auto hide-scrollbar py-1 relative"
-            onTouchStart={activeTab === 'all' ? handlePullTouchStart : undefined}
-            onTouchMove={activeTab === 'all' ? handlePullTouchMove : undefined}
-            onTouchEnd={activeTab === 'all' ? handlePullTouchEnd : undefined}
-            style={{ overscrollBehavior: 'none' }}
-          >
-            {/* ── Pull-to-archive indicator ── */}
-            {activeTab === 'all' && pullY > 0 && (
-              <div
-                className="flex items-center justify-center gap-2 overflow-hidden transition-all"
-                style={{ height: pullY, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}
+      {/* ── ОБЩИЙ блок: контекстное меню + список чатов ── */}
+      {/* Контекстное меню чата */}
+      <AnimatePresence>
+        {chatMenu && (() => {
+          const mW = 200, mH = 160, mg = 8
+          const top = chatMenu.y + mH > window.innerHeight - mg ? chatMenu.y - mH : chatMenu.y + 4
+          const left = Math.min(Math.max(chatMenu.x - mW / 2, mg), window.innerWidth - mW - mg)
+          return (
+            <>
+              <div className="fixed inset-0 z-[198]" onClick={e => { e.stopPropagation(); setChatMenu(null) }} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.88 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.88 }}
+                transition={{ type: 'spring', stiffness: 460, damping: 26 }}
+                onClick={e => e.stopPropagation()}
+                className="fixed z-[199] w-[200px] rounded-2xl shadow-2xl overflow-hidden py-1.5"
+                style={{ top, left, backgroundColor: 'rgba(22,28,40,0.96)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.08)' }}
               >
-                <motion.div
-                  animate={{ rotate: pullState === 'ready' ? 180 : 0 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: pullState === 'ready' ? ACCENT : 'rgba(255,255,255,0.12)' }}
-                >
-                  <Archive size={16} className="text-white" />
-                </motion.div>
-                <motion.span
-                  animate={{ opacity: pullState === 'ready' ? 1 : 0.55 }}
-                  className="text-[13px] font-medium"
-                  style={{ color: pullState === 'ready' ? ACCENT : '#8896a5' }}
-                >
-                  {pullState === 'ready' ? 'Отпустите — открыть Архив' : 'Потяните, чтобы открыть Архив'}
-                </motion.span>
-              </div>
-            )}
+                <button onClick={() => handleArchiveChat(chatMenu.id, !chatMenu.isArchived)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/5 transition-colors">
+                  <Archive size={16} className="text-gray-400" />
+                  <span className="text-[14px] text-white">{chatMenu.isArchived ? 'Из архива' : 'В архив'}</span>
+                </button>
+                <button onClick={() => handleMuteChat(chatMenu.id, !chatMenu.isMuted)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-white/5 transition-colors">
+                  {chatMenu.isMuted ? <BellRing size={16} className="text-gray-400" /> : <BellOff size={16} className="text-gray-400" />}
+                  <span className="text-[14px] text-white">{chatMenu.isMuted ? 'Включить звук' : 'Заглушить'}</span>
+                </button>
+                <div className="my-1 mx-3 h-px" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }} />
+                <button onClick={() => handleDeleteChat(chatMenu.id)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/10 transition-colors">
+                  <Trash2 size={16} className="text-red-400" />
+                  <span className="text-[14px] text-red-400">Удалить чат</span>
+                </button>
+              </motion.div>
+            </>
+          )
+        })()}
+      </AnimatePresence>
+
+      {/* ── СПИСОК ЧАТОВ (pull-to-archive + чаты) ── */}
+      <div
+        ref={pullListRef}
+        className="flex-1 overflow-y-auto hide-scrollbar py-1 relative"
+        onTouchStart={activeTab === 'all' ? handlePullTouchStart : undefined}
+        onTouchMove={activeTab === 'all' ? handlePullTouchMove : undefined}
+        onTouchEnd={activeTab === 'all' ? handlePullTouchEnd : undefined}
+        style={{ overscrollBehavior: 'none' }}
+      >
+        {/* ── Pull-to-archive indicator ── */}
+        {activeTab === 'all' && pullY > 0 && (
+          <div
+            className="flex items-center justify-center gap-2 overflow-hidden transition-all"
+            style={{ height: pullY, opacity: Math.min(pullY / PULL_THRESHOLD, 1) }}
+          >
+            <motion.div
+              animate={{ rotate: pullState === 'ready' ? 180 : 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: pullState === 'ready' ? ACCENT : 'rgba(255,255,255,0.12)' }}
+            >
+              <Archive size={16} className="text-white" />
+            </motion.div>
+            <motion.span
+              animate={{ opacity: pullState === 'ready' ? 1 : 0.55 }}
+              className="text-[13px] font-medium"
+              style={{ color: pullState === 'ready' ? ACCENT : '#8896a5' }}
+            >
+              {pullState === 'ready' ? 'Отпустите — открыть Архив' : 'Потяните, чтобы открыть Архив'}
+            </motion.span>
+          </div>
+        )}
             {!isSearchActive ? (
               <div className="flex flex-col">
                 {/* Telegram-style: Archive entry at bottom of normal list */}
@@ -1395,10 +1411,7 @@ export default function ChatSidebar({
                   ))}
               </motion.div>
             )}
-          </div>
-        </div>
-      )
-      }
+      </div>
     </div>
   )
 }
