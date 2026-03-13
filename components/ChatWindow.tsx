@@ -15,7 +15,6 @@ import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
 import UserProfilePanel from "./UserProfilePanel"
 import GroupProfilePanel from "./GroupProfilePanel"
-import { useNotificationSound } from "@/hooks/useNotificationSound"
 import { VerifiedBadge } from "./VerifiedBadge"
 import TitleBadge from "./TitleBadge"
 
@@ -92,6 +91,12 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const isInitialLoad = useRef(true)
   const inputRef = useRef<HTMLInputElement>(null)
   const [showProfile, setShowProfile] = useState(false)
+  const [mentionProfileUsername, setMentionProfileUsername] = useState<string | null>(null)
+
+  const handleMentionClick = useCallback(async (username: string) => {
+    // Находим пользователя по username и открываем профиль
+    setMentionProfileUsername(username)
+  }, [])
   const [otherUserOnline, setOtherUserOnline] = useState(false)
   const [otherUserLastSeen, setOtherUserLastSeen] = useState<string | null>(null)
   const [otherUserAvatar, setOtherUserAvatar] = useState<string | null>(null)
@@ -129,9 +134,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   // ── Mention toast ─────────────────────────────────────────────
   const [mentionToast, setMentionToast] = useState<{ senderName: string; messageId: string } | null>(null)
 
-  // ── Sounds (один файл, разный pitchrate) ──
+  // ── Sounds: send.wav + notification.mp3 из /public/sounds ──
   const [playSend] = useSound("/sounds/send.wav", { volume: 0.5 })
-  const [playReceive] = useSound("/sounds/notification.mp3", { volume: 0.35 })
+  const [playReceive] = useSound("/sounds/notification.mp3", { volume: 0.6 })
 
   // ── Voice recording ──────────────────────────────────────────
 
@@ -1250,6 +1255,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                       currentUserId={session?.user?.id}
                       selfDestructAt={(msg as any).selfDestructAt}
                       onPin={handlePinMessage}
+                      onMentionClick={handleMentionClick}
                       onReaction={async (messageId, emoji) => {
                         try {
                           const res = await fetch("/api/messages/reactions", {
@@ -1468,6 +1474,17 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         )}
       </div>
 
+      {/* Профиль пользователя по клику на @mention */}
+      <AnimatePresence>
+        {mentionProfileUsername && (
+          <MentionProfilePanel
+            username={mentionProfileUsername}
+            onClose={() => setMentionProfileUsername(null)}
+            isMobile={typeof window !== 'undefined' && window.innerWidth < 768}
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showProfile && (
           isGroup ? (
@@ -1595,5 +1612,47 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+// Компонент: поиск пользователя по username и показ профиля
+function MentionProfilePanel({ username, onClose, isMobile }: { username: string; onClose: () => void; isMobile: boolean }) {
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userAvatar, setUserAvatar] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/users/search?query=${encodeURIComponent(username)}`)
+      .then(r => r.json())
+      .then(data => {
+        const users = Array.isArray(data) ? data : []
+        const match = users.find((u: any) => u.username?.toLowerCase() === username.toLowerCase())
+        if (match) {
+          setUserId(String(match.id))
+          setUserAvatar(match.avatar || null)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [username])
+
+  if (loading) return (
+    <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40">
+      <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+    </div>
+  )
+
+  if (!userId) return null
+
+  return (
+    <UserProfilePanel
+      userId={userId}
+      username={username}
+      avatar={userAvatar || undefined}
+      isOnline={false}
+      onClose={onClose}
+      isMobile={isMobile}
+    />
   )
 }

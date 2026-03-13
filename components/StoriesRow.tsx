@@ -371,7 +371,7 @@ export default function StoriesRow({
         onChange={handleAddStory}
       />
 
-      <div className={`flex items-end gap-2 ${className}`} style={{ overflowX: "auto", scrollbarWidth: "none" }}>
+      <div className={`flex items-center gap-2 ${className}`} style={{ overflowX: "auto", scrollbarWidth: "none" }}>
         {/* Кнопка добавить свою историю */}
         <motion.button
           onClick={() => fileInputRef.current?.click()}
@@ -382,8 +382,8 @@ export default function StoriesRow({
           <div
             className="rounded-full flex items-center justify-center border-2 border-dashed"
             style={{
-              width: size,
-              height: size,
+              width: size + 6,
+              height: size + 6,
               borderColor: "rgba(126,133,225,0.5)",
               backgroundColor: "rgba(126,133,225,0.1)",
               position: "relative",

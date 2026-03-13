@@ -656,18 +656,32 @@ export default function ChatSidebar({
     const file = e.target.files?.[0]
     if (!file) return
     setIsUploading(true)
+
+    // ★ Optimistic update: сразу показываем новый аватар до загрузки (blob URL)
+    const blobUrl = URL.createObjectURL(file)
+    update({ image: blobUrl })  // NextAuth session сразу
+
     const formData = new FormData()
     formData.append("file", file)
     try {
       const res = await fetch("/api/users/avatar", { method: "POST", body: formData })
       if (res.ok) {
         const data = await res.json()
+        // Заменяем blob URL на настоящий URL из Supabase
         update({ image: data.avatar })
+        URL.revokeObjectURL(blobUrl)
         if (socket && session?.user?.id) {
           socket.emit("avatar-update", { userId: parseInt(session.user.id), avatar: data.avatar })
         }
+      } else {
+        // Откатываем при ошибке
+        update({ image: session?.user?.image })
+        URL.revokeObjectURL(blobUrl)
       }
-    } catch { }
+    } catch {
+      update({ image: session?.user?.image })
+      URL.revokeObjectURL(blobUrl)
+    }
     finally { setIsUploading(false); if (fileInputRef.current) fileInputRef.current.value = "" }
   }
 
@@ -904,52 +918,102 @@ export default function ChatSidebar({
       {/* ── MOBILE HEADER (Telegram-style) ── */}
       {isMobile ? (
         <div className="shrink-0">
-          {/* Title bar: Vortex + Stories (compact) + Search icon + Dots */}
+          {/* Title bar — меняется при архиве */}
           <div className="flex items-center px-4 gap-2" style={{ height: 56 }}>
-            {/* Compact stories (collapsed) — слева от названия */}
-            <AnimatePresence>
-              {storiesPhase === 'collapsed' && (
+            <AnimatePresence mode="wait">
+              {activeTab === 'archive' ? (
+                // ── АРХИВ: аватарки архивных чатов + «N история/историй» ──
                 <motion.div
-                  key="stories-compact"
-                  initial={{ opacity: 0, x: -20, scale: 0.8 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -20, scale: 0.8 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                  className="shrink-0"
+                  key="archive-header"
+                  initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  className="flex items-center gap-2 flex-1 min-w-0"
                 >
-                  <StoriesRow compact className="" />
+                  {/* Стрелка назад */}
+                  <motion.button
+                    onClick={() => setActiveTab('all')}
+                    whileTap={{ scale: 0.88 }}
+                    className="p-1.5 -ml-1.5 rounded-full hover:bg-white/10 text-gray-400 shrink-0"
+                  >
+                    <ArrowLeft size={22} />
+                  </motion.button>
+
+                  {/* Аватарки участников архивных чатов (макс 4) */}
+                  {(() => {
+                    const archivedChats = filteredConversations.filter(c => c._folder === 'archive')
+                    const avatars: { src?: string; letter: string; color: string }[] = []
+                    for (const chat of archivedChats) {
+                      if (avatars.length >= 4) break
+                      if (chat.type === 'saved') { avatars.push({ letter: '★', color: '#4e8cde' }); continue }
+                      const other = chat.participants?.find((p: any) => p.userId?.toString() !== currentUser?.id?.toString())?.user
+                      if (other) avatars.push({ src: other.avatar, letter: other.username?.[0]?.toUpperCase() || '?', color: ACCENT })
+                    }
+                    return (
+                      <div className="flex items-center shrink-0">
+                        {avatars.map((av, i) => (
+                          <div
+                            key={i}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[13px] font-bold overflow-hidden border-2 border-[#1c242f]"
+                            style={{ backgroundColor: av.color, marginLeft: i > 0 ? -8 : 0, zIndex: avatars.length - i }}
+                          >
+                            {av.src
+                              ? <img src={av.src} className="w-full h-full object-cover" alt="" />
+                              : av.letter
+                            }
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Счётчик: «N чат / чата / чатов» */}
+                  {(() => {
+                    const n = filteredConversations.filter(c => c._folder === 'archive').length
+                    const word = n === 1 ? 'чат' : n >= 2 && n <= 4 ? 'чата' : 'чатов'
+                    return (
+                      <span className="text-white font-bold text-[18px] truncate" style={{ letterSpacing: -0.2 }}>
+                        {n} {word}
+                      </span>
+                    )
+                  })()}
+                </motion.div>
+              ) : (
+                // ── ОБЫЧНЫЙ: compact StoriesRow + «Vortex» ──
+                <motion.div
+                  key="normal-header"
+                  initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  className="flex items-center gap-2 flex-1 min-w-0"
+                >
+                  {storiesPhase === 'collapsed' && (
+                    <div className="shrink-0">
+                      <StoriesRow compact className="" />
+                    </div>
+                  )}
+                  <span className="text-white font-bold text-[20px] shrink-0" style={{ letterSpacing: -0.3 }}>
+                    Vortex
+                  </span>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Название */}
-            <motion.span
-              layout
-              className="text-white font-bold text-[20px] shrink-0"
-              style={{ letterSpacing: -0.3 }}
-            >
-              Vortex
-            </motion.span>
+            {/* Правые кнопки — Search + Three dots — всегда видны */}
+            {activeTab !== 'archive' && <div className="flex-1" />}
 
-            <div className="flex-1" />
-
-            {/* Search icon — скрывается при скролле вниз */}
             <motion.button
               onClick={() => { setIsSearchActive(true) }}
               whileTap={{ scale: 0.88 }}
-              className="p-2 rounded-full hover:bg-white/10 text-gray-400"
+              className="p-2 rounded-full hover:bg-white/10 text-gray-400 shrink-0"
             >
               <Search size={20} />
             </motion.button>
 
-            {/* Three dots: только создать группу */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <motion.button
                 onClick={() => setShowDropdown(v => !v)}
                 whileTap={{ scale: 0.88 }}
                 className="p-2 rounded-full hover:bg-white/10 text-gray-400"
               >
-                {/* dots icon */}
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
                 </svg>
@@ -1025,8 +1089,8 @@ export default function ChatSidebar({
             )}
           </AnimatePresence>
 
-          {/* Archive header */}
-          {activeTab === 'archive' && (
+          {/* Archive header — стрелка перенесена в title bar, здесь не нужна */}
+          {false && activeTab === 'archive' && (
             <div className="flex items-center gap-2 px-4 pb-2">
               <motion.button onClick={() => setActiveTab('all')} whileTap={{ scale: 0.9 }}
                 className="flex items-center gap-1.5 text-[13px] font-medium"

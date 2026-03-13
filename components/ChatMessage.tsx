@@ -50,6 +50,7 @@ interface ChatMessageProps {
   currentUserId?: string | number;
   selfDestructAt?: string | null;
   isGroupChat?: boolean;
+  onMentionClick?: (username: string) => void;
 }
 
 const ChatMessage = React.memo(function ChatMessage({
@@ -57,7 +58,7 @@ const ChatMessage = React.memo(function ChatMessage({
   replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp, failed,
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
   openMenuId, onMenuOpen, onMenuClose, menuPos, senderName, senderId,
-  reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat
+  reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat, onMentionClick
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const { filter } = useProfanityFilter();
@@ -342,7 +343,7 @@ const ChatMessage = React.memo(function ChatMessage({
               <div className="flex items-end gap-x-2 flex-wrap">
                 <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
                   <Linkify options={{ target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100" }}>
-                    {renderWithMentions(displayContent)}
+                    {renderWithMentions(displayContent, onMentionClick)}
                   </Linkify>
                 </span>
                 <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">{timeStr}<ReadIndicator /></span>
@@ -387,12 +388,16 @@ function MenuItem({ icon, label, color = "text-white", onClick }: { icon: React.
   );
 }
 
-// Парсим @упоминания — подсвечиваем синим
- function renderWithMentions(text: string): React.ReactNode[] {
+// Парсим @упоминания — подсвечиваем и делаем кликабельными
+function renderWithMentions(text: string, onMentionClick?: (username: string) => void): React.ReactNode[] {
   const parts = text.split(/(@\w+)/g)
   return parts.map((part, i) =>
     /^@\w+$/.test(part)
-      ? <span key={i} style={{ color: '#7e85e1', fontWeight: 600 }}>{part}</span>
+      ? <span
+          key={i}
+          style={{ color: '#7e85e1', fontWeight: 600, cursor: 'pointer' }}
+          onClick={e => { e.stopPropagation(); onMentionClick?.(part.slice(1)) }}
+        >{part}</span>
       : <span key={i}>{part}</span>
   )
 }
