@@ -47,33 +47,7 @@
   --color-foreground: var(--foreground);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --recipient-bubble: #212121 !important;
-    --input-bg: #212121 !important;
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --recipient-bubble: #212121 !important;
-    --input-bg: #212121 !important;
-  }
-}
-
-/* Ensure colors are consistent across browsers and devices */
-[style*="var(--input-bg)"], 
-[style*="var(--recipient-bubble)"],
-[fill="var(--recipient-bubble)"],
-[fill="var(--input-bg)"] {
-  background-color: #212121 !important;
-  fill: #212121 !important;
-}
-
-[style*="var(--sender-bubble)"],
-[fill="var(--sender-bubble)"] {
-  background-color: #c67c78 !important;
-  fill: #c67c78 !important;
-}
+/* media query removed — theme is controlled by data-theme attribute only */
 
 input, select, textarea {
   font-size: 16px !important; /* Prevents auto-zoom on mobile safari */

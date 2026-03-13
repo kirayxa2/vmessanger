@@ -977,7 +977,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col h-full min-w-0" style={{ background: "transparent" }}>
+      <div className="flex-1 flex flex-col h-full min-w-0 tg-bg">
 
         {/* ── Header ── */}
         <div
@@ -1162,8 +1162,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         </AnimatePresence>
 
         {/* ── Messages ── */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 hide-scrollbar relative tg-bg" onScroll={handleScroll}
-          style={{ WebkitOverflowScrolling: "touch", backgroundColor: "var(--chat-bg)" }}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 hide-scrollbar relative" onScroll={handleScroll}
+          style={{ WebkitOverflowScrolling: "touch" }}
         >
           {/* Loading more indicator */}
           {loadingMore && (
@@ -1304,7 +1304,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
 
         {/* ── Input area ── */}
         {!isSystemChat && (
-          <div ref={inputContainerRef} className="px-3 pb-4 pt-2 relative z-20">
+          <div ref={inputContainerRef} className="px-3 pb-4 pt-2 relative z-20" style={{ background: 'transparent' }}>
             <AnimatePresence>
               {uploadError && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}

@@ -519,7 +519,7 @@ export default function ChatSidebar({
     if (pullState === 'ready') {
       setPullState('triggered')
       setTimeout(() => {
-        setActiveTab('archive')
+        setArchiveVisible(true)  // показываем «чат-Архив» в списке, НЕ открываем сразу
         setPullY(0)
         setPullState('idle')
       }, 350)
@@ -532,6 +532,18 @@ export default function ChatSidebar({
 
   // Вкладки: все / архив
   const [activeTab, setActiveTab] = useState<'all' | 'archive'>('all')
+  // Показывать ли виртуальный «чат-Архив» в списке (появляется после pull)
+  const [archiveVisible, setArchiveVisible] = useState(false)
+
+  // ── isMobile (ДО любого return!) ───────────────────────────────
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  const [storiesPhase, setStoriesPhase] = useState<'collapsed' | 'expanded'>('collapsed')
 
   // Когда докбар меняет вкладку — обновляем view
   useEffect(() => {
@@ -873,31 +885,7 @@ export default function ChatSidebar({
     )
   }
 
-  // ── detect isMobile inside component ─────────────────────────
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener("resize", check)
-    return () => window.removeEventListener("resize", check)
-  }, [])
-
-  // ── Mobile Stories expanded state ───────────────────────────
-  // storiesPhase: 'collapsed'=next to title | 'expanding'=animating out | 'expanded'=full row | 'collapsing'=back
-  const [storiesPhase, setStoriesPhase] = useState<'collapsed' | 'expanded'>('collapsed')
-  const listScrollRef = useRef<HTMLDivElement>(null)
-  // Pull-to-reveal search (архив) — отдельный ref для скролла списка чатов
-  const [mobileSearchReveal, setMobileSearchReveal] = useState(0) // 0–1 progress
-  const mobileSearchStartY = useRef(0)
-  const mobileSearchIsPulling = useRef(false)
-  const SEARCH_REVEAL_THRESHOLD = 56
-
-  const handleMobileListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget
-    // Если в архиве и тянем вниз — раскрываем поиск
-    if (activeTab === 'archive') return
-    // Скрываем иконку поиска если скролл вниз
-  }, [activeTab])
+  // ── CHATS SCREEN ─────────────────────────────────────────────
 
   // ── CHATS SCREEN ─────────────────────────────────────────────
   return (
@@ -1161,11 +1149,7 @@ export default function ChatSidebar({
               <span className="text-[14px] font-semibold" style={{ color: ACCENT }}>Архив</span>
             </motion.button>
           )}
-          {!isSearchActive && activeTab === 'all' && (
-            <div className="px-3 pb-2 text-[11px] text-gray-600 select-none pointer-events-none">
-              ↑ потяните вверх чтобы открыть Архив
-            </div>
-          )}
+
 
         </div>
       )}
@@ -1243,14 +1227,14 @@ export default function ChatSidebar({
         )}
             {!isSearchActive ? (
               <div className="flex flex-col">
-                {/* Telegram-style: Archive entry at bottom of normal list */}
+                {/* Telegram-style: Archive entry at top of list */}
                 {activeTab === 'all' && (() => {
                   const archivedCount = filteredConversations.filter(c => c._folder === 'archive').length
-                  if (archivedCount === 0) return null
+                  if (archivedCount === 0 && !archiveVisible) return null
                   return (
                     <motion.div
                       key="__archive_entry__"
-                      onClick={() => setActiveTab('archive')}
+                      onClick={() => { setActiveTab('archive'); setArchiveVisible(false) }}
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                       whileTap={{ scale: 0.98 }}
                       className="p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] hover:bg-white/5 transition-all select-none"
@@ -1262,13 +1246,17 @@ export default function ChatSidebar({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <span className="font-semibold text-[16px] text-white">Архив</span>
-                          <motion.div
-                            className="text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center"
-                            style={{ backgroundColor: ACCENT, color: 'white' }}
-                            initial={{ scale: 0 }} animate={{ scale: 1 }}
-                          >{archivedCount}</motion.div>
+                          {archivedCount > 0 && (
+                            <motion.div
+                              className="text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center"
+                              style={{ backgroundColor: ACCENT, color: 'white' }}
+                              initial={{ scale: 0 }} animate={{ scale: 1 }}
+                            >{archivedCount}</motion.div>
+                          )}
                         </div>
-                        <p className="text-[14px] opacity-60 text-white">{archivedCount} чат{archivedCount === 1 ? '' : archivedCount < 5 ? 'а' : 'ов'}</p>
+                        <p className="text-[14px] opacity-60 text-white">
+                          {archivedCount === 0 ? 'Пусто' : `${archivedCount} чат${archivedCount === 1 ? '' : archivedCount < 5 ? 'а' : 'ов'}`}
+                        </p>
                       </div>
                     </motion.div>
                   )
