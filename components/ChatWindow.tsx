@@ -167,7 +167,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const inputContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // When window resizes (e.g., mobile keyboard opens), scroll input into view
+    // Huawei-specific keyboard fix
+    const isHuawei = /huawei/i.test(navigator.userAgent);
+
     const handleResize = () => {
       if (typeof window !== 'undefined' && window.innerWidth < 768) {
         if (document.activeElement === inputRef.current) {
@@ -177,8 +179,59 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         }
       }
     };
+
+    const handleFocus = () => {
+      if (isHuawei && inputContainerRef.current) {
+        // Huawei: force input container to bottom with fixed positioning
+        const container = inputContainerRef.current;
+        const viewportHeight = window.visualViewport?.height || window.innerHeight;
+        const containerHeight = container.offsetHeight;
+
+        // Position container at bottom of visible viewport
+        container.style.position = 'fixed';
+        container.style.bottom = '0';
+        container.style.left = '0';
+        container.style.right = '0';
+        container.style.zIndex = '9999';
+
+        // Adjust messages container to not overlap
+        const messagesContainer = container.previousElementSibling as HTMLElement;
+        if (messagesContainer) {
+          messagesContainer.style.paddingBottom = `${containerHeight + 20}px`;
+        }
+      }
+    };
+
+    const handleBlur = () => {
+      if (isHuawei && inputContainerRef.current) {
+        // Reset positioning
+        const container = inputContainerRef.current;
+        container.style.position = '';
+        container.style.bottom = '';
+        container.style.left = '';
+        container.style.right = '';
+        container.style.zIndex = '';
+
+        const messagesContainer = container.previousElementSibling as HTMLElement;
+        if (messagesContainer) {
+          messagesContainer.style.paddingBottom = '';
+        }
+      }
+    };
+
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    if (inputRef.current) {
+      inputRef.current.addEventListener('focus', handleFocus);
+      inputRef.current.addEventListener('blur', handleBlur);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (inputRef.current) {
+        inputRef.current.removeEventListener('focus', handleFocus);
+        inputRef.current.removeEventListener('blur', handleBlur);
+      }
+    };
   }, []);
   const isGroup = isGroupChat
   const isSpecialChat = isSavedChat || isSystemChat || isGroup

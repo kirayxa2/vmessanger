@@ -89,12 +89,29 @@ html, body {
 
   background-color: var(--color-background);
 
-  /* Фикс для iOS Safari — предотвращает скролл body при открытии клавиатуры */
+  /* Фикс для iOS Safari и Huawei — предотвращает скролл body при открытии клавиатуры */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
+}
+
+/* Huawei-specific fix */
+@supports (-webkit-touch-callout: none) {
+  body {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Дополнительный фикс для input на мобильных */
+input, textarea {
+  /* Предотвращает zoom на фокусе */
+  font-size: 16px !important;
+  /* Huawei fix: убираем transform который может сломать позиционирование */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .wrapperinput {

@@ -59,7 +59,8 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             var isAndroid = /Android/i.test(navigator.userAgent);
-            
+            var isHuawei = /huawei/i.test(navigator.userAgent);
+
             function applyHeight(h) {
               var r = document.documentElement;
               r.style.setProperty('--vh', (h * 0.01) + 'px');
@@ -93,9 +94,15 @@ export default function RootLayout({
             // Проверяем через 100мс после фокуса на любом input
             document.addEventListener('focusin', function(e) {
               if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-                var checks = [100, 300, 500, 800];
+                var checks = isHuawei ? [100, 200, 300, 400, 500, 800, 1000] : [100, 300, 500, 800];
                 checks.forEach(function(ms) {
-                  setTimeout(function() { applyHeight(getH()); }, ms);
+                  setTimeout(function() {
+                    applyHeight(getH());
+                    // Huawei fix: скроллим input в видимую область
+                    if (isHuawei) {
+                      e.target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    }
+                  }, ms);
                 });
               }
             });
@@ -104,6 +111,16 @@ export default function RootLayout({
                 setTimeout(function() { applyHeight(getH()); }, 200);
               }
             });
+
+            // Huawei-specific: постоянный мониторинг высоты
+            if (isHuawei) {
+              setInterval(function() {
+                var activeEl = document.activeElement;
+                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+                  applyHeight(getH());
+                }
+              }, 300);
+            }
           })();
         ` }} />
       </head>
