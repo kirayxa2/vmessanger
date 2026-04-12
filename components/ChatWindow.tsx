@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef, useMemo, useCallback } from "react"
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock } from "lucide-react"
 import { Virtuoso } from "react-virtuoso"
@@ -219,10 +219,14 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   useEffect(() => {
     if (!socket) return
     const handleAvatarUpdate = (data: { userId: number; avatar: string }) => {
-      setMessages(prev => prev.map(msg =>
-        msg.sender.id?.toString() === data.userId?.toString()
-          ? { ...msg, sender: { ...msg.sender, avatar: data.avatar } } : msg
-      ))
+      setMessages(prev => {
+        const hasChanges = prev.some(msg => msg.sender.id?.toString() === data.userId?.toString())
+        if (!hasChanges) return prev
+        return prev.map(msg =>
+          msg.sender.id?.toString() === data.userId?.toString()
+            ? { ...msg, sender: { ...msg.sender, avatar: data.avatar } } : msg
+        )
+      })
       if (otherUser?.id?.toString() === data.userId?.toString()) setOtherUserAvatar(data.avatar)
     }
     socket.on("user-avatar-updated", handleAvatarUpdate)
@@ -877,24 +881,34 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   useEffect(() => {
     if (!socket) return
     const handleReactionAdded = (data: any) => {
-      setMessages(prev => prev.map(m => {
-        if (m.id?.toString() === data.messageId?.toString()) {
-          const reactions = (m as any).reactions || []
-          return { ...m, reactions: [...reactions, data] }
-        }
-        return m
-      }))
+      setMessages(prev => {
+        let changed = false
+        const updated = prev.map(m => {
+          if (m.id?.toString() === data.messageId?.toString()) {
+            changed = true
+            const reactions = (m as any).reactions || []
+            return { ...m, reactions: [...reactions, data] }
+          }
+          return m
+        })
+        return changed ? updated : prev
+      })
     }
     const handleReactionRemoved = (data: any) => {
-      setMessages(prev => prev.map(m => {
-        if (m.id?.toString() === data.messageId?.toString()) {
-          const reactions = ((m as any).reactions || []).filter(
-            (r: any) => !(r.userId === data.userId && r.emoji === data.emoji)
-          )
-          return { ...m, reactions }
-        }
-        return m
-      }))
+      setMessages(prev => {
+        let changed = false
+        const updated = prev.map(m => {
+          if (m.id?.toString() === data.messageId?.toString()) {
+            changed = true
+            const reactions = ((m as any).reactions || []).filter(
+              (r: any) => !(r.userId === data.userId && r.emoji === data.emoji)
+            )
+            return { ...m, reactions }
+          }
+          return m
+        })
+        return changed ? updated : prev
+      })
     }
     socket.on("reaction-added", handleReactionAdded)
     socket.on("reaction-removed", handleReactionRemoved)
@@ -1216,70 +1230,31 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               const isNew = msgIdStr.startsWith("temp-")
               const sk = stableKeys.current.get(msgIdStr) || msgIdStr
 
-
               return (
-                <div key={sk} ref={el => { messageRefs.current[msg.id.toString()] = el }} className="rounded-lg">
-                  {msg.fileUrl ? (
-                    <div className={`flex mb-1 ${isSender ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[80%] ${isSender ? "items-end" : "items-start"} flex flex-col`}>
-                        <FileMessage
-                          fileUrl={msg.fileUrl}
-                          fileName={msg.fileName || "file"}
-                          fileSize={msg.fileSize || 0}
-                          fileType={msg.fileType || "application/octet-stream"}
-                          isSender={isSender}
-                          caption={msg.content || undefined}
-                          timeStr={new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          isRead={!!msg.isRead}
-                          senderName={msg.sender.username}
-                          sentAt={new Date(msg.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                          onDelete={() => handleDeleteMessage(msg.id.toString())}
-                          onForward={() => handleForwardOpen({ id: msg.id.toString(), content: msg.content })}
-                          onReply={() => handleReply({ id: msg.id.toString(), content: msg.content, senderName: msg.sender.username })}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <ChatMessage
-                      id={msg.id} content={msg.content} createdAt={msg.createdAt}
-                      isSender={isSender} isFirstInGroup={isFirstInGroup} isLastInGroup={isLastInGroup}
-                      hasAbove={!isFirstInGroup} replyTo={msg.replyTo} isForwarded={!!msg.forwardFromId}
-                      isRead={msg.isRead} voiceUrl={msg.voiceUrl} voiceDuration={msg.voiceDuration}
-                      senderName={isGroupChat ? msg.sender.username : undefined} senderId={msg.sender.id} isTemp={isNew}
-                      failed={(msg as any).failed}
-                      isGroupChat={isGroupChat}
-                      onDelete={handleDeleteMessage} onEdit={handleStartEdit}
-                      onReply={handleReply} onForward={handleForwardOpen} onScrollToMessage={scrollToMessage}
-                      openMenuId={openMenuId} onMenuOpen={handleMenuOpen} onMenuClose={handleMenuClose} menuPos={menuPos}
-                      reactions={(msg as any).reactions}
-                      currentUserId={session?.user?.id}
-                      selfDestructAt={(msg as any).selfDestructAt}
-                      onPin={handlePinMessage}
-                      onMentionClick={handleMentionClick}
-                      onReaction={async (messageId, emoji) => {
-                        try {
-                          const res = await fetch("/api/messages/reactions", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ messageId, emoji }),
-                          })
-                          if (res.ok) {
-                            const data = await res.json()
-                            if (data.action === "added") {
-                              socket?.emit("reaction-added", { ...data, conversationId: String(apiId) })
-                            } else {
-                              socket?.emit("reaction-removed", { ...data, conversationId: String(apiId) })
-                            }
-                            // Re-fetch messages to update reactions
-                            const msgRes = await fetch(`/api/messages?conversationId=${apiId}&limit=100`)
-                            const msgData = await msgRes.json()
-                            setMessages(Array.isArray(msgData.messages) ? msgData.messages : [])
-                          }
-                        } catch { }
-                      }}
-                    />
-                  )}
-                </div>
+                <MessageItem
+                  key={sk}
+                  msg={msg}
+                  isSender={isSender}
+                  isFirstInGroup={isFirstInGroup}
+                  isLastInGroup={isLastInGroup}
+                  isNew={isNew}
+                  isGroupChat={isGroupChat}
+                  session={session}
+                  openMenuId={openMenuId}
+                  menuPos={menuPos}
+                  messageRefs={messageRefs}
+                  handleDeleteMessage={handleDeleteMessage}
+                  handleStartEdit={handleStartEdit}
+                  handleReply={handleReply}
+                  handleForwardOpen={handleForwardOpen}
+                  scrollToMessage={scrollToMessage}
+                  handleMenuOpen={handleMenuOpen}
+                  handleMenuClose={handleMenuClose}
+                  handlePinMessage={handlePinMessage}
+                  handleMentionClick={handleMentionClick}
+                  socket={socket}
+                  apiId={apiId}
+                />
               )
             })}
             <div ref={messagesEndRef} />
@@ -1656,3 +1631,96 @@ function MentionProfilePanel({ username, onClose, isMobile }: { username: string
     />
   )
 }
+
+// Мемоизированный компонент для рендера одного сообщения
+const MessageItem = React.memo(function MessageItem({
+  msg, isSender, isFirstInGroup, isLastInGroup, isNew, isGroupChat, session,
+  openMenuId, menuPos, messageRefs, handleDeleteMessage, handleStartEdit,
+  handleReply, handleForwardOpen, scrollToMessage, handleMenuOpen, handleMenuClose,
+  handlePinMessage, handleMentionClick, socket, apiId
+}: {
+  msg: Message
+  isSender: boolean
+  isFirstInGroup: boolean
+  isLastInGroup: boolean
+  isNew: boolean
+  isGroupChat: boolean
+  session: any
+  openMenuId: string | null
+  menuPos: { x: number; y: number }
+  messageRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>
+  handleDeleteMessage: (id: string) => void
+  handleStartEdit: (id: string, content: string) => void
+  handleReply: (msg: { id: string; content: string; senderName: string }) => void
+  handleForwardOpen: (msg: { id: string; content: string }) => void
+  scrollToMessage: (id: string) => void
+  handleMenuOpen: (id: string, x: number, y: number) => void
+  handleMenuClose: () => void
+  handlePinMessage: (id: string) => void
+  handleMentionClick: (username: string) => void
+  socket: any
+  apiId: string
+}) {
+  const handleReactionClick = useCallback(async (messageId: string, emoji: string) => {
+    try {
+      const res = await fetch("/api/messages/reactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId, emoji }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.action === "added") {
+          socket?.emit("reaction-added", { ...data, conversationId: String(apiId) })
+        } else {
+          socket?.emit("reaction-removed", { ...data, conversationId: String(apiId) })
+        }
+      }
+    } catch { }
+  }, [socket, apiId])
+
+  return (
+    <div ref={el => { messageRefs.current[msg.id.toString()] = el }} className="rounded-lg">
+      {msg.fileUrl ? (
+        <div className={`flex mb-1 ${isSender ? "justify-end" : "justify-start"}`}>
+          <div className={`max-w-[80%] ${isSender ? "items-end" : "items-start"} flex flex-col`}>
+            <FileMessage
+              fileUrl={msg.fileUrl}
+              fileName={msg.fileName || "file"}
+              fileSize={msg.fileSize || 0}
+              fileType={msg.fileType || "application/octet-stream"}
+              isSender={isSender}
+              caption={msg.content || undefined}
+              timeStr={new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              isRead={!!msg.isRead}
+              senderName={msg.sender.username}
+              sentAt={new Date(msg.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+              onDelete={() => handleDeleteMessage(msg.id.toString())}
+              onForward={() => handleForwardOpen({ id: msg.id.toString(), content: msg.content })}
+              onReply={() => handleReply({ id: msg.id.toString(), content: msg.content, senderName: msg.sender.username })}
+            />
+          </div>
+        </div>
+      ) : (
+        <ChatMessage
+          id={msg.id} content={msg.content} createdAt={msg.createdAt}
+          isSender={isSender} isFirstInGroup={isFirstInGroup} isLastInGroup={isLastInGroup}
+          hasAbove={!isFirstInGroup} replyTo={msg.replyTo} isForwarded={!!msg.forwardFromId}
+          isRead={msg.isRead} voiceUrl={msg.voiceUrl} voiceDuration={msg.voiceDuration}
+          senderName={isGroupChat ? msg.sender.username : undefined} senderId={msg.sender.id} isTemp={isNew}
+          failed={(msg as any).failed}
+          isGroupChat={isGroupChat}
+          onDelete={handleDeleteMessage} onEdit={handleStartEdit}
+          onReply={handleReply} onForward={handleForwardOpen} onScrollToMessage={scrollToMessage}
+          openMenuId={openMenuId} onMenuOpen={handleMenuOpen} onMenuClose={handleMenuClose} menuPos={menuPos}
+          reactions={(msg as any).reactions}
+          currentUserId={session?.user?.id}
+          selfDestructAt={(msg as any).selfDestructAt}
+          onPin={handlePinMessage}
+          onMentionClick={handleMentionClick}
+          onReaction={handleReactionClick}
+        />
+      )}
+    </div>
+  )
+})
