@@ -187,7 +187,7 @@ jobs:
 
           public class MainActivity extends Activity {
               private WebView webView;
-              private static final String APP_URL = "https://vmessanger-production.up.railway.app";
+              private static final String APP_URL = "https://vmessanger.onrender.com";
               private static final int FILE_CHOOSER_REQUEST = 1001;
               private static final int PERMISSION_REQUEST_CODE = 1002;
 
@@ -235,7 +235,7 @@ jobs:
                   webView.setWebViewClient(new WebViewClient() {
                       @Override
                       public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                          if (url.startsWith("https://vmessanger-production.up.railway.app")) {
+                          if (url.startsWith("https://vmessanger.onrender.com")) {
                               view.loadUrl(url);
                               return true;
                           }
