@@ -1,71 +1,73 @@
-# 🌌 VortexMessenger (vMessenger)
+# VortexMessenger
 
-> **Next-Generation Real-time Messaging Experience.**
-> Скорость вортекса, мощь современных технологий.
-
----
-
-## ✨ Основные возможности
-
-* **Real-time Core:** Мгновенная доставка сообщений через **Socket.io**.
-* **Fluid UI:** Плавные, "живые" анимации интерфейса на **Framer Motion**.
-* **Secure Auth:** Надежная авторизация через **NextAuth.js**.
-* **Cloud Backend:** База данных и хранилище медиафайлов на **Supabase (PostgreSQL)**.
-* **Cross-Platform:** Работа на Web и Android через **Capacitor.js**.
-* **OLED Ready:** Глубокая темная тема (`#0e1621`) для экономии заряда и комфорта глаз.
+A messenger built from scratch — no bloat, just what matters. Fast, dark, real-time.
 
 ---
 
-## 🛠 Технологический стек
+## Features
 
-### Frontend & Core
-* **Next.js 15+** (App Router)
-* **TypeScript** (85.2% кодовой базы)
-* **Tailwind CSS** (Styling)
-* **React 19**
-
-### Backend & Infrastructure
-* **Socket.io** (WebSockets)
-* **Supabase** (Database, Auth, Storage)
-* **NextAuth** (Session Management)
-
-### Mobile & Native
-* **Capacitor** (Native Bridge)
-* **C++ / CMake** (Performance modules & Native optimizations)
+- Instant message delivery via WebSockets
+- Smooth animations that make the UI feel alive
+- Secure authentication with NextAuth.js
+- Media files and database on Supabase
+- Works in browser and on Android
+- Deep dark theme (#0e1621) — easy on the eyes and saves battery on OLED screens
 
 ---
 
-## 📊 Статистика проекта
+## Stack
 
-* **TypeScript:** 85.2% (Type-safe development)
-* **C++:** 8.4% (Native performance)
-* **JavaScript:** 3.8% (Config & Scripts)
-* **CSS / CMake:** 2.6% (Styling & Build systems)
+**Frontend**
+- Next.js 15+ (App Router)
+- React 19
+- TypeScript
+- Tailwind CSS
+- Framer Motion
 
----
+**Backend**
+- Socket.io
+- Supabase (PostgreSQL + Storage)
+- NextAuth
+- Prisma
 
-## 🚀 Разработка и сборка
-
-### Локальный запуск
-1. Установите зависимости:
-   ```bash
-   npm install
-   ```
-2. Настройте .env (Supabase URL & Anon Key).
-3. Запустите dev-сервер:
-   ```bash
-   npm run dev
-   ```
-
-### Сборка Android (CI/CD)
-Проект настроен на автоматическую сборку через **GitHub Actions**. При каждом пуше в `main`:
-
-1. Выполняется `next build` и `next export`.
-2. Результат синхронизируется с **Capacitor**.
-3. Генерируется `app-debug.apk` во вкладке **Actions** -> **Artifacts**.
+**Mobile**
+- Android APK via GitHub Actions (TWA/WebView)
 
 ---
 
-## 🔒 Лицензия
-Private Project. All rights reserved.  
-Created by **kirayxa2**.
+## Codebase
+
+| Language | Share |
+|----------|-------|
+| TypeScript | 85.2% |
+| C++ | 8.4% |
+| JavaScript | 3.8% |
+| CSS / CMake | 2.6% |
+
+---
+
+## Running locally
+
+```bash
+npm install
+```
+
+Create a `.env` file and fill in the required variables (Supabase URL, NextAuth secret, etc.), then:
+
+```bash
+node server.js
+```
+
+---
+
+## Android APK
+
+The APK is built automatically via GitHub Actions on every push to `main`.  
+Download the latest build from **Actions → Artifacts**.
+
+---
+
+## License
+
+Private project. All rights reserved.  
+Author: **kirayxa2**
