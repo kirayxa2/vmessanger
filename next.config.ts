@@ -58,7 +58,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               `img-src 'self' data: blob: https://${supabaseHostname}`,
-              `connect-src 'self' wss: ws: https://${supabaseHostname} https://vmessanger-production.up.railway.app stun:stun.l.google.com:19302 stun:stun1.l.google.com:19302`,
+              `connect-src 'self' wss: ws: https://${supabaseHostname} https://vmessanger.onrender.com https://vmessanger-production.up.railway.app stun:stun.l.google.com:19302 stun:stun1.l.google.com:19302`,
               `media-src 'self' blob: https://${supabaseHostname}`,
               "frame-ancestors 'none'",
             ].join("; "),
