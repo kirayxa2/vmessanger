@@ -58,7 +58,10 @@ html, body {
   padding: 0;
   width: 100%;
   /* height контролируется через --app-height из layout.tsx visualViewport */
+  height: 100vh; /* Fallback */
+  height: var(--app-height, 100vh); /* Динамическая высота с учетом клавиатуры */
   overflow: hidden;
+  overscroll-behavior: none; /* Отключить pull-to-refresh браузера */
   font-family: "icons" !important;
   --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu,
   Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
@@ -85,6 +88,13 @@ html, body {
   text-align: left;
 
   background-color: var(--color-background);
+
+  /* Фикс для iOS Safari — предотвращает скролл body при открытии клавиатуры */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .wrapperinput {

@@ -21,6 +21,7 @@ import { useDeviceSession } from "@/hooks/useDeviceSession"
 import QRCodeSidebar from "./QRCodeSidebar"
 import StoriesRow from "./StoriesRow"
 import { useTheme } from "@/lib/theme"
+import { Virtuoso } from "react-virtuoso"
 
 const ACCENT = "#7e85e1"
 
@@ -1290,7 +1291,7 @@ export default function ChatSidebar({
           </div>
         )}
             {!isSearchActive ? (
-              <div className="flex flex-col">
+              <div className="flex flex-col h-full">
                 {/* Telegram-style: Archive entry at top of list */}
                 {activeTab === 'all' && (() => {
                   const archivedCount = filteredConversations.filter(c => c._folder === 'archive').length
@@ -1325,121 +1326,28 @@ export default function ChatSidebar({
                     </motion.div>
                   )
                 })()}
-                {filteredConversations.filter(c => {
-                  if (activeTab === 'archive') return c._folder === 'archive'
-                  return c._folder !== 'archive'
-                }).map((chat, index) => {
-                  const isSelected = selectedId === chat.id.toString()
-                  const unread = unreadCounts[chat.id] || 0
-                  const isSaved = chat.type === "saved"
-                  const isSystem = chat.type === "system"
-                  const otherUser = (!isSaved && !isSystem)
-                    ? chat.participants?.find((p: any) => p.userId?.toString() !== currentUser?.id?.toString())?.user
-                    : null
 
-                  const isGroup = chat.type === "group"
-
-                  let avatarContent = null
-                  let avatarBg = ACCENT
-                  let displayNameEl = null
-
-                  if (isSaved) {
-                    avatarContent = <Bookmark size={22} className="text-white" />
-                    avatarBg = "#4e8cde"
-                    displayNameEl = <span>{t("saved_messages")}</span>
-                  } else if (isSystem) {
-                    avatarContent = <img src="/logo (1).ico" alt="Vortex" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
-                    avatarBg = "#7e85e1"
-                    displayNameEl = <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
-                  } else if (isGroup) {
-                    // Group avatar and name
-                    avatarContent = <span className="font-bold text-xl">{chat.name?.[0]?.toUpperCase() || "G"}</span>
-                    avatarBg = "#7e85e1" // distinct color for groups
-                    displayNameEl = <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
-                  } else {
-                    // Private chat
-                    avatarContent = otherUser?.avatar ? <img src={otherUser.avatar} className="w-full h-full object-cover" />
-                      : <span className="font-bold text-xl">{otherUser?.username?.[0]?.toUpperCase() || "U"}</span>
-                    const isDevUser = otherUser?.id !== undefined && (
-                      otherUser.id === DEV_USER_ID ||
-                      otherUser.id === DEV_USER_ID.toString() ||
-                      Number(otherUser.id) === DEV_USER_ID
-                    )
-                    displayNameEl = <span className="flex items-center gap-1">
-                      <span>{otherUser?.username}</span>
-                      {isDevUser && <VerifiedBadge size={15} />}
-                      <TitleBadge userId={otherUser?.id} />
-                    </span>
-                  }
-
-                  const lastMsg = chat.messages?.[0]
-                  const previewText = isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
-                    : isSystem ? t("service_notifications")
-                      : isGroup
-                        ? lastMsg ? `${lastMsg.sender?.username || ""}: ${lastMsg.content || "📎"}` : t("no_messages")
-                        : (lastMsg?.content || t("no_messages"))
-
-
-
-                  // Лонгпресс на мобильному
-                  const lpTimer = { current: 0 as any }
-                  const handleTouchStart = (e: React.TouchEvent) => {
-                    if (isSaved || isSystem) return
-                    lpTimer.current = setTimeout(() => {
-                      if (navigator.vibrate) navigator.vibrate(40)
-                      openChatMenu(e, chat)
-                    }, 500)
-                  }
-                  const handleTouchEnd = () => clearTimeout(lpTimer.current)
-                  const handleTouchMove = () => clearTimeout(lpTimer.current)
-
-                  return (
-                    <motion.div
+                {/* Virtualized chat list */}
+                <Virtuoso
+                  style={{ flex: 1 }}
+                  data={filteredConversations.filter(c => {
+                    if (activeTab === 'archive') return c._folder === 'archive'
+                    return c._folder !== 'archive'
+                  })}
+                  itemContent={(index, chat) => (
+                    <ChatListItem
                       key={chat.id}
-                      onClick={() => onSelect?.(chat.id.toString())}
-                      onContextMenu={e => { if (!isSaved && !isSystem) { e.preventDefault(); openChatMenu(e, chat) } }}
-                      onTouchStart={handleTouchStart}
-                      onTouchEnd={handleTouchEnd}
-                      onTouchMove={handleTouchMove}
-                      initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.03, duration: 0.2 }}
-                      className={`p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] transition-all select-none ${isSelected ? "text-white shadow-lg scale-[1.02]" : "bg-transparent hover:bg-white/5"
-                        }`}
-                      style={isSelected ? { backgroundColor: ACCENT } : {}}>
-                      <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 overflow-hidden text-white shadow-md"
-                        style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : avatarBg }}>
-                        {avatarContent}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <div className="font-semibold text-[16px] truncate text-white flex items-center gap-1">
-                            {displayNameEl}
-                            {chat._isMuted && <BellOff size={12} className="opacity-50 shrink-0" />}
-                          </div>
-                          <span className="text-[12px] opacity-60 shrink-0 ml-1">
-                            {chat.messages?.[0] ? new Date(chat.messages[0].createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between mt-[1px]">
-                          <div className={`text-[14px] truncate pr-2 ${isSystem ? "text-gray-500" : "opacity-80 text-white"}`}>
-                            {chat.drafts?.[0] && !isSystem ? (
-                              <span className="flex items-center gap-1">
-                                <span className="text-red-400 font-medium">{t("draft")}:</span>
-                                <span className="opacity-70">{chat.drafts[0].text}</span>
-                              </span>
-                            ) : previewText}
-                          </div>
-                          {unread > 0 && !isSelected && (
-                            <div className="text-white text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center shadow-sm shrink-0"
-                              style={{ backgroundColor: isSystem ? "#5B9BD5" : ACCENT }}>
-                              {unread}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                })}
+                      chat={chat}
+                      index={index}
+                      isSelected={selectedId === chat.id.toString()}
+                      unread={unreadCounts[chat.id] || 0}
+                      currentUser={currentUser}
+                      onSelect={onSelect}
+                      openChatMenu={openChatMenu}
+                      t={t}
+                    />
+                  )}
+                />
               </div>
             ) : (
               <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col">
@@ -1467,3 +1375,121 @@ export default function ChatSidebar({
     </div>
   )
 }
+
+// Мемоизированный компонент для одного чата в списке
+const ChatListItem = React.memo(function ChatListItem({
+  chat, index, isSelected, unread, currentUser, onSelect, openChatMenu, t
+}: {
+  chat: any
+  index: number
+  isSelected: boolean
+  unread: number
+  currentUser: any
+  onSelect?: (id: string) => void
+  openChatMenu: (e: any, chat: any) => void
+  t: any
+}) {
+  const isSaved = chat.type === "saved"
+  const isSystem = chat.type === "system"
+  const isGroup = chat.type === "group"
+  const otherUser = (!isSaved && !isSystem)
+    ? chat.participants?.find((p: any) => p.userId?.toString() !== currentUser?.id?.toString())?.user
+    : null
+
+  let avatarContent = null
+  let avatarBg = ACCENT
+  let displayNameEl = null
+
+  if (isSaved) {
+    avatarContent = <Bookmark size={22} className="text-white" />
+    avatarBg = "#4e8cde"
+    displayNameEl = <span>{t("saved_messages")}</span>
+  } else if (isSystem) {
+    avatarContent = <img src="/logo (1).ico" alt="Vortex" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
+    avatarBg = "#7e85e1"
+    displayNameEl = <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
+  } else if (isGroup) {
+    avatarContent = <span className="font-bold text-xl">{chat.name?.[0]?.toUpperCase() || "G"}</span>
+    avatarBg = "#7e85e1"
+    displayNameEl = <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
+  } else {
+    avatarContent = otherUser?.avatar ? <img src={otherUser.avatar} className="w-full h-full object-cover" />
+      : <span className="font-bold text-xl">{otherUser?.username?.[0]?.toUpperCase() || "U"}</span>
+    const isDevUser = otherUser?.id !== undefined && (
+      otherUser.id === DEV_USER_ID ||
+      otherUser.id === DEV_USER_ID.toString() ||
+      Number(otherUser.id) === DEV_USER_ID
+    )
+    displayNameEl = <span className="flex items-center gap-1">
+      <span>{otherUser?.username}</span>
+      {isDevUser && <VerifiedBadge size={15} />}
+      <TitleBadge userId={otherUser?.id} />
+    </span>
+  }
+
+  const lastMsg = chat.messages?.[0]
+  const previewText = isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
+    : isSystem ? t("service_notifications")
+      : isGroup
+        ? lastMsg ? `${lastMsg.sender?.username || ""}: ${lastMsg.content || "📎"}` : t("no_messages")
+        : (lastMsg?.content || t("no_messages"))
+
+  const lpTimer = useRef<any>(null)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isSaved || isSystem) return
+    lpTimer.current = setTimeout(() => {
+      if (navigator.vibrate) navigator.vibrate(40)
+      openChatMenu(e, chat)
+    }, 500)
+  }, [isSaved, isSystem, openChatMenu, chat])
+
+  const handleTouchEnd = useCallback(() => clearTimeout(lpTimer.current), [])
+  const handleTouchMove = useCallback(() => clearTimeout(lpTimer.current), [])
+
+  return (
+    <motion.div
+      onClick={() => onSelect?.(chat.id.toString())}
+      onContextMenu={e => { if (!isSaved && !isSystem) { e.preventDefault(); openChatMenu(e, chat) } }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchMove}
+      initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.03, duration: 0.2 }}
+      className={`p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] transition-all select-none ${
+        isSelected ? "text-white shadow-lg scale-[1.02]" : "bg-transparent hover:bg-white/5"
+      }`}
+      style={isSelected ? { backgroundColor: ACCENT } : {}}>
+      <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 overflow-hidden text-white shadow-md"
+        style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : avatarBg }}>
+        {avatarContent}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-1">
+          <div className="font-semibold text-[16px] truncate text-white flex items-center gap-1">
+            {displayNameEl}
+            {chat._isMuted && <BellOff size={12} className="opacity-50 shrink-0" />}
+          </div>
+          <span className="text-[12px] opacity-60 shrink-0 ml-1">
+            {chat.messages?.[0] ? new Date(chat.messages[0].createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+          </span>
+        </div>
+        <div className="flex items-center justify-between mt-[1px]">
+          <div className={`text-[14px] truncate pr-2 ${isSystem ? "text-gray-500" : "opacity-80 text-white"}`}>
+            {chat.drafts?.[0] && !isSystem ? (
+              <span className="flex items-center gap-1">
+                <span className="text-red-400 font-medium">{t("draft")}:</span>
+                <span className="opacity-70">{chat.drafts[0].text}</span>
+              </span>
+            ) : previewText}
+          </div>
+          {unread > 0 && !isSelected && (
+            <div className="text-white text-[11px] font-bold px-1.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center shadow-sm shrink-0"
+              style={{ backgroundColor: isSystem ? "#5B9BD5" : ACCENT }}>
+              {unread}
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  )
+})
