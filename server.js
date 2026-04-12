@@ -29,6 +29,12 @@ const prisma = new PrismaClient()
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     try {
+      // Ping endpoint для UptimeRobot — не даёт Render засыпать
+      if (req.url === "/ping") {
+        res.statusCode = 200
+        res.end("OK")
+        return
+      }
       const parsedUrl = parse(req.url, true)
       await handle(req, res, parsedUrl)
     } catch (err) {
