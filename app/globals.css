@@ -163,20 +163,24 @@ input, textarea, [contenteditable="true"], .message-text {
 }
 
 .hide-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
-.hide-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
 }
 
-.hide-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+/* Virtuoso inner scroller */
+.hide-scrollbar [data-virtuoso-scroller] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-
-.hide-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+.hide-scrollbar [data-virtuoso-scroller]::-webkit-scrollbar {
+  display: none;
+  width: 0;
 }
 
 .bubble-shadow {

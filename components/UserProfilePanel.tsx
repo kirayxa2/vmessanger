@@ -49,7 +49,7 @@ export default function UserProfilePanel({
   const handleChat = useCallback(() => {
     if (conversationId) {
       onClose()
-      router.push(`/chat/${conversationId}`)
+      router.push(`/${conversationId}`)
     }
   }, [conversationId, router, onClose])
 
@@ -171,7 +171,7 @@ export default function UserProfilePanel({
           </div>
         </div>
 
-        {/* ── Bio + username info rows ── */}
+        {/* ── Bio + username — закруглённая карточка как в Telegram ── */}
         {loading ? (
           <div className="flex justify-center py-8">
             <div
@@ -180,23 +180,25 @@ export default function UserProfilePanel({
             />
           </div>
         ) : (
-          <div className="py-2 border-b border-white/5">
-            <div className="flex items-start gap-4 px-5 py-3">
-              <AtSign size={18} className="text-gray-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-white text-[15px]">@{username?.toLowerCase()}</p>
+          <div className="mx-4 my-4 rounded-2xl overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            {/* Username row */}
+            <div className="flex items-center gap-4 px-4 py-3.5 border-b border-white/5">
+              <AtSign size={18} style={{ color: ACCENT }} className="shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-[15px] font-medium">@{username?.toLowerCase()}</p>
                 <p className="text-gray-500 text-[12px] mt-0.5">Username</p>
               </div>
             </div>
-            {profile?.bio && (
-              <div className="flex items-start gap-4 px-5 py-3">
-                <Info size={18} className="text-gray-500 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-white text-[15px] leading-snug">{profile.bio}</p>
-                  <p className="text-gray-500 text-[12px] mt-0.5">Bio</p>
-                </div>
+            {/* Bio row — всегда показываем, даже если пустой */}
+            <div className="flex items-start gap-4 px-4 py-3.5">
+              <Info size={18} style={{ color: ACCENT }} className="shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-[15px] leading-snug">
+                  {profile?.bio || <span className="text-gray-600 italic">No bio</span>}
+                </p>
+                <p className="text-gray-500 text-[12px] mt-0.5">Bio</p>
               </div>
-            )}
+            </div>
           </div>
         )}
 

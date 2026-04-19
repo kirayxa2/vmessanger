@@ -1118,20 +1118,13 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
           onScrollTo={scrollToMessage}
         />
 
-        {/* ── Menu backdrop — outside scroll so bubbles stay tappable ── */}
+        {/* ── Menu backdrop: прозрачный, только закрывает меню по тапу вне ── */}
         {openMenuId && (
           <div
-            className="fixed inset-0 z-[98]"
-            style={{ pointerEvents: "none" }}
-          >
-            {/* Invisible full-screen tap catcher — sits behind the menu (z-100) but catches taps outside it */}
-            <div
-              className="absolute inset-0"
-              style={{ pointerEvents: "all" }}
-              onClick={handleMenuClose}
-              onContextMenu={e => { e.preventDefault(); handleMenuClose() }}
-            />
-          </div>
+            className="fixed inset-0 z-[199]"
+            onClick={handleMenuClose}
+            onContextMenu={e => { e.preventDefault(); handleMenuClose() }}
+          />
         )}
 
         {/* ── Messages ── */}

@@ -1329,7 +1329,8 @@ export default function ChatSidebar({
 
                 {/* Virtualized chat list */}
                 <Virtuoso
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, scrollbarWidth: "none" }}
+                  className="hide-scrollbar"
                   data={filteredConversations.filter(c => {
                     if (activeTab === 'archive') return c._folder === 'archive'
                     return c._folder !== 'archive'

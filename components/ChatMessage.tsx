@@ -361,7 +361,7 @@ const ChatMessage = React.memo(function ChatMessage({
 
         <AnimatePresence>
           {showMenu && (
-            <motion.div initial={{ opacity: 0, scale: 0.1 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.1 }} transition={{ type: "spring", stiffness: 500, damping: 26, mass: 0.65 }} className="fixed z-[100] w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden" style={{ ...menuStyle, transformOrigin }} onClick={e => e.stopPropagation()}>
+            <motion.div initial={{ opacity: 0, scale: 0.1 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.1 }} transition={{ type: "spring", stiffness: 500, damping: 26, mass: 0.65 }} className="fixed z-[200] w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden" style={{ ...menuStyle, transformOrigin }} onClick={e => e.stopPropagation()}>
               <MenuItem icon={<Reply size={17} />} label={t("reply")} onClick={() => { onReply?.({ id: messageId, content, senderName: senderName || "" }); onMenuClose(); }} />
               {isSender && <MenuItem icon={<Pencil size={17} />} label={t("edit")} onClick={() => { onEdit?.(messageId, content); onMenuClose(); }} />}
               <MenuItem icon={<Copy size={17} />} label={t("copy")} onClick={() => { navigator.clipboard.writeText(content); onMenuClose(); }} />
