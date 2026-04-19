@@ -68,6 +68,10 @@
   "dependencies": {
     "@tailwindcss/postcss": "^4",
     "tailwindcss": "^4",
+    "typescript": "^5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/node": "^20",
     "@capacitor/android": "^8.1.0",
     "@capacitor/cli": "^8.1.0",
     "@capacitor/core": "^8.1.0",
@@ -108,9 +112,6 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
     "concurrently": "^9.2.1",
     "dotenv-cli": "^11.0.0",
     "electron": "^40.6.1",
@@ -118,7 +119,6 @@
     "electron-is-dev": "^3.0.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "typescript": "^5",
     "wait-on": "^9.0.4"
   }
 }
