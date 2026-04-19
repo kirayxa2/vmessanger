@@ -1,8 +1,7 @@
-import type { NextConfig } from "next";
-
 const supabaseHostname = "taozobjhniqhjukwgmvn.supabase.co"
 
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   turbopack: {},
 
   images: {
@@ -18,7 +17,6 @@ const nextConfig: NextConfig = {
 
   async headers() {
     return [
-      // ── assetlinks.json — правильный Content-Type, без X-Frame-Options ──
       {
         source: "/.well-known/assetlinks.json",
         headers: [
@@ -27,7 +25,6 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "public, max-age=3600" },
         ],
       },
-      // ── manifest.json ──
       {
         source: "/manifest.json",
         headers: [
@@ -35,7 +32,6 @@ const nextConfig: NextConfig = {
           { key: "Access-Control-Allow-Origin", value: "*" },
         ],
       },
-      // ── Все остальные маршруты ──
       {
         source: "/((?!.well-known).*)",
         headers: [
