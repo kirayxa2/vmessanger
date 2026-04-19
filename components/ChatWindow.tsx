@@ -1542,6 +1542,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
         )}
       </AnimatePresence>
     </motion.div>
+  </LazyMotion>
   )
 }
 

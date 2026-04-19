@@ -2,8 +2,6 @@ const supabaseHostname = "taozobjhniqhjukwgmvn.supabase.co"
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: {},
-
   images: {
     remotePatterns: [
       {
