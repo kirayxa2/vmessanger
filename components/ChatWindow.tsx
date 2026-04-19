@@ -10,7 +10,7 @@ import useSound from "use-sound"
 import ChatMessage from "./ChatMessage"
 import FileMessage from "./FileMessage"
 import CallModal from "./CallModal"
-import { AnimatePresence, motion } from "framer-motion"
+import { AnimatePresence, motion, LazyMotion, domAnimation } from "framer-motion"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
 import UserProfilePanel from "./UserProfilePanel"
@@ -76,7 +76,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState("")
 
-  const DEV_USER_ID = 1;
+  const DEV_USER_ID = process.env.NODE_ENV === "development" ? 1 : -1
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -810,6 +810,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       participantIds,
       ...(currentReplyTo ? { replyToId: parseInt(currentReplyTo.id) } : {}),
     })
+    // Stop typing indicator as soon as message is sent
+    socket.emit("stop-typing", { conversationId: String(apiId), userId: session.user.id })
 
     // 2b. Если в тексте есть @упоминания — шлём событие
     const mentionMatches = currentInput.match(/@(\w+)/g)
@@ -1003,6 +1005,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   // 2. Добавляем проверку здесь (выше рендера)
 
   return (
+    <LazyMotion features={domAnimation}>
     <motion.div
       className="flex-1 flex flex-row h-full bg-[#1c242f] relative"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}
@@ -1115,6 +1118,22 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
           onScrollTo={scrollToMessage}
         />
 
+        {/* ── Menu backdrop — outside scroll so bubbles stay tappable ── */}
+        {openMenuId && (
+          <div
+            className="fixed inset-0 z-[98]"
+            style={{ pointerEvents: "none" }}
+          >
+            {/* Invisible full-screen tap catcher — sits behind the menu (z-100) but catches taps outside it */}
+            <div
+              className="absolute inset-0"
+              style={{ pointerEvents: "all" }}
+              onClick={handleMenuClose}
+              onContextMenu={e => { e.preventDefault(); handleMenuClose() }}
+            />
+          </div>
+        )}
+
         {/* ── Messages ── */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 hide-scrollbar relative" onScroll={handleScroll}
           style={{ WebkitOverflowScrolling: "touch" }}
@@ -1129,10 +1148,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
             <motion.span initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
               className="bg-black/20 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm">{t('today')}</motion.span>
           </div>
-
-          {openMenuId && (
-            <div className="fixed inset-0 z-[99]" onClick={handleMenuClose} onContextMenu={e => { e.preventDefault(); handleMenuClose() }} />
-          )}
 
           <div className="flex flex-col w-full max-w-[850px] mx-auto">
             {isSystemChat && messages.map((msg, idx) => (
@@ -1337,6 +1352,10 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
                         lastTypingEmitRef.current = now
                         socket.emit("typing", { conversationId: String(apiId), userId: session.user.id })
                       }
+                      // When field is cleared, immediately emit stop-typing
+                      if (!e.target.value) {
+                        socket?.emit("stop-typing", { conversationId: String(apiId), userId: session?.user?.id })
+                      }
                     }}
                     onKeyDown={handleKeyDown}
                     className="flex-1 bg-transparent border-none outline-none text-white text-[15px] px-2 py-2 placeholder-gray-500 min-w-0 disabled:opacity-50"
@@ -1414,6 +1433,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               isOnline={otherUserOnline}
               onClose={() => setShowProfile(false)}
               isMobile={typeof window !== "undefined" && window.innerWidth < 768}
+              conversationId={apiId}
             />
           )
         )}

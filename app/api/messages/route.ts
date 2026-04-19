@@ -11,6 +11,22 @@ const messageInclude = {
       sender: { select: { id: true, username: true, avatar: true } }
     }
   },
+  // Full reactions with user info — used for POST (single message confirm)
+  reactions: {
+    include: {
+      user: { select: { id: true, username: true } }
+    }
+  }
+}
+
+// Lightweight include for GET list — reactions as count only saves significant data on large chats
+const messageListInclude = {
+  sender: { select: { id: true, username: true, avatar: true } },
+  replyTo: {
+    include: {
+      sender: { select: { id: true, username: true, avatar: true } }
+    }
+  },
   reactions: {
     include: {
       user: { select: { id: true, username: true } }
@@ -45,8 +61,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Verify user is participant in this conversation ──
-    const participant = await prisma.conversationParticipant.findFirst({
-      where: { conversationId: Number(conversationId), userId: Number(session.user.id) }
+    const participant = await prisma.conversationParticipant.findUnique({
+      where: { userId_conversationId: { userId: Number(session.user.id), conversationId: Number(conversationId) } }
     })
     if (!participant) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -94,8 +110,8 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Verify user is participant ──
-    const participant = await prisma.conversationParticipant.findFirst({
-      where: { conversationId: Number(conversationId), userId: Number(session.user.id) }
+    const participant = await prisma.conversationParticipant.findUnique({
+      where: { userId_conversationId: { userId: Number(session.user.id), conversationId: Number(conversationId) } }
     })
     if (!participant) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -114,7 +130,7 @@ export async function GET(req: NextRequest) {
         ...(participant.clearedAt ? { createdAt: { gt: participant.clearedAt } } : {}),
         ...(cursor ? { id: { lt: Number(cursor) } } : {}),
       },
-      include: messageInclude,
+      include: messageListInclude,
       orderBy: { createdAt: "desc" },
       take: limit,
     })

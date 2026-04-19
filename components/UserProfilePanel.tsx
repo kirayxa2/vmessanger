@@ -1,9 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { motion } from "framer-motion"
-import { ArrowLeft, AtSign, Info, Bell } from "lucide-react"
+import { useEffect, useState, useCallback } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { ArrowLeft, AtSign, Info, MessageCircle, BellOff, Phone, Video, QrCode, X, Bell } from "lucide-react"
+import { QRCodeSVG } from "qrcode.react"
 import { useTranslation } from "react-i18next"
+import { useRouter } from "next/navigation"
 
 const ACCENT = "#7e85e1"
 
@@ -14,13 +16,25 @@ interface UserProfilePanelProps {
   isOnline?: boolean
   onClose: () => void
   isMobile?: boolean
+  /** If provided, clicking "Chat" navigates to this conversation */
+  conversationId?: string | number
 }
 
-export default function UserProfilePanel({ userId, username, avatar, isOnline, onClose, isMobile }: UserProfilePanelProps) {
+export default function UserProfilePanel({
+  userId,
+  username,
+  avatar,
+  isOnline,
+  onClose,
+  isMobile,
+  conversationId,
+}: UserProfilePanelProps) {
   const [profile, setProfile] = useState<{ bio?: string; createdAt?: string } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [showQR, setShowQR] = useState(false)
   const { t } = useTranslation()
-  const [notifs, setNotifs] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     if (!userId) return
@@ -32,8 +46,29 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
       .finally(() => setLoading(false))
   }, [userId])
 
-  // Одинаковая анимация справа на обоих платформах
-  // Мобильный — на весь экран, десктоп — 1/3 ширины
+  const handleChat = useCallback(() => {
+    if (conversationId) {
+      onClose()
+      router.push(`/chat/${conversationId}`)
+    }
+  }, [conversationId, router, onClose])
+
+  const handleCall = useCallback(() => {
+    // Trigger audio call — same as ChatWindow's startCall("audio")
+    // Emit globally so ChatWindow can pick it up if open
+    window.dispatchEvent(new CustomEvent("vortex:start-call", { detail: { userId, type: "audio" } }))
+    onClose()
+  }, [userId, onClose])
+
+  const handleVideoCall = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("vortex:start-call", { detail: { userId, type: "video" } }))
+    onClose()
+  }, [userId, onClose])
+
+  const profileUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/${userId}`
+    : `https://vortex.app/${userId}`
+
   return (
     <motion.div
       className="absolute top-0 right-0 bottom-0 z-50 flex flex-col bg-[#161e27] border-l border-white/5 shadow-2xl overflow-hidden"
@@ -45,16 +80,20 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
     >
       {/* Header */}
       <div className="flex items-center gap-2 px-4 h-[63px] border-b border-white/5 shrink-0">
-        <motion.button onClick={onClose} whileTap={{ scale: 0.88 }}
-          className="p-2 rounded-full hover:bg-white/10 text-white transition-colors">
+        <motion.button
+          onClick={onClose}
+          whileTap={{ scale: 0.88 }}
+          className="p-2 rounded-full hover:bg-white/10 text-white transition-colors"
+        >
           <ArrowLeft size={22} />
         </motion.button>
-        <span className="text-white font-semibold text-[17px]">User Info</span>
+        <span className="text-white font-semibold text-[17px] flex-1">User Info</span>
       </div>
 
       <div className="flex-1 overflow-y-auto hide-scrollbar">
-        {/* Avatar + name */}
-        <div className="flex flex-col items-center gap-3 pt-8 pb-6 px-4 border-b border-white/5">
+        {/* ── Avatar + name block ── */}
+        <div className="flex flex-col items-center gap-3 pt-8 pb-6 px-4 border-b border-white/5 relative">
+          {/* Avatar */}
           <div className="relative">
             <div
               className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold text-white overflow-hidden shadow-xl"
@@ -69,19 +108,76 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
               <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-[#161e27]" />
             )}
           </div>
-          <div className="text-center">
-            <h3 className="text-white font-bold text-[20px] leading-tight">{username}</h3>
-            <p className="text-[14px] mt-1" style={{ color: isOnline ? "#4ade80" : "#6b7280" }}>
-              {isOnline ? t('online') : t('offline')}
-            </p>
+
+          {/* Name + username row with QR button */}
+          <div className="flex items-center gap-2">
+            <div className="text-center">
+              <h3 className="text-white font-bold text-[20px] leading-tight">{username}</h3>
+              <p className="text-[14px] mt-0.5" style={{ color: isOnline ? "#4ade80" : "#6b7280" }}>
+                {isOnline ? t("online") : t("offline")}
+              </p>
+            </div>
+            {/* QR mini-button */}
+            <motion.button
+              onClick={() => setShowQR(true)}
+              whileTap={{ scale: 0.85 }}
+              className="ml-1 p-2 rounded-xl bg-white/8 hover:bg-white/14 text-gray-400 hover:text-white transition-colors"
+              title="Show QR code"
+            >
+              <QrCode size={18} />
+            </motion.button>
+          </div>
+
+          {/* ── 4 action buttons (Telegram-style) ── */}
+          <div className="flex gap-3 mt-3 w-full justify-center">
+            {[
+              {
+                icon: <MessageCircle size={22} />,
+                label: "Chat",
+                onClick: handleChat,
+                disabled: !conversationId,
+              },
+              {
+                icon: muted ? <BellOff size={22} /> : <Bell size={22} />,
+                label: muted ? "Unmute" : "Mute",
+                onClick: () => setMuted(p => !p),
+                active: muted,
+              },
+              {
+                icon: <Phone size={22} />,
+                label: "Call",
+                onClick: handleCall,
+              },
+              {
+                icon: <Video size={22} />,
+                label: "Video",
+                onClick: handleVideoCall,
+              },
+            ].map(btn => (
+              <motion.button
+                key={btn.label}
+                onClick={btn.onClick}
+                whileTap={{ scale: 0.9 }}
+                disabled={btn.disabled}
+                className="flex flex-col items-center gap-1.5 flex-1 py-3 rounded-2xl transition-all disabled:opacity-30"
+                style={{ backgroundColor: btn.active ? `${ACCENT}33` : "rgba(255,255,255,0.06)" }}
+              >
+                <span style={{ color: btn.active ? ACCENT : "rgba(255,255,255,0.8)" }}>{btn.icon}</span>
+                <span className="text-[11px] font-medium" style={{ color: btn.active ? ACCENT : "#9ca3af" }}>
+                  {btn.label}
+                </span>
+              </motion.button>
+            ))}
           </div>
         </div>
 
-        {/* Info rows */}
+        {/* ── Bio + username info rows ── */}
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="w-5 h-5 border-2 rounded-full animate-spin"
-              style={{ borderColor: `${ACCENT} transparent transparent transparent` }} />
+            <div
+              className="w-5 h-5 border-2 rounded-full animate-spin"
+              style={{ borderColor: `${ACCENT} transparent transparent transparent` }}
+            />
           </div>
         ) : (
           <div className="py-2 border-b border-white/5">
@@ -104,34 +200,14 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
           </div>
         )}
 
-        {/* Notifications toggle */}
-        <div className="py-2 border-b border-white/5">
-          <div
-            onClick={() => setNotifs(p => !p)}
-            className="flex items-center gap-4 px-5 py-4 cursor-pointer active:bg-white/5 transition-colors"
-          >
-            <Bell size={18} className="text-gray-500 shrink-0" />
-            <span className="flex-1 text-white text-[15px]">Notifications</span>
-            <motion.div
-              className="w-10 h-5 rounded-full relative shrink-0"
-              animate={{ backgroundColor: notifs ? ACCENT : "#374151" }}
-              transition={{ duration: 0.2 }}
-            >
-              <motion.div
-                className="absolute top-[3px] w-[14px] h-[14px] bg-white rounded-full shadow"
-                animate={{ left: notifs ? "calc(100% - 17px)" : "3px" }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              />
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Media tabs */}
+        {/* ── Media tabs ── */}
         <div className="flex border-b border-white/5">
           {["Posts", "Media", "Files", "Links"].map((tab, i) => (
-            <button key={tab}
+            <button
+              key={tab}
               className={`flex-1 py-3 text-[13px] font-medium transition-colors ${i === 0 ? "border-b-2" : ""}`}
-              style={i === 0 ? { color: ACCENT, borderColor: ACCENT } : { color: "#6b7280" }}>
+              style={i === 0 ? { color: ACCENT, borderColor: ACCENT } : { color: "#6b7280" }}
+            >
               {tab}
             </button>
           ))}
@@ -148,6 +224,71 @@ export default function UserProfilePanel({ userId, username, avatar, isOnline, o
           <p className="text-gray-600 text-[13px]">No media yet</p>
         </div>
       </div>
+
+      {/* ── QR modal overlay ── */}
+      <AnimatePresence>
+        {showQR && (
+          <motion.div
+            className="absolute inset-0 z-[60] flex flex-col bg-[#161e27]"
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 380, damping: 32 }}
+          >
+            {/* QR header */}
+            <div className="flex items-center gap-2 px-4 h-[63px] border-b border-white/5 shrink-0">
+              <motion.button
+                onClick={() => setShowQR(false)}
+                whileTap={{ scale: 0.88 }}
+                className="p-2 rounded-full hover:bg-white/10 text-white transition-colors"
+              >
+                <X size={22} />
+              </motion.button>
+              <span className="text-white font-semibold text-[17px]">QR Code</span>
+            </div>
+
+            {/* QR content */}
+            <div className="flex-1 flex flex-col items-center justify-center p-8 gap-6">
+              {/* Card */}
+              <div
+                className="w-full max-w-[260px] rounded-[28px] p-6 flex flex-col items-center gap-4 shadow-2xl"
+                style={{ background: `linear-gradient(135deg, ${ACCENT} 0%, #5b61b9 100%)` }}
+              >
+                {/* Avatar inside card */}
+                <div className="w-16 h-16 rounded-full border-4 border-white overflow-hidden shadow-lg bg-white flex items-center justify-center">
+                  {avatar
+                    ? <img src={avatar} className="w-full h-full object-cover" alt="avatar" />
+                    : <span className="text-2xl font-bold" style={{ color: ACCENT }}>{username?.[0]?.toUpperCase()}</span>
+                  }
+                </div>
+
+                {/* QR code white box */}
+                <div className="bg-white rounded-[20px] p-4 w-full flex flex-col items-center">
+                  <QRCodeSVG
+                    value={profileUrl}
+                    size={160}
+                    level="H"
+                    includeMargin={false}
+                    imageSettings={avatar ? {
+                      src: avatar,
+                      height: 32,
+                      width: 32,
+                      excavate: true,
+                    } : undefined}
+                  />
+                  <p className="mt-4 text-[15px] font-bold tracking-tight text-gray-800">
+                    @{username?.toUpperCase()}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-gray-500 text-[13px] text-center leading-relaxed px-4">
+                Scan this code to open {username}&apos;s profile in Vortex
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

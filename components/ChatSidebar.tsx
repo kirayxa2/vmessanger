@@ -25,7 +25,7 @@ import { Virtuoso } from "react-virtuoso"
 
 const ACCENT = "#7e85e1"
 
-const DEV_USER_ID = 1;
+const DEV_USER_ID = process.env.NODE_ENV === "development" ? 1 : -1
 
 // ── Toggle Switch компонент ────────────────────────────────────
 function ToggleSwitch({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {

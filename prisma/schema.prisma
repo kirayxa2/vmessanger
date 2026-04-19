@@ -30,6 +30,8 @@ model User {
   sessions          UserSession[]
   stories           Story[]
   storyViews        StoryView[]
+
+  @@index([lastSeen])
 }
 
 model Conversation {

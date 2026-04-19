@@ -4,6 +4,8 @@ const next = require("next")
 const { Server } = require("socket.io")
 const os = require("os")
 const jwt = require("jsonwebtoken")
+let compression
+try { compression = require("compression") } catch { compression = null }
 
 const dev = process.env.NODE_ENV !== "production"
 const hostname = "0.0.0.0"
@@ -22,13 +24,37 @@ function getNetworkIp() {
 const app = next({ dev, hostname: "localhost", port })
 const handle = app.getRequestHandler()
 
-// ── Prisma client for server-side queries ──
+// ── Prisma client for server-side queries — singleton from lib/prisma ──
+// Note: lib/prisma.ts exports a singleton; here we instantiate directly
+// because server.js is CommonJS and cannot import ESM/TS modules at runtime.
+// To avoid two connections, keep only this instance and do NOT import lib/prisma.ts elsewhere in server.js.
 const { PrismaClient } = require("@prisma/client")
-const prisma = new PrismaClient()
+// Reuse existing global instance if present (prevents extra connections on hot-reload)
+const prisma = global.__prisma || (global.__prisma = new PrismaClient())
 
 app.prepare().then(() => {
+  // ── Background job: delete expired self-destructing messages every 60s ──
+  setInterval(async () => {
+    try {
+      const deleted = await prisma.message.deleteMany({
+        where: {
+          selfDestructAt: { not: null, lte: new Date() },
+        },
+      })
+      if (deleted.count > 0) {
+        console.log(`[self-destruct] Deleted ${deleted.count} expired messages`)
+      }
+    } catch (err) {
+      console.error("[self-destruct] Cleanup error:", err)
+    }
+  }, 60_000)
+
   const server = createServer(async (req, res) => {
     try {
+      // Gzip/Brotli compression — reduces response size by 60-80%
+      if (compression) {
+        await new Promise(resolve => compression()(req, res, resolve))
+      }
       // Ping endpoint для UptimeRobot — не даёт Render засыпать
       if (req.url === "/ping") {
         res.statusCode = 200
@@ -47,8 +73,15 @@ app.prepare().then(() => {
   const io = new Server(server, {
     path: "/api/socket/io",
     addTrailingSlash: false,
-    cors: { origin: "*", methods: ["GET", "POST"] },
-    transports: ["websocket", "polling"],
+    cors: {
+      origin: process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_SITE_URL || "*",
+      methods: ["GET", "POST"],
+    },
+    // Prefer WebSocket; allow polling only in dev for easier debugging
+    transports: dev ? ["websocket", "polling"] : ["websocket"],
+    // Increase ping timeout to reduce false disconnects on mobile networks
+    pingTimeout: 30_000,
+    pingInterval: 25_000,
   })
 
   // ── JWT Authentication middleware ──────────────────────────────
@@ -360,6 +393,10 @@ app.prepare().then(() => {
 
     socket.on("typing", (data) => {
       socket.to(String(data.conversationId)).emit("user-typing", data)
+    })
+
+    socket.on("stop-typing", (data) => {
+      socket.to(String(data.conversationId)).emit("user-stop-typing", data)
     })
 
     // ── @mentions: notify mentioned users ──

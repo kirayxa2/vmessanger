@@ -4,7 +4,7 @@ import React, { useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { ArrowLeft, Share2, Download, Check } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
-import html2canvas from "html2canvas"
+// html2canvas is imported dynamically to avoid bloating the initial bundle (~200KB)
 
 interface QRCodeSidebarProps {
   user: {
@@ -40,6 +40,8 @@ export default function QRCodeSidebar({ user, onBack }: QRCodeSidebarProps) {
     if (!qrRef.current) return
     setIsSharing(true)
     try {
+      // Dynamic import — loads only when user taps Share (~200KB saved on initial load)
+      const html2canvas = (await import("html2canvas")).default
       const canvas = await html2canvas(qrRef.current, {
         backgroundColor: null,
         scale: 2,
