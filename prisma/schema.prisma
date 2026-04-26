@@ -30,6 +30,7 @@ model User {
   sessions          UserSession[]
   stories           Story[]
   storyViews        StoryView[]
+  publicKey         String?   // E2E: X25519/P-256 public key (base64, spki format)
 
   @@index([lastSeen])
 }
@@ -89,6 +90,7 @@ model Message {
   voiceUrl        String?
   voiceDuration   Int?
   selfDestructAt  DateTime?
+  isEncrypted     Boolean   @default(false)
 
   conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   receiver       User?         @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)

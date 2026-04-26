@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { generateKeyPair, getPublicKeyBase64 } from "@/lib/crypto"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -20,10 +21,14 @@ export default function RegisterPage() {
     setLoading(true)
 
     try {
+      // 1. Генерируем E2E ключи на клиенте (приватный остаётся в IndexedDB)
+      const { publicKey } = await generateKeyPair()
+
+      // 2. Регистрируемся на сервере — отправляем publicKey вместе с данными
       const response = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, publicKey }),
       })
 
       const data = await response.json()

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { email, username, password } = body
+    const { email, username, password, publicKey } = body
 
     // ── Input validation ──
     if (!email || !username || !password) {
@@ -59,6 +59,8 @@ export async function POST(req: NextRequest) {
         email: email.toLowerCase().trim(),
         username,
         password: hashedPassword,
+        // E2E: сохраняем публичный ключ — приватный НИКОГДА не приходит на сервер
+        ...(publicKey && typeof publicKey === "string" ? { publicKey } : {}),
       },
       select: { id: true, email: true, username: true }
     })

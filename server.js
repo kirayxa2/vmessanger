@@ -242,6 +242,7 @@ app.prepare().then(() => {
               content: hasText ? data.content : "",
               conversationId: Number(data.conversationId),
               senderId: Number(currentUserId),
+              isEncrypted: data.isEncrypted === true,
               ...(data.replyToId ? { replyToId: Number(data.replyToId) } : {}),
               ...(data.forwardFromId ? { forwardFromId: Number(data.forwardFromId) } : {}),
               ...(data.fileUrl ? { fileUrl: data.fileUrl, fileName: data.fileName || "file", fileSize: data.fileSize || 0, fileType: data.fileType || "application/octet-stream" } : {}),

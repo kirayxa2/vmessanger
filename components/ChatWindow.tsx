@@ -19,6 +19,7 @@ import { VerifiedBadge } from "./VerifiedBadge"
 import TitleBadge from "./TitleBadge"
 import ChatHeader from "./chat/ChatHeader"
 import PinnedMessageBanner from "./chat/PinnedMessageBanner"
+import { useE2E } from "@/hooks/useE2E"
 
 const ACCENT = "#7e85e1"
 
@@ -28,6 +29,7 @@ interface Message {
   createdAt: string
   conversationId?: string | number
   isRead?: boolean
+  isEncrypted?: boolean
   replyTo?: { id: number; content: string; sender: { id: number; username: string; avatar?: string } } | null
   forwardFromId?: number | null
   fileUrl?: string | null
@@ -69,6 +71,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const { data: session } = useSession()
   const { t } = useTranslation()
   const { socket } = useSocket()
+  const { e2eEnabled, encrypt, decryptMessages } = useE2E()
 
   const [messages, setMessages] = useState<Message[]>(initialMessages || [])
   const [input, setInput] = useState("")
@@ -294,9 +297,11 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     isInitialLoad.current = true
     fetch(`/api/messages?conversationId=${apiId}&limit=50`)
       .then(r => r.json())
-      .then(data => {
+      .then(async data => {
         const msgs = Array.isArray(data.messages) ? data.messages : (Array.isArray(data) ? data : [])
-        setMessages(msgs)
+        // E2E: расшифровываем сообщения на клиенте перед показом
+        const decrypted = await decryptMessages(msgs)
+        setMessages(decrypted)
         setHasMoreMessages(!!data.hasMore)
         nextCursorRef.current = data.nextCursor || null
         setLoading(false)
@@ -336,7 +341,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       const data = await res.json()
       const older = Array.isArray(data.messages) ? data.messages : []
       if (older.length > 0) {
-        setMessages(prev => [...older, ...prev])
+        // E2E: расшифровываем подгруженные сообщения
+        const decryptedOlder = await decryptMessages(older)
+        setMessages(prev => [...decryptedOlder, ...prev])
         setHasMoreMessages(!!data.hasMore)
         nextCursorRef.current = data.nextCursor || null
       } else {
@@ -773,10 +780,18 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       const tempEditId = "edit-" + Date.now()
       // Обновляем оптимистично — сразу показываем изменение в UI
       setMessages(prev => prev.map(m => m.id?.toString() === editingMessageId ? { ...m, content: input } : m))
+
+      // E2E: шифруем отредактированное сообщение
+      let editContent = input
+      if (e2eEnabled && otherUser?.id && !isGroupChat) {
+        const enc = await encrypt(input, otherUser.id)
+        if (enc) editContent = enc
+      }
+
       socket.emit("edit-message", {
         tempEditId,
         id: editingMessageId,
-        content: input,
+        content: editContent,
         conversationId: String(apiId),
       })
       setEditingMessageId(null); setInput("")
@@ -801,10 +816,22 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     const currentReplyTo = replyingTo
     setInput(""); setReplyingTo(null)
 
-    // 2. Отправляем через сокет — без HTTP запроса
+    // 2. E2E: шифруем перед отправкой — сервер хранит только зашифрованный blob
+    let contentToSend = currentInput
+    let isEncryptedFlag = false
+    if (e2eEnabled && otherUser?.id && !isGroupChat) {
+      const encryptedContent = await encrypt(currentInput, otherUser.id)
+      if (encryptedContent) {
+        contentToSend = encryptedContent
+        isEncryptedFlag = true
+      }
+    }
+
+    // 3. Отправляем через сокет — без HTTP запроса
     socket.emit("send-message", {
       tempId,
-      content: currentInput,
+      content: contentToSend,
+      isEncrypted: isEncryptedFlag,
       conversationId: String(apiId),
       senderId: session.user.id,
       participantIds,
