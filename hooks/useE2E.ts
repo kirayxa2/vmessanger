@@ -114,38 +114,24 @@ export function useE2E() {
   }, [e2eEnabled, getRecipientPublicKey])
 
   // ── Расшифровать список сообщений (для загрузки истории) ──
-  const decryptMessages = useCallback(async <T extends { content: string; isEncrypted?: boolean; sender: { id: string | number } }>(
-    messages: T[]
-  ): Promise<T[]> => {
-    if (!e2eEnabled) return messages
-
+  const decryptMessages = useCallback(
+  async (messages: any[]): Promise<any[]> => {
+    if (!e2eEnabled) return messages;
     const decrypted = await Promise.all(
       messages.map(async (msg) => {
-        // Если сообщение не помечено как зашифрованное — возвращаем как есть
-        if (!msg.isEncrypted) return msg
-
-        // Своё сообщение — мы сами отправители, расшифровываем своим ключом
-        // (ECDH симметричный — обе стороны получают одинаковый shared secret)
-        const senderId = String(msg.sender.id)
-        const myId = String(session?.user?.id)
-
-        // Если это наше сообщение — нам нужен ключ получателя для расшифровки
-        // Если чужое — нужен ключ отправителя
-        // В ECDH sharedKey(myPriv, theirPub) == sharedKey(theirPriv, myPub)
-        // Поэтому decrypt всегда вызываем с ключом другой стороны
-        const otherUserId = senderId === myId ? senderId : senderId
-
-        const plaintext = await decrypt(msg.content, otherUserId)
-        if (plaintext === null) {
-          // Не смогли расшифровать — показываем плейсхолдер
-          return { ...msg, content: "🔒 Зашифрованное сообщение" }
-        }
-        return { ...msg, content: plaintext }
+        if (!msg.isEncrypted) return msg;
+        const senderId = String(msg.sender?.id);
+        const plaintext = await decrypt(msg.content, senderId);
+        return {
+          ...msg,
+          content: plaintext ?? "🔒 Зашифрованное сообщение"
+        };
       })
-    )
-
-    return decrypted
-  }, [e2eEnabled, decrypt, session?.user?.id])
+    );
+    return decrypted;
+  },
+  [e2eEnabled, decrypt, session?.user?.id]
+);
 
   return {
     ready,
