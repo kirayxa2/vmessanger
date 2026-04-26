@@ -62,6 +62,7 @@ function SocketInitializer({ children }: { children: React.ReactNode }) {
     const socketInstance = io(process.env.NEXT_PUBLIC_SITE_URL || "", {
       path: "/api/socket/io",
       addTrailingSlash: false,
+      transports: ["websocket"],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10,
