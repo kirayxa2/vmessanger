@@ -71,7 +71,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const { data: session } = useSession()
   const { t } = useTranslation()
   const { socket } = useSocket()
-  const { e2eEnabled, encrypt, decryptMessages } = useE2E()
+  const { e2eEnabled, encrypt, decrypt, decryptMessages } = useE2E()
 
   const [messages, setMessages] = useState<Message[]>(initialMessages || [])
   const [input, setInput] = useState("")
@@ -408,13 +408,20 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
     const roomId = String(apiId)
     socket.emit("join-conversation", roomId)
 
-    const handleNewMessage = (message: Message) => {
+    const handleNewMessage = async (message: Message) => {
       const msgConvId = message.conversationId?.toString()
       if (msgConvId && msgConvId !== roomId) return
+      // E2E: расшифровываем входящее сообщение перед добавлением в список
+      let displayMessage = message
+      if (message.isEncrypted && message.content) {
+        const senderId = String(message.sender?.id)
+        const plaintext = await decrypt(message.content, senderId)
+        displayMessage = { ...message, content: plaintext ?? "🔒 Зашифрованное сообщение" }
+      }
       setMessages(prev => {
-        if (prev.some(m => m.id?.toString() === message.id?.toString())) return prev
-        newMsgIds.current.add(message.id.toString())
-        return [...prev, message]
+        if (prev.some(m => m.id?.toString() === displayMessage.id?.toString())) return prev
+        newMsgIds.current.add(displayMessage.id.toString())
+        return [...prev, displayMessage]
       })
       // Auto-mark as read if chat is visible
       if (message.sender.id?.toString() !== session?.user?.id?.toString()) {
@@ -513,7 +520,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       socket.off("edit-confirmed", handleEditConfirmed)
       socket.off("you-were-mentioned", handleMentioned)
     }
-  }, [apiId, socket, session?.user?.id])
+  }, [apiId, socket, session?.user?.id, decrypt])
 
   // Incoming call listener
   useEffect(() => {

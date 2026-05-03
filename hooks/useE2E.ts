@@ -130,7 +130,7 @@ export function useE2E() {
     );
     return decrypted;
   },
-  [e2eEnabled, decrypt, session?.user?.id]
+  [e2eEnabled, decrypt]
 );
 
   return {
