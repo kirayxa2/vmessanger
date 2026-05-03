@@ -458,7 +458,13 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       const sk = stableKeys.current.get(tempId) || tempId
       stableKeys.current.set(saved.id.toString(), sk)
       stableKeys.current.delete(tempId)
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...saved } : m))
+      // E2E: сохраняем оригинальный (незашифрованный) контент из оптимистичного сообщения
+      // Сервер возвращает зашифрованный blob — заменяем его тем что уже показываем
+      setMessages(prev => prev.map(m => {
+        if (m.id !== tempId) return m
+        // m.content — это оригинальный plaintext из оптимистичного сообщения
+        return { ...saved, content: m.content }
+      }))
       try { playSend() } catch {}
     }
 
