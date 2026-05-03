@@ -71,7 +71,7 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const { data: session } = useSession()
   const { t } = useTranslation()
   const { socket } = useSocket()
-  const { e2eEnabled, encrypt, decrypt, decryptMessages } = useE2E()
+  const { ready: e2eReady, e2eEnabled, encrypt, decrypt, decryptMessages } = useE2E()
 
   const [messages, setMessages] = useState<Message[]>(initialMessages || [])
   const [input, setInput] = useState("")
@@ -292,15 +292,20 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   }, [socket, otherUser?.id])
 
   // Load messages (paginated)
-  useEffect(() => {
-    setLoading(true)
-    isInitialLoad.current = true
-    fetch(`/api/messages?conversationId=${apiId}&limit=50`)
-      .then(r => r.json())
-      .then(async data => {
-        const msgs = Array.isArray(data.messages) ? data.messages : (Array.isArray(data) ? data : [])
-        // E2E: расшифровываем сообщения на клиенте перед показом
-        const decrypted = await decryptMessages(msgs)
+  // Храним сырые сообщения — чтобы перерасшифровать когда E2E будет готово
+const rawMessagesRef = useRef<any[]>([])
+
+// Load messages (paginated)
+useEffect(() => {
+  setLoading(true)
+  isInitialLoad.current = true
+  fetch(`/api/messages?conversationId=${apiId}&limit=50`)
+    .then(r => r.json())
+    .then(async data => {
+      const msgs = Array.isArray(data.messages) ? data.messages : (Array.isArray(data) ? data : [])
+      rawMessagesRef.current = msgs
+      // E2E: расшифровываем если e2eReady, иначе покажем как есть — useEffect ниже перерасшифрует
+      const decrypted = await decryptMessages(msgs)
         setMessages(decrypted)
         setHasMoreMessages(!!data.hasMore)
         nextCursorRef.current = data.nextCursor || null
@@ -331,6 +336,19 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
       .catch(() => { isInitialLoad.current = false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiId])
+
+  // ── Перерасшифровка когда E2E инициализировался после загрузки сообщений ──
+  useEffect(() => {
+    if (!e2eReady || !e2eEnabled) return
+    if (rawMessagesRef.current.length === 0) return
+    const hasCiphertext = rawMessagesRef.current.some((m: any) => m.isEncrypted)
+    if (!hasCiphertext) return
+    ;(async () => {
+      const decrypted = await decryptMessages(rawMessagesRef.current)
+      setMessages(decrypted)
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [e2eReady, e2eEnabled])
 
   // ── Load more messages (pagination) ──
   const loadMoreMessages = useCallback(async () => {
@@ -1177,11 +1195,6 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               <Loader2 size={20} className="animate-spin text-[#7e85e1]" />
             </div>
           )}
-          <div className="flex justify-center mb-4">
-            <motion.span initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-black/20 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm">{t('today')}</motion.span>
-          </div>
-
           <div className="flex flex-col w-full max-w-[850px] mx-auto">
             {isSystemChat && messages.map((msg, idx) => (
               <motion.div key={msg.id.toString()} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
@@ -1205,41 +1218,92 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
               </motion.div>
             ))}
 
-            {!isSystemChat && messages.map((msg, idx) => {
-              const isSender = msg.sender.id?.toString() === session?.user?.id?.toString()
-              const isFirstInGroup = idx === 0 || messages[idx - 1]?.sender.id?.toString() !== msg.sender.id?.toString()
-              const isLastInGroup = idx === messages.length - 1 || messages[idx + 1]?.sender.id?.toString() !== msg.sender.id?.toString()
-              const msgIdStr = msg.id.toString()
-              const isNew = msgIdStr.startsWith("temp-")
-              const sk = stableKeys.current.get(msgIdStr) || msgIdStr
+            {!isSystemChat && (() => {
+              // Группируем сообщения по дням, вставляем liquid-glass разделители
+              type Item =
+                | { kind: 'divider'; label: string; key: string }
+                | { kind: 'msg'; msg: Message; idx: number }
+              const items: Item[] = []
+              let lastDateKey = ''
+              messages.forEach((msg, idx) => {
+                const d = new Date(msg.createdAt)
+                const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+                if (dateKey !== lastDateKey) {
+                  lastDateKey = dateKey
+                  const now = new Date()
+                  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+                  const diffDays = Math.round((today.getTime() - msgDay.getTime()) / 86400000)
+                  let label = ''
+                  if (diffDays === 0) label = 'Сегодня'
+                  else if (diffDays === 1) label = 'Вчера'
+                  else if (diffDays < 7) label = d.toLocaleDateString('ru-RU', { weekday: 'long' })
+                  else label = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: diffDays > 365 ? 'numeric' : undefined })
+                  items.push({ kind: 'divider', label, key: `divider-${dateKey}` })
+                }
+                items.push({ kind: 'msg', msg, idx })
+              })
 
-              return (
-                <MessageItem
-                  key={sk}
-                  msg={msg}
-                  isSender={isSender}
-                  isFirstInGroup={isFirstInGroup}
-                  isLastInGroup={isLastInGroup}
-                  isNew={isNew}
-                  isGroupChat={isGroupChat}
-                  session={session}
-                  openMenuId={openMenuId}
-                  menuPos={menuPos}
-                  messageRefs={messageRefs}
-                  handleDeleteMessage={handleDeleteMessage}
-                  handleStartEdit={handleStartEdit}
-                  handleReply={handleReply}
-                  handleForwardOpen={handleForwardOpen}
-                  scrollToMessage={scrollToMessage}
-                  handleMenuOpen={handleMenuOpen}
-                  handleMenuClose={handleMenuClose}
-                  handlePinMessage={handlePinMessage}
-                  handleMentionClick={handleMentionClick}
-                  socket={socket}
-                  apiId={apiId}
-                />
-              )
-            })}
+              return items.map(item => {
+                if (item.kind === 'divider') {
+                  return (
+                    <div key={item.key} className="flex justify-center my-3 pointer-events-none select-none">
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.82, y: -6 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                        style={{
+                          background: 'rgba(0,0,0,0.38)',
+                          backdropFilter: 'blur(12px)',
+                          WebkitBackdropFilter: 'blur(12px)',
+                          border: '1px solid rgba(255,255,255,0.10)',
+                          borderRadius: 999,
+                          padding: '3px 14px',
+                          boxShadow: '0 2px 16px rgba(0,0,0,0.28)',
+                        }}
+                      >
+                        <span style={{ color: 'rgba(255,255,255,0.82)', fontSize: 12, fontWeight: 500, letterSpacing: 0.1 }}>
+                          {item.label}
+                        </span>
+                      </motion.div>
+                    </div>
+                  )
+                }
+                const { msg, idx } = item
+                const isSender = msg.sender.id?.toString() === session?.user?.id?.toString()
+                const isFirstInGroup = idx === 0 || messages[idx - 1]?.sender.id?.toString() !== msg.sender.id?.toString()
+                const isLastInGroup = idx === messages.length - 1 || messages[idx + 1]?.sender.id?.toString() !== msg.sender.id?.toString()
+                const msgIdStr = msg.id.toString()
+                const isNew = msgIdStr.startsWith("temp-")
+                const sk = stableKeys.current.get(msgIdStr) || msgIdStr
+                return (
+                  <MessageItem
+                    key={sk}
+                    msg={msg}
+                    isSender={isSender}
+                    isFirstInGroup={isFirstInGroup}
+                    isLastInGroup={isLastInGroup}
+                    isNew={isNew}
+                    isGroupChat={isGroupChat}
+                    session={session}
+                    openMenuId={openMenuId}
+                    menuPos={menuPos}
+                    messageRefs={messageRefs}
+                    handleDeleteMessage={handleDeleteMessage}
+                    handleStartEdit={handleStartEdit}
+                    handleReply={handleReply}
+                    handleForwardOpen={handleForwardOpen}
+                    scrollToMessage={scrollToMessage}
+                    handleMenuOpen={handleMenuOpen}
+                    handleMenuClose={handleMenuClose}
+                    handlePinMessage={handlePinMessage}
+                    handleMentionClick={handleMentionClick}
+                    socket={socket}
+                    apiId={apiId}
+                  />
+                )
+              })
+            })()}
             <div ref={messagesEndRef} />
           </div>
 

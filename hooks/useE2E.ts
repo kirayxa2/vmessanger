@@ -68,16 +68,26 @@ export function useE2E() {
   const getRecipientPublicKey = useCallback(async (userId: string | number): Promise<string | null> => {
     const uid = String(userId)
 
-    if (publicKeyCache.has(uid)) {
-      return publicKeyCache.get(uid)!
-    }
+    // 1. In-memory кэш (быстрее всего)
+    if (publicKeyCache.has(uid)) return publicKeyCache.get(uid)!
 
+    // 2. sessionStorage (переживает перезагрузку страницы)
+    try {
+      const cached = sessionStorage.getItem("vortex_pubkey_" + uid)
+      if (cached) {
+        publicKeyCache.set(uid, cached)
+        return cached
+      }
+    } catch {}
+
+    // 3. Сервер
     try {
       const res = await fetch(`/api/e2e?userId=${uid}`)
       if (!res.ok) return null
       const data = await res.json()
       if (data.publicKey) {
         publicKeyCache.set(uid, data.publicKey)
+        try { sessionStorage.setItem("vortex_pubkey_" + uid, data.publicKey) } catch {}
         return data.publicKey
       }
     } catch {

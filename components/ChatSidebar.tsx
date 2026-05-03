@@ -1377,6 +1377,25 @@ export default function ChatSidebar({
   )
 }
 
+// Форматирование времени как в Telegram
+function formatChatTime(date: Date): string {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today.getTime() - 86400000)
+  const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diffDays = Math.round((today.getTime() - msgDay.getTime()) / 86400000)
+
+  if (msgDay.getTime() === today.getTime()) {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  } else if (msgDay.getTime() === yesterday.getTime()) {
+    return "Вчера"
+  } else if (diffDays < 7) {
+    return date.toLocaleDateString("ru-RU", { weekday: "short" }) // Пн, Вт, Ср...
+  } else {
+    return date.toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) // 12 мар
+  }
+}
+
 // Мемоизированный компонент для одного чата в списке
 const ChatListItem = React.memo(function ChatListItem({
   chat, index, isSelected, unread, currentUser, onSelect, openChatMenu, t
@@ -1471,7 +1490,7 @@ const ChatListItem = React.memo(function ChatListItem({
             {chat._isMuted && <BellOff size={12} className="opacity-50 shrink-0" />}
           </div>
           <span className="text-[12px] opacity-60 shrink-0 ml-1">
-            {chat.messages?.[0] ? new Date(chat.messages[0].createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+            {chat.messages?.[0] ? formatChatTime(new Date(chat.messages[0].createdAt)) : ""}
           </span>
         </div>
         <div className="flex items-center justify-between mt-[1px]">

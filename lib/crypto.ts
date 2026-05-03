@@ -16,6 +16,19 @@ const DB_NAME = "vortex-e2e"
 const DB_VERSION = 1
 const STORE_NAME = "keys"
 
+// Кэш в памяти: публичные ключи собеседников (sessionStorage переживает перезагрузку вкладки)
+const SESSION_PUBKEY_PREFIX = "vortex_pubkey_"
+
+function sessionGetPubKey(userId: string): string | null {
+  try { return sessionStorage.getItem(SESSION_PUBKEY_PREFIX + userId) } catch { return null }
+}
+function sessionSetPubKey(userId: string, key: string): void {
+  try { sessionStorage.setItem(SESSION_PUBKEY_PREFIX + userId, key) } catch {}
+}
+
+// Кэш приватного ключа в памяти — IndexedDB читаем только один раз за сессию
+let _privateKeyCache: CryptoKey | null = null
+
 // ── IndexedDB helpers ──────────────────────────────────────────────────────────
 
 function openDB(): Promise<IDBDatabase> {
@@ -79,7 +92,9 @@ export async function generateKeyPair(): Promise<{ publicKey: string; privateKey
  */
 export async function getPrivateKey(): Promise<CryptoKey | null> {
   try {
+    if (_privateKeyCache) return _privateKeyCache
     const key = await idbGet<CryptoKey>("privateKey")
+    if (key) _privateKeyCache = key
     return key ?? null
   } catch {
     return null
