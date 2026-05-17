@@ -73,6 +73,7 @@ interface ChatMessageProps {
   selfDestructAt?: string | null;
   isGroupChat?: boolean;
   onMentionClick?: (username: string) => void;
+  animateIn?: boolean;
 }
 
 const ChatMessage = React.memo(function ChatMessage({
@@ -80,7 +81,7 @@ const ChatMessage = React.memo(function ChatMessage({
   replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp, failed,
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
   openMenuId, onMenuOpen, onMenuClose, menuPos, senderName, senderId,
-  reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat, onMentionClick
+  reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat, onMentionClick, animateIn
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const { filter } = useProfanityFilter();
@@ -287,7 +288,10 @@ const ChatMessage = React.memo(function ChatMessage({
 
   return (
     <motion.div
-      initial={isTemp ? { opacity: 0, scale: 0.92, y: 6, x: isSender ? 6 : -6 } : false}
+      initial={isTemp || animateIn
+        ? { opacity: 0, scale: 0.92, y: 6, x: isSender ? 6 : -6 }
+        : false
+      }
       animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
       exit={isDeleting ? { opacity: 0, transition: { duration: 0.2, delay: 0.75 } } : { opacity: 0, scale: 0.85, transition: { duration: 0.12 } }}
       transition={{ type: "spring", stiffness: 500, damping: 36, mass: 0.6 }}
@@ -383,7 +387,15 @@ const ChatMessage = React.memo(function ChatMessage({
 
         <AnimatePresence>
           {showMenu && (
-            <motion.div initial={{ opacity: 0, scale: 0.1 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.1 }} transition={{ type: "spring", stiffness: 500, damping: 26, mass: 0.65 }} className="fixed z-[200] w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden" style={{ ...menuStyle, transformOrigin }} onClick={e => e.stopPropagation()}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.1 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.1 }}
+              transition={{ type: "spring", stiffness: 500, damping: 26, mass: 0.65 }}
+              className="fixed z-[9999] w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden"
+              style={{ ...menuStyle, transformOrigin }}
+              onClick={e => e.stopPropagation()}
+            >
               <MenuItem icon={<Reply size={17} />} label={t("reply")} onClick={() => { onReply?.({ id: messageId, content, senderName: senderName || "" }); onMenuClose(); }} />
               {isSender && <MenuItem icon={<Pencil size={17} />} label={t("edit")} onClick={() => { onEdit?.(messageId, content); onMenuClose(); }} />}
               <MenuItem icon={<Copy size={17} />} label={t("copy")} onClick={() => { navigator.clipboard.writeText(content); onMenuClose(); }} />

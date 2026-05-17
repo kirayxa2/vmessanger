@@ -87,6 +87,8 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const isScrolledToBottomRef = useRef(true)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const stableKeys = useRef<Map<string, string>>(new Map())
   const newMsgIds = useRef<Set<string>>(new Set())
@@ -441,6 +443,10 @@ useEffect(() => {
         newMsgIds.current.add(displayMessage.id.toString())
         return [...prev, displayMessage]
       })
+      // Если не скроллим вниз — считаем непрочитанные
+      if (!isScrolledToBottomRef.current && message.sender.id?.toString() !== session?.user?.id?.toString()) {
+        setUnreadCount(prev => prev + 1)
+      }
       // Auto-mark as read if chat is visible
       if (message.sender.id?.toString() !== session?.user?.id?.toString()) {
         try { playReceive() } catch {}
@@ -565,14 +571,20 @@ useEffect(() => {
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
-    setShowScrollButton(scrollHeight - scrollTop - clientHeight > 200)
+    const atBottom = scrollHeight - scrollTop - clientHeight < 60
+    isScrolledToBottomRef.current = atBottom
+    setShowScrollButton(!atBottom)
+    if (atBottom) setUnreadCount(0)
     // Load more when scrolled to top
     if (scrollTop < 100 && hasMoreMessages && !loadingMore) {
       loadMoreMessages()
     }
   }, [hasMoreMessages, loadingMore, loadMoreMessages])
 
-  const scrollToBottom = useCallback(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), [])
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    setUnreadCount(0)
+  }, [])
 
   const scrollToMessage = useCallback((msgId: string) => {
     const el = messageRefs.current[msgId]
@@ -1050,10 +1062,41 @@ useEffect(() => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-[#0e1621]">
-        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
-          <Loader2 className="text-[#7e85e1]" size={36} />
-        </motion.div>
+      <div className="flex flex-col h-full bg-[#0e1621]">
+        {/* Skeleton header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5" style={{ backgroundColor: "#1c242f" }}>
+          <div className="w-8 h-8 rounded-full bg-white/8 animate-pulse shrink-0" />
+          <div className="w-10 h-10 rounded-full bg-white/8 animate-pulse shrink-0" />
+          <div className="flex-1 flex flex-col gap-1.5">
+            <div className="h-3.5 w-32 rounded-full bg-white/8 animate-pulse" />
+            <div className="h-2.5 w-20 rounded-full bg-white/5 animate-pulse" />
+          </div>
+        </div>
+        {/* Skeleton messages */}
+        <div className="flex-1 p-4 flex flex-col gap-3">
+          {[
+            { w: "55%", side: "start" }, { w: "40%", side: "end" }, { w: "70%", side: "start" },
+            { w: "35%", side: "end" }, { w: "60%", side: "start" }, { w: "45%", side: "end" },
+            { w: "65%", side: "start" }, { w: "30%", side: "end" },
+          ].map((s, i) => (
+            <div key={i} className={`flex ${s.side === "end" ? "justify-end" : "justify-start"}`}>
+              <div
+                className="h-9 rounded-2xl animate-pulse"
+                style={{
+                  width: s.w,
+                  backgroundColor: s.side === "end" ? "rgba(91,103,234,0.18)" : "rgba(255,255,255,0.06)",
+                  animationDelay: `${i * 80}ms`,
+                }}
+              />
+            </div>
+          ))}
+        </div>
+        {/* Skeleton input */}
+        <div className="px-3 pb-4 pt-2 flex items-center gap-2">
+          <div className="w-[46px] h-[46px] rounded-full bg-white/8 animate-pulse shrink-0" />
+          <div className="flex-1 h-[46px] rounded-2xl bg-white/8 animate-pulse" />
+          <div className="w-[46px] h-[46px] rounded-full bg-white/8 animate-pulse shrink-0" />
+        </div>
       </div>
     )
   }
@@ -1176,10 +1219,10 @@ useEffect(() => {
           onScrollTo={scrollToMessage}
         />
 
-        {/* ── Menu backdrop: прозрачный, только закрывает меню по тапу вне ── */}
+        {/* ── Menu backdrop: fixed поверх ВСЕГО включая сообщения ── */}
         {openMenuId && (
           <div
-            className="fixed inset-0 z-[199]"
+            className="fixed inset-0 z-[9998]"
             onClick={handleMenuClose}
             onContextMenu={e => { e.preventDefault(); handleMenuClose() }}
           />
@@ -1298,6 +1341,7 @@ useEffect(() => {
                     handleMenuClose={handleMenuClose}
                     handlePinMessage={handlePinMessage}
                     handleMentionClick={handleMentionClick}
+                    newMsgIds={newMsgIds}
                     socket={socket}
                     apiId={apiId}
                   />
@@ -1312,8 +1356,17 @@ useEffect(() => {
               <motion.div className="absolute right-[20px] bottom-[20px] z-50"
                 initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }}>
                 <motion.button onClick={scrollToBottom} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                  className="w-[42px] h-[42px] rounded-full flex items-center justify-center shadow-lg text-white" style={{ backgroundColor: ACCENT }}>
+                  className="relative w-[42px] h-[42px] rounded-full flex items-center justify-center shadow-lg text-white" style={{ backgroundColor: ACCENT }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 10l5 5 5-5" /></svg>
+                  {unreadCount > 0 && (
+                    <motion.div
+                      initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                      className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 rounded-full flex items-center justify-center px-1 text-[11px] font-bold text-white shadow-lg"
+                      style={{ backgroundColor: "#e53935" }}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </motion.div>
+                  )}
                 </motion.button>
               </motion.div>
             )}
@@ -1690,7 +1743,7 @@ const MessageItem = React.memo(function MessageItem({
   msg, isSender, isFirstInGroup, isLastInGroup, isNew, isGroupChat, session,
   openMenuId, menuPos, messageRefs, handleDeleteMessage, handleStartEdit,
   handleReply, handleForwardOpen, scrollToMessage, handleMenuOpen, handleMenuClose,
-  handlePinMessage, handleMentionClick, socket, apiId
+  handlePinMessage, handleMentionClick, newMsgIds, socket, apiId
 }: {
   msg: Message
   isSender: boolean
@@ -1711,6 +1764,7 @@ const MessageItem = React.memo(function MessageItem({
   handleMenuClose: () => void
   handlePinMessage: (id: string) => void
   handleMentionClick: (username: string) => void
+  newMsgIds: React.MutableRefObject<Set<string>>
   socket: any
   apiId: string
 }) {
@@ -1771,6 +1825,7 @@ const MessageItem = React.memo(function MessageItem({
           selfDestructAt={(msg as any).selfDestructAt}
           onPin={handlePinMessage}
           onMentionClick={handleMentionClick}
+          animateIn={newMsgIds.current.has(msg.id.toString())}
           onReaction={handleReactionClick}
         />
       )}
