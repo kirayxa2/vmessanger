@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Linkify from "linkify-react";
 import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Pin, Clock } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
@@ -386,14 +387,14 @@ const ChatMessage = React.memo(function ChatMessage({
         </motion.div>
 
         <AnimatePresence>
-          {showMenu && (
+          {showMenu && typeof document !== "undefined" && createPortal(
             <motion.div
               initial={{ opacity: 0, scale: 0.1 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.1 }}
               transition={{ type: "spring", stiffness: 500, damping: 26, mass: 0.65 }}
-              className="fixed z-[9999] w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden"
-              style={{ ...menuStyle, transformOrigin }}
+              className="fixed w-52 bg-[#1e1e1e]/96 backdrop-blur-xl rounded-2xl shadow-2xl py-1.5 flex flex-col border border-white/8 overflow-hidden"
+              style={{ ...menuStyle, transformOrigin, zIndex: 99999 }}
               onClick={e => e.stopPropagation()}
             >
               <MenuItem icon={<Reply size={17} />} label={t("reply")} onClick={() => { onReply?.({ id: messageId, content, senderName: senderName || "" }); onMenuClose(); }} />
@@ -403,7 +404,8 @@ const ChatMessage = React.memo(function ChatMessage({
               <MenuItem icon={<Pin size={17} />} label="📌 Закрепить" onClick={() => { onPin?.(messageId); onMenuClose(); }} />
               <div className="mx-3 my-1 border-t border-white/8" />
               <MenuItem icon={<Trash2 size={17} />} label={t("delete")} color="text-red-400" onClick={handleDelete} />
-            </motion.div>
+            </motion.div>,
+            document.body
           )}
         </AnimatePresence>
       </div>
