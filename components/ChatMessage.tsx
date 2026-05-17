@@ -386,9 +386,10 @@ const ChatMessage = React.memo(function ChatMessage({
           )}
         </motion.div>
 
-        <AnimatePresence>
-          {showMenu && typeof document !== "undefined" && createPortal(
+        {showMenu && typeof document !== "undefined" && createPortal(
+          <AnimatePresence>
             <motion.div
+              key="context-menu"
               initial={{ opacity: 0, scale: 0.1 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.1 }}
@@ -404,10 +405,10 @@ const ChatMessage = React.memo(function ChatMessage({
               <MenuItem icon={<Pin size={17} />} label="📌 Закрепить" onClick={() => { onPin?.(messageId); onMenuClose(); }} />
               <div className="mx-3 my-1 border-t border-white/8" />
               <MenuItem icon={<Trash2 size={17} />} label={t("delete")} color="text-red-400" onClick={handleDelete} />
-            </motion.div>,
-            document.body
-          )}
-        </AnimatePresence>
+            </motion.div>
+          </AnimatePresence>,
+          document.body
+        )}
       </div>
     </motion.div>
   );

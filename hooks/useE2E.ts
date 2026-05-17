@@ -132,9 +132,11 @@ export function useE2E() {
         if (!msg.isEncrypted) return msg;
         const senderId = String(msg.sender?.id);
         const plaintext = await decrypt(msg.content, senderId);
+        // Если расшифровка не удалась — показываем оригинальный контент, не мусор
+        if (plaintext === null) return { ...msg, isEncrypted: false };
         return {
           ...msg,
-          content: plaintext ?? "🔒 Зашифрованное сообщение"
+          content: plaintext
         };
       })
     );

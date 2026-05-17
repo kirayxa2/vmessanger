@@ -101,7 +101,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   const resolveRealId = useCallback((id: string) => virtualToReal.current[id] ?? id, [])
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (currentSelectedId?: string) => {
     if (isFetching.current) return
     isFetching.current = true
     try {
@@ -111,7 +111,8 @@ export default function HomePage({ conversationId }: { conversationId?: string }
       const raw = Array.isArray(data) ? data.filter((c: any) => c.id != null) : []
       const allChats = applyVirtualIds(raw)
       setConversations(allChats)
-      if (!selectedId && allChats.length > 0 && window.innerWidth >= 768) {
+      const activeId = currentSelectedId ?? selectedIdRef.current
+      if (!activeId && allChats.length > 0 && window.innerWidth >= 768) {
         const saved = allChats.find((c: any) => c.type === "saved")
         setSelectedId(saved ? saved.id.toString() : allChats[0].id.toString())
       }
@@ -121,7 +122,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
       setLoading(false)
       isFetching.current = false
     }
-  }, [selectedId, ensureSpecialChats, applyVirtualIds])
+  }, [ensureSpecialChats, applyVirtualIds])
 
   useEffect(() => {
     if (status === "authenticated" && socket && conversations.length > 0) {
@@ -235,9 +236,10 @@ export default function HomePage({ conversationId }: { conversationId?: string }
     setShowChatOnMobile(true)
     setUnreadCounts(prev => ({ ...prev, [id]: 0 }))
     if (typeof window !== "undefined") {
-      // pushState добавляет запись в историю — нажатие назад даст popstate
       window.history.pushState({ conversationId: id }, "", `/${id}`)
     }
+    // Обновляем список чатов в фоне чтобы подтянуть новые чаты
+    setTimeout(() => fetchConversations(), 1000)
   }
 
   const handleConversationCreated = (conversation: any) => {

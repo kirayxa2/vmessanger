@@ -645,7 +645,16 @@ export default function ChatSidebar({
       })
       if (res.ok) {
         const conversation = await res.json()
-        onConversationCreated?.(conversation)
+        // Нормализуем чат чтобы participants были в правильном формате
+        const normalized = {
+          ...conversation,
+          participants: conversation.participants || [
+            { userId: user.id, user },
+            { userId: currentUser?.id, user: currentUser },
+          ],
+          messages: conversation.messages || [],
+        }
+        onConversationCreated?.(normalized)
         onSelect?.(conversation.id.toString())
         setIsSearchActive(false); setSearchQuery("")
       }
