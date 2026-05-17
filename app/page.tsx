@@ -267,8 +267,8 @@ export default function HomePage({ conversationId }: { conversationId?: string }
   // ── DESKTOP LAYOUT ────────────────────────────────────────────
   if (!isMobile) {
     return (
-      <div className="flex h-[100dvh] w-full bg-[#070d14] overflow-hidden fixed inset-0 p-2 md:p-3 gap-2 md:gap-3">
-        <div className="w-full md:w-[420px] h-full flex flex-col shrink-0 overflow-hidden rounded-2xl md:rounded-3xl bg-[#1c242f] shadow-2xl border border-white/5">
+      <div className="flex h-[100dvh] w-full bg-[#0e1621] overflow-hidden fixed inset-0">
+        <div className="w-full md:w-[420px] h-full flex flex-col shrink-0 overflow-hidden bg-[#1c242f] border-r border-white/5">
           <TitleBar />
           <ChatSidebar
             currentUser={session?.user}
@@ -279,7 +279,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
             onConversationCreated={handleConversationCreated}
           />
         </div>
-        <div className="flex-1 flex flex-col relative h-full overflow-hidden rounded-2xl md:rounded-3xl bg-[#1c242f] shadow-2xl border border-white/5">
+        <div className="flex-1 flex flex-col relative h-full overflow-hidden bg-[#0e1621]">
           {selectedId ? (
             <ChatWindow
               key={selectedId}
@@ -311,10 +311,9 @@ export default function HomePage({ conversationId }: { conversationId?: string }
     >
 
       {/* ── Основной контент ── */}
-      <div className="flex-1 overflow-hidden relative px-2 pt-2">
+      <div className="flex-1 overflow-hidden relative">
         <AnimatePresence mode="wait">
 
-          {/* Открытый чат — тоже капсула */}
           {showChatOnMobile && selectedId ? (
             <motion.div
               key="chat"
@@ -322,11 +321,8 @@ export default function HomePage({ conversationId }: { conversationId?: string }
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 38, mass: 0.9 }}
-              className="absolute inset-0 rounded-[28px] overflow-hidden"
-              style={{
-                backgroundColor: "#1c242f",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)",
-              }}
+              className="absolute inset-0 overflow-hidden"
+              style={{ backgroundColor: "#1c242f" }}
             >
               <ChatWindow
                 key={selectedId}
@@ -339,33 +335,24 @@ export default function HomePage({ conversationId }: { conversationId?: string }
               />
             </motion.div>
           ) : (
-            /* Сайдбар — капсула с отступами со всех сторон */
             <motion.div
               key="sidebar"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
-              className="absolute inset-0 px-3"
+              className="absolute inset-0"
+              style={{ backgroundColor: "#1c242f" }}
             >
-              {/* Капсула сайдбара */}
-              <div
-                className="w-full h-full rounded-[22px] overflow-hidden"
-                style={{
-                  backgroundColor: "#1a2233",
-                  boxShadow: "0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07)",
-                }}
-              >
-                <ChatSidebar
-                  currentUser={session?.user}
-                  conversations={conversations}
-                  selectedId={selectedId}
-                  unreadCounts={unreadCounts}
-                  onSelect={handleSelectConversation}
-                  onConversationCreated={handleConversationCreated}
-                  mobileInitialView={mobileTab}
-                />
-              </div>
+              <ChatSidebar
+                currentUser={session?.user}
+                conversations={conversations}
+                selectedId={selectedId}
+                unreadCounts={unreadCounts}
+                onSelect={handleSelectConversation}
+                onConversationCreated={handleConversationCreated}
+                mobileInitialView={mobileTab}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -379,17 +366,10 @@ export default function HomePage({ conversationId }: { conversationId?: string }
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: "spring", stiffness: 420, damping: 36 }}
-            className="shrink-0 px-3 pb-3 pt-2"
-            style={{ backgroundColor: "#0a0f17" }}
+            className="shrink-0"
+            style={{ backgroundColor: "#1c242f", borderTop: "0.5px solid rgba(255,255,255,0.06)" }}
           >
-            {/* Капсула-докбар */}
-            <div
-              className="flex items-stretch rounded-[22px] overflow-hidden"
-              style={{
-                backgroundColor: "#1a2233",
-                boxShadow: "0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07)",
-              }}
-            >
+            <div className="flex items-stretch">
               <DockButton
                 label="Чаты"
                 icon={<MessageSquare size={23} />}
