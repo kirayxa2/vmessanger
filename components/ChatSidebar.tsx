@@ -23,7 +23,7 @@ import StoriesRow from "./StoriesRow"
 import { useTheme } from "@/lib/theme"
 import { Virtuoso } from "react-virtuoso"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 const DEV_USER_ID = process.env.NODE_ENV === "development" ? 1 : -1
 
@@ -1302,7 +1302,7 @@ export default function ChatSidebar({
                       onClick={() => { setActiveTab('archive'); setArchiveVisible(false) }}
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                       whileTap={{ scale: 0.98 }}
-                      className="p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] hover:bg-white/5 transition-all select-none"
+                      className="p-[8px] px-[10px] mb-[1px] mx-1 rounded-full cursor-pointer flex items-center gap-[12px] hover:bg-white/5 transition-all select-none"
                     >
                       <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 text-white shadow-md"
                         style={{ backgroundColor: 'rgba(126,133,225,0.2)', border: '1.5px solid rgba(126,133,225,0.35)' }}>
@@ -1475,8 +1475,8 @@ const ChatListItem = React.memo(function ChatListItem({
       onTouchMove={handleTouchMove}
       initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.03, duration: 0.2 }}
-      className={`p-[9px] px-[12px] mb-[2px] mx-2 rounded-[12px] cursor-pointer flex items-center gap-[12px] transition-all select-none ${
-        isSelected ? "text-white shadow-lg scale-[1.02]" : "bg-transparent hover:bg-white/5"
+      className={`p-[8px] px-[10px] mb-[1px] mx-1 rounded-full cursor-pointer flex items-center gap-[12px] transition-all select-none ${
+        isSelected ? "text-white" : "bg-transparent hover:bg-white/5"
       }`}
       style={isSelected ? { backgroundColor: ACCENT } : {}}>
       <div className="w-[54px] h-[54px] rounded-full flex items-center justify-center shrink-0 overflow-hidden text-white shadow-md"

@@ -7,10 +7,32 @@ import { useProfanityFilter } from "@/hooks/useProfanityFilter";
 import TitleBadge from "./TitleBadge";
 import { VerifiedBadge } from "./VerifiedBadge";
 
-const SENDER_COLOR = "#c67c78";
-const RECIPIENT_COLOR = "#212121";
-const ACCENT = "#7e85e1";
+const SENDER_COLOR = "#5b67ea";
+const RECIPIENT_COLOR = "#212d3b";
+const ACCENT = "var(--accent, #7e85e1)";
 const DEV_USER_ID = 1;
+
+// Telegram-стиль скруглений пузыря (как в официальном приложении)
+function getBubbleRadius(isSender: boolean, isFirstInGroup: boolean, isLastInGroup: boolean, hasAbove: boolean) {
+  const BIG = "18px"
+  const SMALL = "4px"
+  const TAIL = "4px"
+  if (isSender) {
+    return {
+      borderTopLeftRadius: BIG,
+      borderTopRightRadius: hasAbove ? SMALL : BIG,
+      borderBottomLeftRadius: BIG,
+      borderBottomRightRadius: isLastInGroup ? TAIL : SMALL,
+    }
+  } else {
+    return {
+      borderTopLeftRadius: hasAbove ? SMALL : BIG,
+      borderTopRightRadius: BIG,
+      borderBottomLeftRadius: isLastInGroup ? TAIL : SMALL,
+      borderBottomRightRadius: BIG,
+    }
+  }
+}
 
 interface ReplyTo {
   id: number;
@@ -288,10 +310,7 @@ const ChatMessage = React.memo(function ChatMessage({
         <motion.div ref={swipeWrapRef} style={{ x: swipeX, willChange: "transform" }} onContextMenu={handleContextMenu} className="relative">
           <div
             style={{
-              borderTopLeftRadius: !isSender && hasAbove ? "5px" : "15px",
-              borderTopRightRadius: isSender && hasAbove ? "5px" : "15px",
-              borderBottomLeftRadius: !isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
-              borderBottomRightRadius: isSender ? (isLastInGroup ? "0px" : "5px") : "15px",
+              ...getBubbleRadius(isSender, isFirstInGroup, isLastInGroup, hasAbove),
               backgroundColor: bubbleColor,
               opacity: isDeleting ? 0 : 1,
               transform: isDeleting ? "scale(0.8)" : "scale(1)",
@@ -351,9 +370,12 @@ const ChatMessage = React.memo(function ChatMessage({
             )}
           </div>
           {isLastInGroup && !isDeleting && (
-            <div className={`absolute bottom-0 w-[10px] h-4 ${isSender ? "-right-[10px]" : "-left-[9px]"} z-0`}>
-              <svg width="10" height="16" viewBox="0 0 10 16">
-                {isSender ? <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill={SENDER_COLOR} /> : <path d="M3 17h6V0c-.193 2.84-.876 5.767-2.05 8.782-.904 2.325-2.446 4.485-4.625 6.48A1 1 0 003 17z" fill={RECIPIENT_COLOR} />}
+            <div className={`absolute bottom-0 w-[11px] h-[20px] ${isSender ? "-right-[9px]" : "-left-[9px]"} z-0 overflow-hidden`}>
+              <svg width="11" height="20" viewBox="0 0 11 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {isSender
+                  ? <path d="M11 20H0L0.002 0C0.196 3.127 0.88 6.362 2.054 9.66 3.23 12.96 5.25 15.97 8.12 18.68A2 2 0 0011 20z" fill={SENDER_COLOR} />
+                  : <path d="M0 20h11L10.998 0C10.804 3.127 10.12 6.362 8.946 9.66 7.77 12.96 5.75 15.97 2.88 18.68A2 2 0 010 20z" fill={RECIPIENT_COLOR} />
+                }
               </svg>
             </div>
           )}

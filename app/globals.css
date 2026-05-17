@@ -5,10 +5,12 @@
   --background: #0e1621;
   --foreground: #ffffff;
   --sidebar-bg: #1c242f;
-  --sidebar-item-active: #8b72f3;
+  --accent: #7e85e1;
+  --accent-hover: #6b73d4;
+  --sidebar-item-active: #7e85e1;
   --header-bg: #1c242f;
   --chat-bg: #0e1621;
-  --sender-bubble: #c67c78;
+  --sender-bubble: #5b67ea;
   --sender-text: #ffffff;
   --recipient-bubble: #212d3b;
   --recipient-text: #ffffff;
@@ -26,10 +28,12 @@
   --background: #f0f2f5;
   --foreground: #1a1a1a;
   --sidebar-bg: #ffffff;
+  --accent: #7e85e1;
+  --accent-hover: #6b73d4;
   --sidebar-item-active: #7e85e1;
   --header-bg: #ffffff;
   --chat-bg: #e8ecf1;
-  --sender-bubble: #7e85e1;
+  --sender-bubble: #5b67ea;
   --sender-text: #ffffff;
   --recipient-bubble: #ffffff;
   --recipient-text: #1a1a1a;
@@ -62,7 +66,6 @@ html, body {
   height: var(--app-height, 100vh); /* Динамическая высота с учетом клавиатуры */
   overflow: hidden;
   overscroll-behavior: none; /* Отключить pull-to-refresh браузера */
-  font-family: "icons" !important;
   --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu,
   Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   --font-family-monospace: "Cascadia Mono", "Roboto Mono", "Droid Sans Mono", 'SF Mono', "Menlo", "Ubuntu Mono",
@@ -73,9 +76,6 @@ html, body {
 
   --color-borders-input: rgb(91, 91, 90, 1);
   --border-radius-messages: 0.9375rem;
-
-  --sender-bubble: #c67c78;
-
 
   font-family: var(--font-family);
 

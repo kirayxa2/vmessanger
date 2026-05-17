@@ -13,7 +13,7 @@ import { useNotificationSound } from "@/hooks/useNotificationSound"
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Capacitor } from '@capacitor/core'
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 // Определяем тип платформы
 function useIsMobile() {
@@ -141,7 +141,14 @@ export default function HomePage({ conversationId }: { conversationId?: string }
         setMessagesCache(prev => {
           const existing = prev[data.conversationId] || []
           const updated = [...existing, message].slice(-100)
-          return { ...prev, [data.conversationId]: updated }
+          const newCache = { ...prev, [data.conversationId]: updated }
+          // Ограничиваем кеш до 20 чатов чтобы не раздувать память
+          const keys = Object.keys(newCache)
+          if (keys.length > 20) {
+            const oldest = keys.find(k => k !== data.conversationId)
+            if (oldest) delete newCache[oldest]
+          }
+          return newCache
         })
         const isNotActiveChat = data.conversationId.toString() !== selectedIdRef.current?.toString()
         const isNotSender = message.sender?.id?.toString() !== session?.user?.id?.toString()

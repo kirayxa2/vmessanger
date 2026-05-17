@@ -112,14 +112,25 @@ export default function RootLayout({
               }
             });
 
-            // Huawei-specific: постоянный мониторинг высоты
+            // Huawei-specific: постоянный мониторинг высоты (останавливаем когда страница скрыта)
             if (isHuawei) {
-              setInterval(function() {
-                var activeEl = document.activeElement;
-                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
-                  applyHeight(getH());
-                }
-              }, 300);
+              var huaweiInterval = null;
+              function startHuaweiPolling() {
+                if (huaweiInterval) return;
+                huaweiInterval = setInterval(function() {
+                  var activeEl = document.activeElement;
+                  if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+                    applyHeight(getH());
+                  }
+                }, 300);
+              }
+              function stopHuaweiPolling() {
+                if (huaweiInterval) { clearInterval(huaweiInterval); huaweiInterval = null; }
+              }
+              startHuaweiPolling();
+              document.addEventListener('visibilitychange', function() {
+                document.hidden ? stopHuaweiPolling() : startHuaweiPolling();
+              });
             }
           })();
         ` }} />
