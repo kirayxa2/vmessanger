@@ -161,13 +161,8 @@ export async function GET(req: NextRequest) {
             deletedAt: null, // скрытые не показываем
           }
         },
-        NOT: { isGroup: true, type: "private" },
-        OR: [
-          { type: "private" },
-          { type: "saved" },
-          { type: "system" },
-          { type: "group" },
-        ],
+        // Скрыть только участников ботов из их же конверсаций — у нас юзеры-боты
+        // не должны видеть свой собственный botfather-чат
       },
       include: {
         drafts: { where: { userId: currentUserId } },

@@ -195,9 +195,24 @@ export default function HomePage({ conversationId }: { conversationId?: string }
             }
           }
         }
-        setConversations(prev =>
-          prev.map(c => c.id.toString() === data.conversationId.toString() ? { ...c, messages: [message] } : c)
-        )
+        setConversations(prev => {
+          const exists = prev.find(c => c.id.toString() === data.conversationId.toString())
+          if (!exists) {
+            // Чата нет в sidebar — подтягиваем список заново чтобы показать его.
+            // Это запасной путь: обычно чат уже добавлен через new-conversation event,
+            // но если он потерялся — этот fetch его восстановит.
+            fetch("/api/conversations")
+              .then(r => r.json())
+              .then((fresh: any[]) => {
+                if (!Array.isArray(fresh)) return
+                const raw = fresh.filter((c: any) => c.id != null)
+                setConversations(applyVirtualIds(raw))
+              })
+              .catch(() => {})
+            return prev
+          }
+          return prev.map(c => c.id.toString() === data.conversationId.toString() ? { ...c, messages: [message] } : c)
+        })
       }
       const handleAvatarUpdate = (data: { userId: number; avatar: string }) => {
         setConversations(prev =>

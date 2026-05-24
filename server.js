@@ -268,6 +268,25 @@ app.prepare().then(() => {
           // Confirm to sender: replace temp with real message
           socket.emit("message-confirmed", { tempId: data.tempId, message: saved })
 
+          // Получаем полный объект conversation один раз — пригодится для new-conversation
+          // (на случай если у получателя чата ещё нет в sidebar)
+          let fullConversation = null
+          if (Array.isArray(data.participantIds) && data.participantIds.length > 0) {
+            try {
+              fullConversation = await prisma.conversation.findUnique({
+                where: { id: Number(data.conversationId) },
+                include: {
+                  drafts: true,
+                  participants: { include: { user: { select: { id: true, username: true, avatar: true } } } },
+                  messages: { orderBy: { createdAt: "desc" }, take: 1, include: { sender: { select: { id: true, username: true, avatar: true } } } },
+                },
+              })
+              if (fullConversation) {
+                fullConversation = { ...fullConversation, _folder: null, _isMuted: false }
+              }
+            } catch {}
+          }
+
           // Deliver to other participants — also ensure they join the room
           socket.to(roomId).emit("new-message", saved)
           if (Array.isArray(data.participantIds)) {
@@ -280,6 +299,12 @@ app.prepare().then(() => {
                     const s = io.sockets.sockets.get(sid)
                     if (s) s.join(roomId)
                   })
+                }
+                // Гарантируем что чат появится у получателя в sidebar — даже если
+                // он первый раз слышит о нём (handleNewConversation в page.tsx
+                // защищён от дубликатов).
+                if (fullConversation) {
+                  emitToUser(uid, "new-conversation", fullConversation)
                 }
                 emitToUser(uid, "new-message", saved)
                 emitToUser(uid, "conversation-updated", { conversationId: roomId, lastMessage: saved })
