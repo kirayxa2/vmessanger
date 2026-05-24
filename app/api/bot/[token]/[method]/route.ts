@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { parseBotToken, formatBot, buildUpdate, dispatchWebhook } from "@/lib/botUtils"
+import { parseBotToken, formatBot } from "@/lib/botUtils"
 
 const ok = (result: unknown) => NextResponse.json({ ok: true, result })
 const err = (desc: string, code = 400) =>
@@ -15,6 +15,18 @@ async function resolveBot(token: string) {
   })
   if (!bot || !bot.isActive) return null
   return bot
+}
+
+// Тип update'а — формат как у Telegram getUpdates
+type BotUpdate = {
+  update_id: number
+  message: {
+    message_id: number
+    from: { id: number; username: string; is_bot: boolean }
+    chat: { id: number; type: string }
+    date: number
+    text: string
+  }
 }
 
 export async function GET(
@@ -37,9 +49,17 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
   const bot = await resolveBot(token)
   if (!bot) return err("Unauthorized: invalid token", 401)
 
-  let body: Record<string, unknown> = {}
+  // Параметры можно передавать и в query string (GET) и в body (POST)
+  const url = new URL(req.url)
+  const queryParams: Record<string, string> = {}
+  url.searchParams.forEach((v, k) => { queryParams[k] = v })
+
+  let body: Record<string, unknown> = { ...queryParams }
   if (req.method === "POST") {
-    try { body = await req.json() } catch {}
+    try {
+      const json = await req.json()
+      body = { ...body, ...json }
+    } catch {}
   }
 
   // ── getMe ──
@@ -67,28 +87,91 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
     return ok(true)
   }
 
+  // ── getUpdates (long polling) ──
+  // Возвращает все непросмотренные сообщения от пользователей в чатах с этим ботом.
+  // offset: возвращаются update_id > offset. limit: max 100.
+  // timeout: сколько секунд ждать новых сообщений (long polling, max 30).
+  if (method === "getUpdates") {
+    if (!bot.userId) {
+      return err("Bot has no user account; recreate the bot via BotFather", 400)
+    }
+    const offset = Number(body.offset ?? 0) || 0
+    const limit = Math.min(Number(body.limit ?? 100) || 100, 100)
+    const timeout = Math.min(Math.max(Number(body.timeout ?? 0) || 0, 0), 30)
+
+    const fetchUpdates = async (): Promise<BotUpdate[]> => {
+      const messages = await prisma.message.findMany({
+        where: {
+          id: { gt: offset },
+          senderId: { not: bot.userId! },
+          conversation: {
+            participants: { some: { userId: bot.userId! } },
+          },
+        },
+        include: {
+          sender: { select: { id: true, username: true, isBot: true } },
+          conversation: { select: { id: true, type: true } },
+        },
+        orderBy: { id: "asc" },
+        take: limit,
+      })
+      return messages.map(m => ({
+        update_id: m.id,
+        message: {
+          message_id: m.id,
+          from: { id: m.sender.id, username: m.sender.username, is_bot: m.sender.isBot },
+          chat: { id: m.conversation.id, type: m.conversation.type },
+          date: Math.floor(m.createdAt.getTime() / 1000),
+          text: m.content,
+        },
+      }))
+    }
+
+    let updates = await fetchUpdates()
+
+    // Long polling: если ничего нет и просили подождать — поллим раз в секунду
+    if (updates.length === 0 && timeout > 0) {
+      const deadline = Date.now() + timeout * 1000
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 1000))
+        updates = await fetchUpdates()
+        if (updates.length > 0) break
+      }
+    }
+
+    return ok(updates)
+  }
+
   // ── sendMessage ──
   if (method === "sendMessage") {
-    const { chat_id, text, reply_markup, reply_to_message_id, parse_mode } = body as {
-      chat_id: number
+    const { chat_id, text, reply_markup, reply_to_message_id } = body as {
+      chat_id: number | string
       text: string
       reply_markup?: unknown
       reply_to_message_id?: number
-      parse_mode?: string
     }
-    if (!chat_id || !text) return err("chat_id and text are required")
+    const chatId = Number(chat_id)
+    if (!chatId || !text) return err("chat_id and text are required")
 
-    // chat_id — это conversationId
-    const conversation = await prisma.conversation.findUnique({ where: { id: chat_id } })
+    const conversation = await prisma.conversation.findUnique({ where: { id: chatId } })
     if (!conversation) return err("chat not found", 404)
 
-    // Бот должен быть participant'ом (виртуально через botId на сообщении)
-    // Находим первого участника чтобы взять senderId (системный пользователь бота)
-    // Мы храним сообщения бота через senderId = ownerId, помечая botId
+    // senderId — это User-аккаунт бота (если есть). Иначе fallback на владельца.
+    const senderId = bot.userId ?? bot.ownerId
+
+    // Гарантируем что бот — participant в этом чате (для консистентности FK)
+    if (bot.userId) {
+      await prisma.conversationParticipant.upsert({
+        where: { userId_conversationId: { userId: bot.userId, conversationId: chatId } },
+        update: {},
+        create: { userId: bot.userId, conversationId: chatId, role: "member" },
+      })
+    }
+
     const msg = await prisma.message.create({
       data: {
-        conversationId: chat_id,
-        senderId: bot.ownerId,
+        conversationId: chatId,
+        senderId,
         content: text,
         botId: bot.id,
         replyToId: reply_to_message_id ?? null,
@@ -96,26 +179,39 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
       },
       include: {
         sender: { select: { id: true, username: true, avatar: true } },
-        replyTo: true,
+        replyTo: { include: { sender: { select: { id: true, username: true, avatar: true } } } },
       },
     })
 
-    // Обновляем updatedAt conversation
+    // Обновляем updatedAt чата
     await prisma.conversation.update({
-      where: { id: chat_id },
+      where: { id: chatId },
       data: { updatedAt: new Date() },
     })
 
-    // Эмитим через глобальный io
-    const g = global as unknown as { __io?: { to: (r: string) => { emit: (e: string, d: unknown) => void } } }
-    g.__io?.to(`conversation:${chat_id}`).emit("new-message", {
-      ...msg,
-      bot: formatBot(bot),
+    // Эмитим в реалтайме всем participants чата
+    const g = global as unknown as {
+      __io?: { to: (r: string) => { emit: (e: string, d: unknown) => void } }
+      __emitToUser?: (userId: number | string, event: string, data: unknown) => void
+    }
+    const roomId = String(chatId)
+    g.__io?.to(roomId).emit("new-message", { ...msg, conversationId: chatId })
+    // На случай если кто-то ещё не joined в комнату — direct-emit участникам
+    const participants = await prisma.conversationParticipant.findMany({
+      where: { conversationId: chatId },
+      select: { userId: true },
     })
+    for (const p of participants) {
+      g.__emitToUser?.(p.userId, "new-message", { ...msg, conversationId: chatId })
+      g.__emitToUser?.(p.userId, "conversation-updated", {
+        conversationId: roomId,
+        lastMessage: msg,
+      })
+    }
 
     return ok({
       message_id: msg.id,
-      chat: { id: chat_id },
+      chat: { id: chatId },
       date: Math.floor(msg.createdAt.getTime() / 1000),
       text: msg.content,
     })
@@ -130,14 +226,14 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
     }
     if (!message_id || !text) return err("message_id and text are required")
     const msg = await prisma.message.update({
-      where: { id: message_id, botId: bot.id },
+      where: { id: Number(message_id), botId: bot.id },
       data: {
         content: text,
         replyMarkup: reply_markup ? (reply_markup as object) : undefined,
       },
     })
     const g = global as unknown as { __io?: { to: (r: string) => { emit: (e: string, d: unknown) => void } } }
-    g.__io?.to(`conversation:${msg.conversationId}`).emit("message-edited", msg)
+    g.__io?.to(String(msg.conversationId)).emit("message-edited", msg)
     return ok(true)
   }
 
@@ -145,11 +241,11 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
   if (method === "deleteMessage") {
     const { message_id } = body as { message_id: number }
     if (!message_id) return err("message_id is required")
-    const msg = await prisma.message.findFirst({ where: { id: message_id, botId: bot.id } })
+    const msg = await prisma.message.findFirst({ where: { id: Number(message_id), botId: bot.id } })
     if (!msg) return err("message not found", 404)
-    await prisma.message.delete({ where: { id: message_id } })
+    await prisma.message.delete({ where: { id: Number(message_id) } })
     const g = global as unknown as { __io?: { to: (r: string) => { emit: (e: string, d: unknown) => void } } }
-    g.__io?.to(`conversation:${msg.conversationId}`).emit("message-deleted", { id: message_id, conversationId: msg.conversationId })
+    g.__io?.to(String(msg.conversationId)).emit("message-deleted", String(message_id))
     return ok(true)
   }
 
@@ -161,12 +257,10 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
       show_alert?: boolean
     }
     await prisma.botCallbackQuery.update({
-      where: { id: callback_query_id },
+      where: { id: Number(callback_query_id) },
       data: { answeredAt: new Date() },
     })
-    // Уведомить пользователя через сокет
-    // callback_query содержит userId, нужно его найти
-    const cq = await prisma.botCallbackQuery.findUnique({ where: { id: callback_query_id } })
+    const cq = await prisma.botCallbackQuery.findUnique({ where: { id: Number(callback_query_id) } })
     if (cq) {
       const g = global as unknown as {
         __emitToUser?: (userId: number, event: string, data: unknown) => void
@@ -178,10 +272,10 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
 
   // ── setWebhook ──
   if (method === "setWebhook") {
-    const { url, secret_token } = body as { url: string; secret_token?: string }
+    const { url: hookUrl, secret_token } = body as { url: string; secret_token?: string }
     await prisma.bot.update({
       where: { id: bot.id },
-      data: { webhookUrl: url || null, webhookSecret: secret_token || null },
+      data: { webhookUrl: hookUrl || null, webhookSecret: secret_token || null },
     })
     return ok(true)
   }
