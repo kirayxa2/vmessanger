@@ -38,7 +38,14 @@ export async function GET(req: NextRequest) {
       take: 10
     })
 
-    return NextResponse.json(users)
+    // Добавляем BotFather если запрос совпадает
+    const botfatherNames = ["botfather", "bot father", "бот"]
+    const showBotFather = botfatherNames.some(n => n.includes(query.toLowerCase())) || "botfather".startsWith(query.toLowerCase())
+    const result = showBotFather
+      ? [{ id: -1, username: "BotFather", avatar: null, is_bot: true }, ...users]
+      : users
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Users search error:", error)
     return NextResponse.json({ error: "Internal error" }, { status: 500 })

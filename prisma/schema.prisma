@@ -31,6 +31,9 @@ model User {
   stories           Story[]
   storyViews        StoryView[]
   publicKey         String?   // E2E: X25519/P-256 public key (base64, spki format)
+  ownedBots         Bot[]     @relation
+  botSessions       BotSession[]
+  botFatherSession  BotFatherSession?
 
   @@index([lastSeen])
 }
@@ -91,6 +94,8 @@ model Message {
   voiceDuration   Int?
   selfDestructAt  DateTime?
   isEncrypted     Boolean   @default(false)
+  replyMarkup     Json?     // inline_keyboard, keyboard и т.д.
+  botId           Int?      // если сообщение от бота
 
   conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   receiver       User?         @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
@@ -195,11 +200,91 @@ model StoryView {
   @@unique([storyId, userId])
 }
 
+// ══════════════════════════════════════════
+// BOT PLATFORM
+// ══════════════════════════════════════════
+
+model Bot {
+  id             Int      @id @default(autoincrement())
+  token          String   @unique
+  username       String   @unique
+  name           String
+  description    String?
+  about          String?
+  avatarUrl      String?
+  isActive       Boolean  @default(true)
+  ownerId        Int
+  webhookUrl     String?
+  webhookSecret  String?
+  allowedUpdates String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner           User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  commands        BotCommand[]
+  sessions        BotSession[]
+  callbackQueries BotCallbackQuery[]
+
+  @@index([ownerId])
+  @@index([username])
+}
+
+model BotCommand {
+  id          Int    @id @default(autoincrement())
+  botId       Int
+  command     String
+  description String
+  bot         Bot    @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@unique([botId, command])
+  @@index([botId])
+}
+
+model BotSession {
+  id        Int      @id @default(autoincrement())
+  botId     Int
+  userId    Int
+  state     String?
+  data      Json?
+  updatedAt DateTime @updatedAt
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([botId, userId])
+  @@index([botId])
+  @@index([userId])
+}
+
+model BotCallbackQuery {
+  id           Int       @id @default(autoincrement())
+  botId        Int
+  userId       Int
+  messageId    Int
+  callbackData String
+  answeredAt   DateTime?
+  createdAt    DateTime  @default(now())
+  bot          Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@index([botId])
+  @@index([userId])
+}
+
+model BotFatherSession {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  step      String   @default("idle")
+  data      Json?
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model UserSession {
   id           String   @id @default(cuid())
   userId       Int
   deviceName   String
-  deviceType   String   @default("desktop") // desktop | mobile | tablet
+  deviceType   String   @default("desktop")
   os           String?
   browser      String?
   ip           String?

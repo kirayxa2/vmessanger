@@ -638,6 +638,18 @@ export default function ChatSidebar({
     if (isCreatingConversation.current) return
     isCreatingConversation.current = true
     try {
+      // Если это BotFather — открываем его через свой endpoint
+      if (user.is_bot || user.id === -1) {
+        const res = await fetch("/api/botfather/open", { method: "POST" })
+        if (res.ok) {
+          const conversation = await res.json()
+          onConversationCreated?.(conversation)
+          onSelect?.(conversation.id.toString())
+          setIsSearchActive(false); setSearchQuery("")
+        }
+        return
+      }
+
       const res = await fetch("/api/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1370,12 +1382,17 @@ export default function ChatSidebar({
                     <div key={user.id} onClick={() => handleUserClick(user)}
                       className="px-4 py-2 flex items-center gap-3 hover:bg-white/5 cursor-pointer mx-2 rounded-xl transition-colors">
                       <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shrink-0 overflow-hidden"
-                        style={{ backgroundColor: ACCENT }}>
-                        {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.username?.[0].toUpperCase()}
+                        style={{ backgroundColor: user.is_bot ? '#1a6b3a' : ACCENT }}>
+                        {user.is_bot
+                          ? <span className="text-2xl">🤖</span>
+                          : user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.username?.[0].toUpperCase()}
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-bold text-[15px] text-white">{user.username}</span>
-                        <span className="text-[13px] text-gray-500">@{user.username?.toLowerCase()}</span>
+                        <span className="font-bold text-[15px] text-white flex items-center gap-1">
+                          {user.username}
+                          {user.is_bot && <VerifiedBadge size={15} />}
+                        </span>
+                        <span className="text-[13px] text-gray-500">{user.is_bot ? 'бот' : `@${user.username?.toLowerCase()}`}</span>
                       </div>
                     </div>
                   ))}
@@ -1420,6 +1437,7 @@ const ChatListItem = React.memo(function ChatListItem({
 }) {
   const isSaved = chat.type === "saved"
   const isSystem = chat.type === "system"
+  const isBotFather = chat.type === "botfather"
   const isGroup = chat.type === "group"
   const otherUser = (!isSaved && !isSystem)
     ? chat.participants?.find((p: any) => p.userId?.toString() !== currentUser?.id?.toString())?.user
@@ -1437,6 +1455,10 @@ const ChatListItem = React.memo(function ChatListItem({
     avatarContent = <img src="/logo (1).ico" alt="Vortex" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
     avatarBg = "#7e85e1"
     displayNameEl = <span className="flex items-center gap-1"><span>Vortex</span><VerifiedBadge size={16} /></span>
+  } else if (isBotFather) {
+    avatarContent = <span className="text-2xl">🤖</span>
+    avatarBg = "#1a6b3a"
+    displayNameEl = <span className="flex items-center gap-1"><span>BotFather</span><VerifiedBadge size={15} /></span>
   } else if (isGroup) {
     avatarContent = <span className="font-bold text-xl">{chat.name?.[0]?.toUpperCase() || "G"}</span>
     avatarBg = "#7e85e1"
@@ -1459,13 +1481,14 @@ const ChatListItem = React.memo(function ChatListItem({
   const lastMsg = chat.messages?.[0]
   const previewText = isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
     : isSystem ? t("service_notifications")
+      : isBotFather ? (lastMsg?.content || "Управление ботами")
       : isGroup
         ? lastMsg ? `${lastMsg.sender?.username || ""}: ${lastMsg.content || "📎"}` : t("no_messages")
         : (lastMsg?.content || t("no_messages"))
 
   const lpTimer = useRef<any>(null)
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isSaved || isSystem) return
+    if (isSaved || isSystem || isBotFather) return
     lpTimer.current = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(40)
       openChatMenu(e, chat)
@@ -1478,7 +1501,7 @@ const ChatListItem = React.memo(function ChatListItem({
   return (
     <motion.div
       onClick={() => onSelect?.(chat.id.toString())}
-      onContextMenu={e => { if (!isSaved && !isSystem) { e.preventDefault(); openChatMenu(e, chat) } }}
+      onContextMenu={e => { if (!isSaved && !isSystem && !isBotFather) { e.preventDefault(); openChatMenu(e, chat) } }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
