@@ -297,7 +297,9 @@ app.prepare().then(() => {
               select: { type: true },
             })
             if (conv && conv.type === "botfather" && hasText) {
-              // Вызываем BotFather через внутренний HTTP endpoint
+              // Вызываем BotFather через внутренний HTTP endpoint —
+              // он сам сохранит сообщения в БД с правильным senderId (BotFather user)
+              // и вернёт готовые message-объекты для эмита через сокет.
               const bfRes = await fetch(`http://localhost:${port}/api/botfather`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-internal-secret": process.env.INTERNAL_SECRET || "botfather-secret" },
@@ -307,21 +309,11 @@ app.prepare().then(() => {
                   conversationId: Number(data.conversationId),
                 }),
               }).catch(() => null)
-              const replies = bfRes?.ok ? await bfRes.json().catch(() => []) : []
-              if (Array.isArray(replies) && replies.length > 0) {
-                for (const rep of replies) {
-                  const botMsg = await prisma.message.create({
-                    data: {
-                      conversationId: Number(data.conversationId),
-                      senderId: Number(currentUserId),
-                      content: rep.text,
-                      botId: 0,
-                      replyMarkup: rep.replyMarkup || undefined,
-                    },
-                    include: { sender: { select: { id: true, username: true, avatar: true } } }
-                  })
-                  const botSaved = { ...botMsg, isBotMessage: true }
-                  io.to(roomId).emit("new-message", botSaved)
+              const savedMessages = bfRes?.ok ? await bfRes.json().catch(() => []) : []
+              if (Array.isArray(savedMessages) && savedMessages.length > 0) {
+                for (const botSaved of savedMessages) {
+                  // Эмитим всем участникам чата (включая отправителя)
+                  io.to(roomId).emit("new-message", { ...botSaved, conversationId: roomId })
                   socket.emit("conversation-updated", { conversationId: roomId, lastMessage: botSaved })
                 }
               }

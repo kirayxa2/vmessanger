@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth/authOptions"
+import { ensureBotFatherUser } from "@/lib/botfather/system"
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -21,6 +22,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Query too long" }, { status: 400 })
     }
 
+    // Гарантируем что BotFather-юзер существует — чтобы он искался первым же запросом
+    await ensureBotFatherUser()
+
     const users = await prisma.user.findMany({
       where: {
         OR: [
@@ -34,16 +38,23 @@ export async function GET(req: NextRequest) {
         id: true,
         username: true,
         avatar: true,
+        isBot: true,
       },
-      take: 10
+      take: 15,
+      // Боты в начало списка чтобы их легко находить
+      orderBy: [
+        { isBot: "desc" },
+        { username: "asc" },
+      ],
     })
 
-    // Добавляем BotFather если запрос совпадает
-    const botfatherNames = ["botfather", "bot father", "бот"]
-    const showBotFather = botfatherNames.some(n => n.includes(query.toLowerCase())) || "botfather".startsWith(query.toLowerCase())
-    const result = showBotFather
-      ? [{ id: -1, username: "BotFather", avatar: null, is_bot: true }, ...users]
-      : users
+    // Маппим в публичный формат, поле is_bot для фронтенда
+    const result = users.map(u => ({
+      id: u.id,
+      username: u.username,
+      avatar: u.avatar,
+      is_bot: u.isBot,
+    }))
 
     return NextResponse.json(result)
   } catch (error) {

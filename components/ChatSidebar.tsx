@@ -638,8 +638,8 @@ export default function ChatSidebar({
     if (isCreatingConversation.current) return
     isCreatingConversation.current = true
     try {
-      // Если это BotFather — открываем его через свой endpoint
-      if (user.is_bot || user.id === -1) {
+      // BotFather — отдельный endpoint (создаёт чат с type='botfather' для спец. UI)
+      if (user.username === "BotFather") {
         const res = await fetch("/api/botfather/open", { method: "POST" })
         if (res.ok) {
           const conversation = await res.json()
@@ -650,6 +650,7 @@ export default function ChatSidebar({
         return
       }
 
+      // Все остальные пользователи (включая обычных ботов) — обычный 1-1 чат
       const res = await fetch("/api/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

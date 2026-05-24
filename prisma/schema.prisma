@@ -31,11 +31,14 @@ model User {
   stories           Story[]
   storyViews        StoryView[]
   publicKey         String?   // E2E: X25519/P-256 public key (base64, spki format)
-  ownedBots         Bot[]     @relation
+  isBot             Boolean   @default(false) // системный аккаунт бота
+  ownedBots         Bot[]     @relation("BotOwner")
+  botProfile        Bot?      @relation("BotIdentity")
   botSessions       BotSession[]
   botFatherSession  BotFatherSession?
 
   @@index([lastSeen])
+  @@index([isBot])
 }
 
 model Conversation {
@@ -215,13 +218,15 @@ model Bot {
   avatarUrl      String?
   isActive       Boolean  @default(true)
   ownerId        Int
+  userId         Int?     @unique // системный User-аккаунт бота (для отображения как обычного пользователя)
   webhookUrl     String?
   webhookSecret  String?
   allowedUpdates String[] @default([])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  owner           User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner           User               @relation("BotOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  user            User?              @relation("BotIdentity", fields: [userId], references: [id], onDelete: SetNull)
   commands        BotCommand[]
   sessions        BotSession[]
   callbackQueries BotCallbackQuery[]

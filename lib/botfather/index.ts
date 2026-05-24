@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { generateBotToken, formatBot } from "@/lib/botUtils"
+import { createBotUser } from "@/lib/botfather/system"
 
 type BFState = { step: string; data: Record<string, unknown> }
 
@@ -145,13 +146,22 @@ async function handleStep(state: BFState, text: string, userId: number): Promise
       if (!username.endsWith("bot")) return reply("Username должен заканчиваться на *bot*. Попробуй ещё раз:")
       const exists = await prisma.bot.findUnique({ where: { username } })
       if (exists) return reply(`@${username} уже занят. Придумай другой:`)
+      const userExists = await prisma.user.findUnique({ where: { username } })
+      if (userExists) return reply(`@${username} уже занят пользователем. Придумай другой:`)
 
-      const bot = await prisma.bot.create({ data: { token: `tmp_${Date.now()}`, username, name, ownerId: userId } })
+      // 1. Создаём системного User-а для бота — чтобы его можно было найти в поиске
+      //    и чат с ним работал как обычный 1-1 чат
+      const botUserId = await createBotUser(username, name)
+
+      // 2. Создаём запись бота
+      const bot = await prisma.bot.create({
+        data: { token: `tmp_${Date.now()}`, username, name, ownerId: userId, userId: botUserId },
+      })
       const token = generateBotToken(bot.id)
       await prisma.bot.update({ where: { id: bot.id }, data: { token } })
       await clearState(userId)
 
-      return reply(`✅ Бот создан!\n\n🤖 *${name}*\n@${username}\n\n🔑 Токен:\n\`${token}\`\n\nBot API: \`POST /api/bot/{token}/{method}\``)
+      return reply(`✅ Бот создан!\n\n🤖 *${name}*\n@${username}\n\n🔑 Токен:\n\`${token}\`\n\nТеперь @${username} появится в поиске — пиши ему как обычному пользователю.\n\nBot API: \`POST /api/bot/{token}/{method}\``)
     }
 
     case "setname_input": {
