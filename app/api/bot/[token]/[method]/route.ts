@@ -19,16 +19,18 @@ async function resolveBot(token: string) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { token: string; method: string } }
+  { params }: { params: Promise<{ token: string; method: string }> }
 ) {
-  return handleMethod(req, params.token, params.method)
+  const { token, method } = await params
+  return handleMethod(req, token, method)
 }
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { token: string; method: string } }
+  { params }: { params: Promise<{ token: string; method: string }> }
 ) {
-  return handleMethod(req, params.token, params.method)
+  const { token, method } = await params
+  return handleMethod(req, token, method)
 }
 
 async function handleMethod(req: NextRequest, token: string, method: string) {
