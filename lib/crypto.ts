@@ -268,3 +268,43 @@ export async function encryptMessageForMany(
   }
   return results
 }
+
+
+// ── Self-encryption ────────────────────────────────────────────────────────────
+//
+// ПРОБЛЕМА: при ECDH Alice -> Bob, Alice шифрует через (alicePriv + bobPub).
+// Расшифровать эту копию может только Bob через (bobPriv + alicePub).
+// Если Alice перезашла в чат и хочет расшифровать СВОЁ ЖЕ сообщение — не выйдет.
+//
+// РЕШЕНИЕ: при отправке делаем ВТОРУЮ копию шифровки на собственных ключах
+// (alicePriv + alicePub). Это даёт детерминированный shared secret,
+// который Alice сможет вывести только она сама. Хранится в Message.contentForSender.
+
+/**
+ * Зашифровать сообщение для самого себя (для перезахода в чат).
+ * Использует свой приватный + свой публичный ключ — derive детерминированный self-key.
+ */
+export async function encryptMessageForSelf(plaintext: string): Promise<string | null> {
+  try {
+    const ownPubKey = await getPublicKeyBase64()
+    if (!ownPubKey) return null
+    return encryptMessage(plaintext, ownPubKey)
+  } catch (err) {
+    console.error("[E2E] Self-encryption failed:", err)
+    return null
+  }
+}
+
+/**
+ * Расшифровать собственное сообщение, зашифрованное через encryptMessageForSelf.
+ */
+export async function decryptMessageFromSelf(encryptedBase64: string): Promise<string | null> {
+  try {
+    const ownPubKey = await getPublicKeyBase64()
+    if (!ownPubKey) return null
+    return decryptMessage(encryptedBase64, ownPubKey)
+  } catch (err) {
+    console.error("[E2E] Self-decryption failed:", err)
+    return null
+  }
+}

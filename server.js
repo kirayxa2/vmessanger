@@ -247,6 +247,7 @@ app.prepare().then(() => {
           const message = await prisma.message.create({
             data: {
               content: hasText ? data.content : "",
+              ...(data.contentForSender ? { contentForSender: data.contentForSender } : {}),
               conversationId: Number(data.conversationId),
               senderId: Number(currentUserId),
               isEncrypted: data.isEncrypted === true,
@@ -389,7 +390,11 @@ app.prepare().then(() => {
           if (!data.content || data.content.length > 4096) return
           const updated = await prisma.message.update({
             where: { id: Number(data.id) },
-            data: { content: data.content },
+            data: {
+              content: data.content,
+              ...(data.contentForSender !== undefined ? { contentForSender: data.contentForSender || null } : {}),
+              ...(data.isEncrypted !== undefined ? { isEncrypted: data.isEncrypted === true } : {}),
+            },
             include: {
               sender: { select: { id: true, username: true, avatar: true } },
               replyTo: { include: { sender: { select: { id: true, username: true, avatar: true } } } },

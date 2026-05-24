@@ -23,10 +23,11 @@ async function getState(userId: number): Promise<BFState> {
 }
 
 async function setState(userId: number, step: string, data: Record<string, unknown>) {
+  const payload = { step, data } as any
   await prisma.botFatherSession.upsert({
     where: { userId },
-    update: { step, data: { step, data } },
-    create: { userId, step, data: { step, data } },
+    update: { step, data: payload },
+    create: { userId, step, data: payload },
   })
 }
 
