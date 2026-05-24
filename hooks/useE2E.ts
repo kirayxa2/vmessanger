@@ -50,7 +50,11 @@ export function useE2E() {
   const [e2eEnabled, setE2eEnabled] = useState(false)
   const initDone = useRef(false)
   // Промис инициализации — decryptMessages ждёт его вместо того чтобы возвращать мусор
-  const initPromiseRef = useRef<Promise<void> | null>(null)
+  // Создаём сразу как resolvable промис чтобы не было null-gap до первого useEffect
+  const initResolveRef = useRef<(() => void) | null>(null)
+  const initPromiseRef = useRef<Promise<void>>(new Promise(resolve => { initResolveRef.current = resolve }))
+  // Реф для e2eEnabled — чтобы callback-и не захватывали старое значение false
+  const e2eEnabledRef = useRef(false)
 
   useEffect(() => {
     if (!session?.user?.id || initDone.current) return
@@ -78,15 +82,18 @@ export function useE2E() {
           }
         }
         setE2eEnabled(true)
+        e2eEnabledRef.current = true
       } catch (err) {
         console.error("[E2E] Init error:", err)
         setE2eEnabled(false)
       } finally {
         setReady(true)
+        // Резолвим промис — все ждущие decryptMessages продолжат работу
+        initResolveRef.current?.()
       }
     })()
 
-    initPromiseRef.current = initPromise
+    // Не перезаписываем initPromiseRef — он уже создан в useRef
   }, [session?.user?.id])
 
   // Получить публичный ключ пользователя с кэшированием и дедублированием запросов
@@ -114,31 +121,31 @@ export function useE2E() {
     plaintext: string,
     recipientUserId: string | number
   ): Promise<string | null> => {
-    if (!e2eEnabled) return null
+    if (!e2eEnabledRef.current) return null
     const recipientPubKey = await getRecipientPublicKey(recipientUserId)
     if (!recipientPubKey) return null
     return encryptMessage(plaintext, recipientPubKey)
-  }, [e2eEnabled, getRecipientPublicKey])
+  }, [getRecipientPublicKey])
 
   // Расшифровать сообщение
   const decrypt = useCallback(async (
     encryptedContent: string,
     senderUserId: string | number
   ): Promise<string | null> => {
-    if (!e2eEnabled) return null
+    if (!e2eEnabledRef.current) return null
     const senderPubKey = await getRecipientPublicKey(senderUserId)
     if (!senderPubKey) return null
     return decryptMessage(encryptedContent, senderPubKey)
-  }, [e2eEnabled, getRecipientPublicKey])
+  }, [getRecipientPublicKey])
 
   // Расшифровать список сообщений
   // Ждёт инициализацию E2E перед обработкой — без расинг кондишных не вернёт
   const decryptMessages = useCallback(async (messages: any[]): Promise<any[]> => {
-    // Ждём инициализации
-    if (initPromiseRef.current) await initPromiseRef.current
+    // Ждём инициализации — initPromiseRef всегда существует (не null)
+    await initPromiseRef.current
 
-    // Если E2E не активно — возвращаем как есть
-    if (!e2eEnabled) return messages
+    // Читаем из рефа — не из closure (там e2eEnabled может быть устаревшим false)
+    if (!e2eEnabledRef.current) return messages
 
     // Предзагружаем все публичные ключи параллельно
     const encryptedMessages = messages.filter(m => m.isEncrypted)
@@ -164,7 +171,7 @@ export function useE2E() {
         return { ...msg, content: plaintext }
       })
     )
-  }, [e2eEnabled, decrypt, getRecipientPublicKey])
+  }, [decrypt, getRecipientPublicKey])
 
   return {
     ready,

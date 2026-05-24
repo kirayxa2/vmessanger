@@ -209,11 +209,23 @@ export default function HomePage({ conversationId }: { conversationId?: string }
           }))
         )
       }
+      // New conversation created by another user — add it to our sidebar
+      const handleNewConversation = (conversation: any) => {
+        const normalized = applyVirtualIds([conversation])[0]
+        setConversations(prev => {
+          if (prev.find(c => c.id.toString() === normalized.id.toString())) return prev
+          return [normalized, ...prev]
+        })
+        // Join the socket room for this new conversation
+        socket.emit("join-conversation", normalized.id.toString())
+      }
       socket.on("conversation-updated", handleConversationUpdated)
       socket.on("user-avatar-updated", handleAvatarUpdate)
+      socket.on("new-conversation", handleNewConversation)
       return () => {
         socket.off("conversation-updated", handleConversationUpdated)
         socket.off("user-avatar-updated", handleAvatarUpdate)
+        socket.off("new-conversation", handleNewConversation)
       }
     }
   }, [status, socket, session?.user?.id])

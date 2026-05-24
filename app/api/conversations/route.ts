@@ -125,6 +125,17 @@ export async function POST(req: NextRequest) {
         },
         include: conversationInclude,
       })
+
+      // Notify the other user in real-time so the chat appears in their sidebar
+      const emitToUser = (global as any).__emitToUser
+      if (typeof emitToUser === "function") {
+        emitToUser(String(otherUserId), "new-conversation", {
+          ...conversation,
+          _folder: null,
+          _isMuted: false,
+        })
+      }
+
       return NextResponse.json(conversation, { status: 201 })
     }
 

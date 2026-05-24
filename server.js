@@ -133,6 +133,9 @@ app.prepare().then(() => {
     }
   })
 
+  // Expose io globally so Next.js API routes can emit events
+  global.__socketIo = io
+
   // userId -> Set<socketId>
   const userSockets = new Map()
 
@@ -164,6 +167,9 @@ app.prepare().then(() => {
     }
     return false
   }
+
+  // Expose emitToUser globally so Next.js API routes can notify users
+  global.__emitToUser = emitToUser
 
   // ── Cache of user conversation memberships ──
   const userConversationsCache = new Map() // userId -> Set<conversationId>
@@ -260,11 +266,19 @@ app.prepare().then(() => {
           // Confirm to sender: replace temp with real message
           socket.emit("message-confirmed", { tempId: data.tempId, message: saved })
 
-          // Deliver to other participants
+          // Deliver to other participants — also ensure they join the room
           socket.to(roomId).emit("new-message", saved)
           if (Array.isArray(data.participantIds)) {
             data.participantIds.forEach(uid => {
               if (String(uid) !== currentUserId) {
+                // Add their sockets to the room so future broadcasts work
+                const theirSockets = userSockets.get(String(uid))
+                if (theirSockets) {
+                  theirSockets.forEach(sid => {
+                    const s = io.sockets.sockets.get(sid)
+                    if (s) s.join(roomId)
+                  })
+                }
                 emitToUser(uid, "new-message", saved)
                 emitToUser(uid, "conversation-updated", { conversationId: roomId, lastMessage: saved })
               }
