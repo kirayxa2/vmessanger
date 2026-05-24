@@ -238,14 +238,34 @@ export default function HomePage({ conversationId }: { conversationId?: string }
     if (typeof window !== "undefined") {
       window.history.pushState({ conversationId: id }, "", `/${id}`)
     }
-    // Обновляем список чатов в фоне чтобы подтянуть новые чаты
-    setTimeout(() => fetchConversations(), 1000)
+    // Обновляем список чатов в фоне чтобы подтянуть новые чаты (мержим, не перезаписываем)
+    setTimeout(() => {
+      fetch("/api/conversations")
+        .then(r => r.json())
+        .then((data: any[]) => {
+          if (!Array.isArray(data)) return
+          const raw = data.filter((c: any) => c.id != null)
+          const fresh = applyVirtualIds(raw)
+          setConversations(prev => {
+            // Мержим: берём свежие данные с сервера, но сохраняем чаты которых ещё нет на сервере (только что созданные)
+            const freshIds = new Set(fresh.map((c: any) => c.id.toString()))
+            const localOnly = prev.filter(c => !freshIds.has(c.id.toString()))
+            return [...localOnly, ...fresh].sort((a: any, b: any) => {
+              const aTime = a.messages?.[0]?.createdAt || a.updatedAt || 0
+              const bTime = b.messages?.[0]?.createdAt || b.updatedAt || 0
+              return new Date(bTime).getTime() - new Date(aTime).getTime()
+            })
+          })
+        })
+        .catch(() => {})
+    }, 1500)
   }
 
   const handleConversationCreated = (conversation: any) => {
+    const normalized = applyVirtualIds([conversation])[0]
     setConversations(prev => {
-      if (prev.find(c => c.id.toString() === conversation.id.toString())) return prev
-      return [conversation, ...prev]
+      if (prev.find(c => c.id.toString() === normalized.id.toString())) return prev
+      return [normalized, ...prev]
     })
   }
 
