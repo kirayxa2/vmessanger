@@ -49,12 +49,9 @@ export function useE2E() {
   const [ready, setReady] = useState(false)
   const [e2eEnabled, setE2eEnabled] = useState(false)
   const initDone = useRef(false)
-  // Промис инициализации — decryptMessages ждёт его вместо того чтобы возвращать мусор
-  // Создаём сразу как resolvable промис чтобы не было null-gap до первого useEffect
-  const initResolveRef = useRef<(() => void) | null>(null)
-  const initPromiseRef = useRef<Promise<void>>(new Promise(resolve => { initResolveRef.current = resolve }))
-  // Реф для e2eEnabled — чтобы callback-и не захватывали старое значение false
   const e2eEnabledRef = useRef(false)
+  // Простой флаг: инициализация завершена (успешно или нет)
+  const initFinishedRef = useRef(false)
 
   useEffect(() => {
     if (!session?.user?.id || initDone.current) return
@@ -88,12 +85,9 @@ export function useE2E() {
         setE2eEnabled(false)
       } finally {
         setReady(true)
-        // Резолвим промис — все ждущие decryptMessages продолжат работу
-        initResolveRef.current?.()
+        initFinishedRef.current = true
       }
     })()
-
-    // Не перезаписываем initPromiseRef — он уже создан в useRef
   }, [session?.user?.id])
 
   // Получить публичный ключ пользователя с кэшированием и дедублированием запросов
@@ -141,10 +135,15 @@ export function useE2E() {
   // Расшифровать список сообщений
   // Ждёт инициализацию E2E перед обработкой — без расинг кондишных не вернёт
   const decryptMessages = useCallback(async (messages: any[]): Promise<any[]> => {
-    // Ждём инициализации — initPromiseRef всегда существует (не null)
-    await initPromiseRef.current
+    // Ждём инициализации E2E макс 3 секунды, потом идём дальше без E2E
+    if (!initFinishedRef.current) {
+      const deadline = Date.now() + 3000
+      while (!initFinishedRef.current && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 50))
+      }
+    }
 
-    // Читаем из рефа — не из closure (там e2eEnabled может быть устаревшим false)
+    // если E2E не включился — возвращаем сообщения как есть
     if (!e2eEnabledRef.current) return messages
 
     // Предзагружаем все публичные ключи параллельно
