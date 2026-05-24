@@ -79,6 +79,7 @@ model ConversationParticipant {
 model Message {
   id              Int           @id @default(autoincrement())
   content         String        @default("")
+  contentForSender String?      // E2E: вторая зашифрованная копия для отправителя (чтобы он мог расшифровать своё же сообщение)
   createdAt       DateTime      @default(now())
   isRead          Boolean       @default(false)
   senderId        Int

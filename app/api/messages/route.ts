@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { content, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType, voiceUrl, voiceDuration, selfDestructSeconds } = body
+    const { content, contentForSender, isEncrypted, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType, voiceUrl, voiceDuration, selfDestructSeconds } = body
 
     // ── Validate input ──
     const hasText = content && typeof content === "string" && content.trim().length > 0
@@ -77,6 +77,8 @@ export async function POST(req: NextRequest) {
     const message = await prisma.message.create({
       data: {
         content: hasText ? content : "",
+        ...(contentForSender ? { contentForSender } : {}),
+        ...(isEncrypted ? { isEncrypted: true } : {}),
         conversationId: Number(conversationId),
         senderId: Number(session.user.id),
         ...(replyToId ? { replyToId: Number(replyToId) } : {}),
@@ -184,7 +186,7 @@ export async function PATCH(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json()
-    const { id, content } = body
+    const { id, content, contentForSender, isEncrypted } = body
 
     if (!id || !content || typeof content !== "string") {
       return NextResponse.json({ error: "id and content are required" }, { status: 400 })
@@ -200,7 +202,11 @@ export async function PATCH(req: NextRequest) {
 
     const updatedMessage = await prisma.message.update({
       where: { id: Number(id) },
-      data: { content },
+      data: {
+        content,
+        ...(contentForSender !== undefined ? { contentForSender: contentForSender || null } : {}),
+        ...(isEncrypted !== undefined ? { isEncrypted: isEncrypted === true } : {}),
+      },
       include: messageInclude
     })
 

@@ -30,6 +30,7 @@ interface Message {
   conversationId?: string | number
   isRead?: boolean
   isEncrypted?: boolean
+  contentForSender?: string | null  // E2E: вторая копия для отправителя
   replyTo?: { id: number; content: string; sender: { id: number; username: string; avatar?: string } } | null
   forwardFromId?: number | null
   fileUrl?: string | null
@@ -435,7 +436,8 @@ useEffect(() => {
       let displayMessage = message
       if (message.isEncrypted && message.content) {
         const senderId = String(message.sender?.id)
-        const plaintext = await decrypt(message.content, senderId)
+        // Передаём contentForSender — для своих сообщений (с другого устройства) расшифруется через self-key
+        const plaintext = await decrypt(message.content, senderId, (message as any).contentForSender)
         displayMessage = { ...message, content: plaintext ?? "🔒 Зашифрованное сообщение" }
       }
       setMessages(prev => {
@@ -468,7 +470,16 @@ useEffect(() => {
     }
 
     const handleMessageDeleted = (id: string) => setMessages(prev => prev.filter(m => m.id?.toString() !== String(id)))
-    const handleMessageEdited = (updated: Message) => setMessages(prev => prev.map(m => m.id?.toString() === updated.id?.toString() ? updated : m))
+    const handleMessageEdited = async (updated: Message) => {
+      // E2E: расшифровываем отредактированное сообщение перед обновлением UI
+      let displayUpdated = updated
+      if (updated.isEncrypted && updated.content) {
+        const senderId = String(updated.sender?.id)
+        const plaintext = await decrypt(updated.content, senderId, (updated as any).contentForSender)
+        displayUpdated = { ...updated, content: plaintext ?? "🔒 Зашифрованное сообщение" }
+      }
+      setMessages(prev => prev.map(m => m.id?.toString() === displayUpdated.id?.toString() ? displayUpdated : m))
+    }
 
     const handleMessagesRead = (data: { readByUserId: string; messageIds: number[] }) => {
       if (data.readByUserId?.toString() === session?.user?.id?.toString()) return
@@ -824,17 +835,25 @@ useEffect(() => {
       // Обновляем оптимистично — сразу показываем изменение в UI
       setMessages(prev => prev.map(m => m.id?.toString() === editingMessageId ? { ...m, content: input } : m))
 
-      // E2E: шифруем отредактированное сообщение
+      // E2E: шифруем отредактированное сообщение (две копии: для собеседника + для себя)
       let editContent = input
+      let editContentForSender: string | undefined
+      let editIsEncrypted = false
       if (e2eEnabled && otherUser?.id && !isGroupChat) {
         const enc = await encrypt(input, otherUser.id)
-        if (enc) editContent = enc
+        if (enc) {
+          editContent = enc.forRecipient
+          editContentForSender = enc.forSender
+          editIsEncrypted = true
+        }
       }
 
       socket.emit("edit-message", {
         tempEditId,
         id: editingMessageId,
         content: editContent,
+        contentForSender: editContentForSender,
+        isEncrypted: editIsEncrypted,
         conversationId: String(apiId),
       })
       setEditingMessageId(null); setInput("")
@@ -859,13 +878,16 @@ useEffect(() => {
     const currentReplyTo = replyingTo
     setInput(""); setReplyingTo(null)
 
-    // 2. E2E: шифруем перед отправкой — сервер хранит только зашифрованный blob
+    // 2. E2E: шифруем перед отправкой — сервер хранит две зашифрованных копии:
+    //    content (для получателя, ключ собеседника) + contentForSender (для меня, self-key)
     let contentToSend = currentInput
+    let contentForSender: string | undefined
     let isEncryptedFlag = false
     if (e2eEnabled && otherUser?.id && !isGroupChat) {
-      const encryptedContent = await encrypt(currentInput, otherUser.id)
-      if (encryptedContent) {
-        contentToSend = encryptedContent
+      const encryptedPair = await encrypt(currentInput, otherUser.id)
+      if (encryptedPair) {
+        contentToSend = encryptedPair.forRecipient
+        contentForSender = encryptedPair.forSender
         isEncryptedFlag = true
       }
     }
@@ -874,6 +896,7 @@ useEffect(() => {
     socket.emit("send-message", {
       tempId,
       content: contentToSend,
+      contentForSender,
       isEncrypted: isEncryptedFlag,
       conversationId: String(apiId),
       senderId: session.user.id,
