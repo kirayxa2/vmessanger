@@ -158,6 +158,8 @@ export default function HomePage({ conversationId }: { conversationId?: string }
           if (isNotActiveChat) {
             setUnreadCounts(prev => ({ ...prev, [data.conversationId]: (prev[data.conversationId] || 0) + 1 }))
           }
+          // "Без звука" (silent): не проигрываем звук и не показываем уведомление
+          if (!message.silent) {
           // Global notification: play sound
           playNotificationSound()
           
@@ -193,6 +195,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
             } catch (e) {
               console.error("Web Push notification failed", e)
             }
+          }
           }
         }
         setConversations(prev => {

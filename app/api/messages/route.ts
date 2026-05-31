@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { content, contentForSender, isEncrypted, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType, voiceUrl, voiceDuration, selfDestructSeconds } = body
+    const { content, contentForSender, isEncrypted, conversationId, replyToId, forwardFromId, fileUrl, fileName, fileSize, fileType, voiceUrl, voiceDuration, selfDestructSeconds, linkPreview, scheduledAt } = body
 
     // ── Validate input ──
     const hasText = content && typeof content === "string" && content.trim().length > 0
@@ -74,6 +74,15 @@ export async function POST(req: NextRequest) {
       selfDestructAt = new Date(Date.now() + selfDestructSeconds * 1000)
     }
 
+    // ── Scheduled send: дата в будущем (макс. 1 год) ──
+    let scheduledAtDate: Date | undefined
+    if (scheduledAt) {
+      const d = new Date(scheduledAt)
+      if (!isNaN(d.getTime()) && d.getTime() > Date.now() + 5000 && d.getTime() < Date.now() + 365 * 24 * 3600 * 1000) {
+        scheduledAtDate = d
+      }
+    }
+
     const message = await prisma.message.create({
       data: {
         content: hasText ? content : "",
@@ -86,6 +95,8 @@ export async function POST(req: NextRequest) {
         ...(fileUrl ? { fileUrl, fileName: fileName || "file", fileSize: fileSize || 0, fileType: fileType || "application/octet-stream" } : {}),
         ...(voiceUrl ? { voiceUrl, voiceDuration: voiceDuration || 0 } : {}),
         ...(selfDestructAt ? { selfDestructAt } : {}),
+        ...(linkPreview && typeof linkPreview === "object" ? { linkPreview } : {}),
+        ...(scheduledAtDate ? { scheduledAt: scheduledAtDate } : {}),
       },
       include: messageInclude
     })
@@ -128,6 +139,8 @@ export async function GET(req: NextRequest) {
           { selfDestructAt: null },
           { selfDestructAt: { gt: new Date() } },
         ],
+        // Скрываем отложенные сообщения, время которых ещё не наступило
+        scheduledAt: null,
         // If the user cleared history, only show messages after that timestamp
         ...(participant.clearedAt ? { createdAt: { gt: participant.clearedAt } } : {}),
         ...(cursor ? { id: { lt: Number(cursor) } } : {}),

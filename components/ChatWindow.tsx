@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock, LayoutGrid, Bold, Italic, Strikethrough, Code, Link2, EyeOff } from "lucide-react"
+import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock, LayoutGrid, Bold, Italic, Strikethrough, Code, Link2, EyeOff, BellOff } from "lucide-react"
 import { Virtuoso } from "react-virtuoso"
 import Linkify from "linkify-react"
 import EmojiGifPicker from "./EmojiGifPicker"
@@ -163,6 +163,26 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   // ── Text formatting toolbar (Telegram-style) ──
   // Выделяешь текст → всплывает панель форматирования. Оборачиваем выделение в markdown-маркеры.
   const [fmtSel, setFmtSel] = useState<{ start: number; end: number } | null>(null)
+
+  // ── A2: превью ссылки в композере ──
+  const [linkPreviewData, setLinkPreviewData] = useState<{ url: string; title?: string; description?: string; image?: string; siteName?: string } | null>(null)
+  const linkPreviewReqRef = useRef(0)
+  const dismissedLinkRef = useRef<string | null>(null)
+
+  // ── A4: меню отправки (без звука / запланировать) ──
+  const [showSendMenu, setShowSendMenu] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [scheduleValue, setScheduleValue] = useState("")
+  const [scheduledToast, setScheduledToast] = useState<Date | null>(null)
+  const sendLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sendLongPressFired = useRef(false)
+  const toLocalDatetimeValue = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0")
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  // ── A5: команды бота для автокомплита по "/" ──
+  const [botCommands, setBotCommands] = useState<{ command: string; description: string }[]>([])
 
   const handleInputSelect = useCallback(() => {
     const el = inputRef.current
@@ -846,13 +866,15 @@ useEffect(() => {
 
 
   // ── File upload ──────────────────────────────────────────────
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  // Общий загрузчик: optimistic → /api/upload → /api/messages → emit. Используется
+  // кнопкой-скрепкой, drag&drop и вставкой из буфера (paste).
+  const uploadAndSendFile = useCallback(async (file: File, caption: string = "") => {
     if (!file || !session?.user) return
     if (file.size > 50 * 1024 * 1024) { setUploadError(t('file_too_large')); return }
 
     setIsUploading(true)
     setUploadError("")
+    const tempId = "temp-file-" + Date.now()
     try {
       const formData = new FormData()
       formData.append("file", file)
@@ -860,9 +882,8 @@ useEffect(() => {
       if (!uploadRes.ok) { setUploadError(t('upload_error')); return }
       const uploaded = await uploadRes.json()
 
-      const tempId = "temp-file-" + Date.now()
       const optimistic: Message = {
-        id: tempId, content: input || "", conversationId: String(apiId),
+        id: tempId, content: caption || "", conversationId: String(apiId),
         createdAt: new Date().toISOString(),
         fileUrl: uploaded.url, fileName: uploaded.name, fileSize: uploaded.size, fileType: uploaded.type,
         sender: { id: session.user.id, username: session.user.name || "Me", avatar: session.user.image || undefined }
@@ -874,7 +895,7 @@ useEffect(() => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: input || "",
+          content: caption || "",
           conversationId: apiId,
           fileUrl: uploaded.url, fileName: uploaded.name, fileSize: uploaded.size, fileType: uploaded.type,
         })
@@ -889,16 +910,70 @@ useEffect(() => {
       } else {
         setMessages(prev => prev.filter(m => m.id !== tempId))
       }
-    } catch { setUploadError(t('upload_error')) }
-    finally {
-      setIsUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
+    } catch { setUploadError(t('upload_error')); setMessages(prev => prev.filter(m => m.id !== tempId)) }
+    finally { setIsUploading(false) }
+  }, [session, apiId, socket, participantIds, t])
+
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) await uploadAndSendFile(file, input)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }, [uploadAndSendFile, input])
+
+  // A3: вставка картинки/файла из буфера обмена
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (it.kind === "file") {
+        const file = it.getAsFile()
+        if (file) {
+          e.preventDefault()
+          uploadAndSendFile(file)
+          return
+        }
+      }
     }
-  }, [session, apiId, socket, participantIds, input, t])
+  }, [uploadAndSendFile])
+
+  // A5: подгружаем команды бота-участника при открытии приватного чата (для меню "/")
+  useEffect(() => {
+    if (!apiId || isSpecialChat) { setBotCommands([]); return }
+    let cancelled = false
+    fetch(`/api/bot/commands?conversationId=${apiId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled) setBotCommands(d?.commands || []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [apiId, isSpecialChat])
+
+  // A2: детектим первую ссылку в тексте и тащим OG-превью (с дебаунсом)
+  useEffect(() => {
+    const m = input.match(/https?:\/\/[^\s]+/i)
+    const url = m?.[0]
+    if (!url) { setLinkPreviewData(null); dismissedLinkRef.current = null; return }
+    if (url === dismissedLinkRef.current) return
+    const reqId = ++linkPreviewReqRef.current
+    const tm = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`)
+        const d = await r.json()
+        if (reqId === linkPreviewReqRef.current && d?.preview) setLinkPreviewData(d.preview)
+      } catch {}
+    }, 600)
+    return () => clearTimeout(tm)
+  }, [input])
+
+  // Активные команды бота, отфильтрованные по введённому "/префиксу"
+  const slashMatch = /^\/(\w*)$/.exec(input)
+  const commandSuggestions = (slashMatch && botCommands.length > 0)
+    ? botCommands.filter(c => c.command.toLowerCase().startsWith(slashMatch[1].toLowerCase()))
+    : []
 
   // ── Send text message — через сокет, без HTTP POST ────────────
-  // overrideText — текст с reply-кнопки (Telegram-style клавиатура): шлётся как обычное сообщение
-  const sendMessage = useCallback(async (e?: React.FormEvent, overrideText?: string) => {
+  // overrideText — текст с reply-кнопки; opts — { silent, scheduledAt } (меню отправки)
+  const sendMessage = useCallback(async (e?: React.FormEvent, overrideText?: string, opts?: { silent?: boolean; scheduledAt?: string }) => {
     e?.preventDefault()
     const isOverride = typeof overrideText === "string"
     const textToSend = isOverride ? overrideText : input
@@ -938,25 +1013,36 @@ useEffect(() => {
 
     if (!socket) return
 
+    const scheduledAtIso = opts?.scheduledAt || null
+    const isScheduled = !!scheduledAtIso
+    const silent = opts?.silent === true
     const tempId = "temp-" + Date.now()
     const currentReplyTo = isOverride ? null : replyingTo
-    const optimisticMsg: Message = {
-      id: tempId, content: textToSend, conversationId: String(apiId),
-      createdAt: new Date().toISOString(), isRead: false,
-      replyTo: currentReplyTo ? { id: parseInt(currentReplyTo.id), content: currentReplyTo.content, sender: { id: parseInt(currentReplyTo.id), username: currentReplyTo.senderName } } : null,
-      sender: { id: session.user.id, username: session.user.name || "Me", avatar: session.user.image || undefined }
-    }
-    stableKeys.current.set(tempId, tempId)
 
-    // 1. Показываем сообщение МГНОВЕННО с часиками
-    setMessages(prev => [...prev, optimisticMsg])
-    if (onNewMessage) onNewMessage(optimisticMsg)
+    // Превью ссылки для этой отправки + чистим композер
+    const previewToSend = (linkPreviewData && linkPreviewData.url) ? linkPreviewData : null
+    setLinkPreviewData(null)
+
+    // Отложенные сообщения НЕ показываем оптимистично — они появятся при доставке по времени
+    if (!isScheduled) {
+      const optimisticMsg: Message = {
+        id: tempId, content: textToSend, conversationId: String(apiId),
+        createdAt: new Date().toISOString(), isRead: false,
+        replyTo: currentReplyTo ? { id: parseInt(currentReplyTo.id), content: currentReplyTo.content, sender: { id: parseInt(currentReplyTo.id), username: currentReplyTo.senderName } } : null,
+        ...(previewToSend ? { linkPreview: previewToSend } as any : {}),
+        sender: { id: session.user.id, username: session.user.name || "Me", avatar: session.user.image || undefined }
+      }
+      stableKeys.current.set(tempId, tempId)
+      // Показываем сообщение МГНОВЕННО с часиками
+      setMessages(prev => [...prev, optimisticMsg])
+      if (onNewMessage) onNewMessage(optimisticMsg)
+    }
     const currentInput = textToSend
     if (!isOverride) setInput("")
     setReplyingTo(null)
 
-    // 2. E2E: шифруем перед отправкой — сервер хранит две зашифрованных копии:
-    //    content (для получателя, ключ собеседника) + contentForSender (для меня, self-key)
+    // E2E: шифруем перед отправкой — сервер хранит две зашифрованных копии:
+    //   content (для получателя, ключ собеседника) + contentForSender (для меня, self-key)
     let contentToSend = currentInput
     let contentForSender: string | undefined
     let isEncryptedFlag = false
@@ -969,7 +1055,30 @@ useEffect(() => {
       }
     }
 
-    // 3. Отправляем через сокет — без HTTP запроса
+    // Отложенная отправка: сохраняем через HTTP, сервер доставит по времени (без realtime-emit)
+    if (isScheduled && scheduledAtIso) {
+      try {
+        await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: contentToSend,
+            contentForSender,
+            isEncrypted: isEncryptedFlag,
+            conversationId: apiId,
+            ...(currentReplyTo ? { replyToId: parseInt(currentReplyTo.id) } : {}),
+            ...(previewToSend ? { linkPreview: previewToSend } : {}),
+            scheduledAt: scheduledAtIso,
+          }),
+        })
+        setScheduledToast(new Date(scheduledAtIso))
+        setTimeout(() => setScheduledToast(null), 3500)
+      } catch {}
+      fetch(`/api/drafts?conversationId=${apiId}`, { method: "DELETE" }).catch(() => {})
+      return
+    }
+
+    // Отправляем через сокет — без HTTP запроса
     socket.emit("send-message", {
       tempId,
       content: contentToSend,
@@ -979,11 +1088,13 @@ useEffect(() => {
       senderId: session.user.id,
       participantIds,
       ...(currentReplyTo ? { replyToId: parseInt(currentReplyTo.id) } : {}),
+      ...(previewToSend ? { linkPreview: previewToSend } : {}),
+      ...(silent ? { silent: true } : {}),
     })
     // Stop typing indicator as soon as message is sent
     socket.emit("stop-typing", { conversationId: String(apiId), userId: session.user.id })
 
-    // 2b. Если в тексте есть @упоминания — шлём событие
+    // Если в тексте есть @упоминания — шлём событие
     const mentionMatches = currentInput.match(/@(\w+)/g)
     if (mentionMatches && participantIds.length > 0) {
       socket.emit("mention", {
@@ -995,9 +1106,9 @@ useEffect(() => {
       })
     }
 
-    // 3. Удаляем черновик в фоне (не блокирует UI)
+    // Удаляем черновик в фоне (не блокирует UI)
     fetch(`/api/drafts?conversationId=${apiId}`, { method: "DELETE" }).catch(() => {})
-  }, [input, session, editingMessageId, apiId, socket, onNewMessage, participantIds, replyingTo])
+  }, [input, session, editingMessageId, apiId, socket, onNewMessage, participantIds, replyingTo, linkPreviewData])
 
   const handleForwardTo = useCallback(async (targetConvId: string) => {
     if (!forwardingMsg || !session?.user || !socket) return
@@ -1240,6 +1351,48 @@ useEffect(() => {
               <p className="text-white text-lg font-bold">Перетащите файл сюда</p>
               <p className="text-gray-400 text-sm mt-1">Максимум 50 МБ</p>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* A4: модалка планирования отправки */}
+      <AnimatePresence>
+        {showScheduleModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowScheduleModal(false)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl p-5 shadow-2xl" style={{ backgroundColor: "#23232b" }}>
+              <h3 className="text-white text-[16px] font-semibold mb-3 flex items-center gap-2"><Clock size={18} /> Запланировать отправку</h3>
+              <input type="datetime-local" value={scheduleValue} min={toLocalDatetimeValue(new Date(Date.now() + 60000))}
+                onChange={e => setScheduleValue(e.target.value)}
+                className="w-full bg-black/30 text-white rounded-lg px-3 py-2 outline-none text-[14px] mb-4 [color-scheme:dark]" />
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setShowScheduleModal(false)} className="px-4 py-2 rounded-lg text-gray-300 hover:bg-white/5 text-[14px]">Отмена</button>
+                <button
+                  onClick={() => {
+                    const d = new Date(scheduleValue)
+                    if (isNaN(d.getTime()) || d.getTime() < Date.now() + 5000) return
+                    setShowScheduleModal(false)
+                    sendMessage(undefined, undefined, { scheduledAt: d.toISOString() })
+                  }}
+                  className="px-4 py-2 rounded-lg text-white text-[14px] font-medium" style={{ backgroundColor: ACCENT }}>Запланировать</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* A4: тост «запланировано» */}
+      <AnimatePresence>
+        {scheduledToast && (
+          <motion.div initial={{ opacity: 0, y: -20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+            className="absolute top-[70px] left-1/2 z-[150]" style={{ transform: 'translateX(-50%)' }}>
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full shadow-xl text-white text-[13px] font-medium" style={{ backgroundColor: ACCENT }}>
+              <Clock size={14} /> Запланировано на {scheduledToast.toLocaleString()}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1586,6 +1739,61 @@ useEffect(() => {
 
               {/* Text input bubble & reply/edit preview */}
               <div className="flex-1 flex flex-col min-w-0">
+                {/* A5: меню бот-команд по "/" */}
+                <AnimatePresence>
+                  {commandSuggestions.length > 0 && !editingMessageId && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
+                      transition={{ duration: 0.14 }}
+                      className="mb-2 rounded-2xl overflow-y-auto shadow-2xl"
+                      style={{ backgroundColor: "#23232b", border: "1px solid rgba(255,255,255,0.08)", maxHeight: 240 }}
+                    >
+                      {commandSuggestions.map(c => (
+                        <button
+                          key={c.command}
+                          type="button"
+                          onClick={() => { sendMessage(undefined, "/" + c.command); setInput("") }}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/5 transition-colors"
+                        >
+                          <span className="text-[14px] font-semibold shrink-0" style={{ color: ACCENT }}>/{c.command}</span>
+                          <span className="text-[13px] text-gray-400 truncate">{c.description}</span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* A2: превью ссылки */}
+                <AnimatePresence>
+                  {linkPreviewData && !editingMessageId && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
+                      transition={{ duration: 0.14 }}
+                      className="mb-2 rounded-2xl overflow-hidden shadow-lg"
+                      style={{ backgroundColor: "#23232b", border: "1px solid rgba(255,255,255,0.08)" }}
+                    >
+                      <div className="flex items-center gap-2 p-2">
+                        <div className="w-[3px] self-stretch rounded-full shrink-0" style={{ backgroundColor: ACCENT }} />
+                        {linkPreviewData.image && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={linkPreviewData.image} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-semibold leading-tight truncate" style={{ color: ACCENT }}>{linkPreviewData.title || linkPreviewData.siteName || "Ссылка"}</p>
+                          <p className="text-[12px] text-gray-400 truncate leading-tight">{linkPreviewData.description || linkPreviewData.url}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { if (linkPreviewData) { dismissedLinkRef.current = linkPreviewData.url; setLinkPreviewData(null) } }}
+                          className="p-1 rounded-full hover:bg-white/10 text-gray-500 hover:text-white transition-colors shrink-0"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <AnimatePresence>
                   {(editingMessageId || replyingTo) && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
@@ -1698,6 +1906,7 @@ useEffect(() => {
                     }}
                     onKeyDown={handleKeyDown}
                     onSelect={handleInputSelect}
+                    onPaste={handlePaste}
                     className="flex-1 bg-transparent border-none outline-none text-white text-[15px] px-2 py-2 placeholder-gray-500 min-w-0 disabled:opacity-50"
                   />
                   <div className="absolute bottom-px -right-2 w-2 h-4 pointer-events-none">
@@ -1709,35 +1918,72 @@ useEffect(() => {
               </div>
 
               {/* Send / Mic button */}
-              <motion.button
-                onClick={() => {
-                  if (isRecording) {
-                    sendVoiceMessage()
-                  } else if (input.trim() || editingMessageId) {
-                    sendMessage()
-                  } else {
-                    startRecording()
-                  }
-                }}
-                whileHover={{ scale: 1.06 }}
-                whileTap={{ scale: 0.88 }}
-                className="text-white w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 shadow-lg"
-                style={{ backgroundColor: isRecording ? "#e53935" : ACCENT }}
-              >
-                <AnimatePresence mode="wait">
-                  {isRecording ? (
-                    <motion.div key="stop" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
-                      <Send size={22} />
-                    </motion.div>
-                  ) : editingMessageId ? (
-                    <motion.div key="check" initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><CheckCircle size={22} /></motion.div>
-                  ) : input.trim() ? (
-                    <motion.div key="send" initial={{ scale: 0, rotate: 20 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Send size={22} /></motion.div>
-                  ) : (
-                    <motion.div key="mic" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Mic size={22} /></motion.div>
+              <div className="relative shrink-0">
+                <AnimatePresence>
+                  {showSendMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowSendMenu(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                        transition={{ duration: 0.14 }}
+                        className="absolute right-0 z-50 rounded-xl overflow-hidden shadow-2xl"
+                        style={{ bottom: "calc(100% + 10px)", backgroundColor: "#23232b", border: "1px solid rgba(255,255,255,0.08)", minWidth: 210 }}
+                      >
+                        <button type="button"
+                          onClick={() => { setShowSendMenu(false); sendMessage(undefined, undefined, { silent: true }) }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left text-white hover:bg-white/5 transition-colors text-[14px]">
+                          <BellOff size={18} className="text-gray-300 shrink-0" /> Без звука
+                        </button>
+                        <button type="button"
+                          onClick={() => { setShowSendMenu(false); setScheduleValue(toLocalDatetimeValue(new Date(Date.now() + 3600_000))); setShowScheduleModal(true) }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left text-white hover:bg-white/5 transition-colors text-[14px]">
+                          <Clock size={18} className="text-gray-300 shrink-0" /> Запланировать
+                        </button>
+                      </motion.div>
+                    </>
                   )}
                 </AnimatePresence>
-              </motion.button>
+                <motion.button
+                  onClick={() => {
+                    if (sendLongPressFired.current) { sendLongPressFired.current = false; return }
+                    if (isRecording) {
+                      sendVoiceMessage()
+                    } else if (input.trim() || editingMessageId) {
+                      sendMessage()
+                    } else {
+                      startRecording()
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (input.trim() && !editingMessageId && !isRecording) { e.preventDefault(); setShowSendMenu(true) }
+                  }}
+                  onTouchStart={() => {
+                    if (input.trim() && !editingMessageId && !isRecording) {
+                      sendLongPressRef.current = setTimeout(() => { sendLongPressFired.current = true; setShowSendMenu(true) }, 500)
+                    }
+                  }}
+                  onTouchEnd={() => { if (sendLongPressRef.current) clearTimeout(sendLongPressRef.current) }}
+                  onTouchMove={() => { if (sendLongPressRef.current) clearTimeout(sendLongPressRef.current) }}
+                  whileHover={{ scale: 1.06 }}
+                  whileTap={{ scale: 0.88 }}
+                  className="text-white w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 shadow-lg"
+                  style={{ backgroundColor: isRecording ? "#e53935" : ACCENT }}
+                >
+                  <AnimatePresence mode="wait">
+                    {isRecording ? (
+                      <motion.div key="stop" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
+                        <Send size={22} />
+                      </motion.div>
+                    ) : editingMessageId ? (
+                      <motion.div key="check" initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><CheckCircle size={22} /></motion.div>
+                    ) : input.trim() ? (
+                      <motion.div key="send" initial={{ scale: 0, rotate: 20 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Send size={22} /></motion.div>
+                    ) : (
+                      <motion.div key="mic" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}><Mic size={22} /></motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
+              </div>
             </div>
           </div>
         )}
@@ -2031,6 +2277,7 @@ const MessageItem = React.memo(function MessageItem({
           replyMarkup={(msg as any).replyMarkup}
           botId={(msg as any).botId}
           onCallback={handleCallback}
+          linkPreview={(msg as any).linkPreview}
         />
       )}
     </div>

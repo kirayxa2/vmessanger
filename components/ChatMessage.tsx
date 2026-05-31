@@ -82,6 +82,8 @@ interface ChatMessageProps {
   replyMarkup?: { inline_keyboard?: { text: string; callback_data?: string; url?: string }[][] } | null;
   botId?: number | null;
   onCallback?: (messageId: string, data: string, botId: number) => void;
+  // Превью ссылки (OG)
+  linkPreview?: { url: string; title?: string; description?: string; image?: string; siteName?: string } | null;
 }
 
 const ChatMessage = React.memo(function ChatMessage({
@@ -90,7 +92,7 @@ const ChatMessage = React.memo(function ChatMessage({
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
   openMenuId, onMenuOpen, onMenuClose, menuPos, senderName, senderId,
   reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat, onMentionClick, animateIn,
-  replyMarkup, botId, onCallback
+  replyMarkup, botId, onCallback, linkPreview
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const { filter } = useProfanityFilter();
@@ -381,6 +383,35 @@ const ChatMessage = React.memo(function ChatMessage({
                 </span>
                 <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">{timeStr}<ReadIndicator /></span>
               </div>
+            )}
+            {linkPreview && (linkPreview.title || linkPreview.description || linkPreview.image) && (
+              <a
+                href={linkPreview.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="mt-1.5 block rounded-lg overflow-hidden no-underline"
+                style={{ background: "rgba(0,0,0,0.18)", maxWidth: 320 }}
+              >
+                <div className="flex">
+                  <div className="w-[3px] shrink-0" style={{ background: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
+                  <div className="px-2.5 py-1.5 min-w-0">
+                    {linkPreview.siteName && (
+                      <p className="text-[12px] font-semibold truncate" style={{ color: isSender ? "rgba(255,255,255,0.9)" : ACCENT }}>{linkPreview.siteName}</p>
+                    )}
+                    {linkPreview.title && (
+                      <p className="text-[13px] font-semibold leading-snug" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{linkPreview.title}</p>
+                    )}
+                    {linkPreview.description && (
+                      <p className="text-[12px] opacity-70 leading-snug mt-0.5" style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{linkPreview.description}</p>
+                    )}
+                  </div>
+                </div>
+                {linkPreview.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={linkPreview.image} alt="" className="w-full object-cover" style={{ maxHeight: 180 }} loading="lazy" />
+                )}
+              </a>
             )}
           </div>
           {isLastInGroup && !isDeleting && !hasButtons && (

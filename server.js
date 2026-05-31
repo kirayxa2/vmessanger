@@ -172,6 +172,42 @@ app.prepare().then(() => {
   // Expose emitToUser globally so Next.js API routes can notify users
   global.__emitToUser = emitToUser
 
+  // ── Background job: доставка отложенных сообщений (scheduledAt) каждые 20с ──
+  setInterval(async () => {
+    try {
+      const due = await prisma.message.findMany({
+        where: { scheduledAt: { not: null, lte: new Date() } },
+        take: 50,
+        orderBy: { scheduledAt: "asc" },
+        select: { id: true, conversationId: true },
+      })
+      for (const row of due) {
+        // Снимаем флаг отложенности и выставляем время доставки (чтобы порядок в чате был верным)
+        const delivered = await prisma.message.update({
+          where: { id: row.id },
+          data: { scheduledAt: null, createdAt: new Date() },
+          include: {
+            sender: { select: { id: true, username: true, avatar: true } },
+            replyTo: { include: { sender: { select: { id: true, username: true, avatar: true } } } },
+            reactions: { include: { user: { select: { id: true, username: true } } } },
+          },
+        })
+        const roomId = String(delivered.conversationId)
+        const saved = { ...delivered, conversationId: delivered.conversationId }
+        const parts = await prisma.conversationParticipant.findMany({
+          where: { conversationId: delivered.conversationId },
+          select: { userId: true },
+        })
+        for (const p of parts) {
+          emitToUser(p.userId, "new-message", saved)
+          emitToUser(p.userId, "conversation-updated", { conversationId: roomId, lastMessage: saved })
+        }
+      }
+    } catch (err) {
+      console.error("[scheduled] delivery error:", err)
+    }
+  }, 20_000)
+
   // ── Cache of user conversation memberships ──
   const userConversationsCache = new Map() // userId -> Set<conversationId>
 
@@ -255,6 +291,7 @@ app.prepare().then(() => {
               ...(data.forwardFromId ? { forwardFromId: Number(data.forwardFromId) } : {}),
               ...(data.fileUrl ? { fileUrl: data.fileUrl, fileName: data.fileName || "file", fileSize: data.fileSize || 0, fileType: data.fileType || "application/octet-stream" } : {}),
               ...(data.voiceUrl ? { voiceUrl: data.voiceUrl, voiceDuration: data.voiceDuration || 0 } : {}),
+              ...(data.linkPreview && typeof data.linkPreview === "object" ? { linkPreview: data.linkPreview } : {}),
             },
             include: {
               sender: { select: { id: true, username: true, avatar: true } },
@@ -263,7 +300,8 @@ app.prepare().then(() => {
             }
           })
 
-          const saved = { ...message, conversationId: message.conversationId }
+          // silent — транзитный флаг (в БД не храним): получатель не проигрывает звук/уведомление
+          const saved = { ...message, conversationId: message.conversationId, silent: data.silent === true }
 
           // Confirm to sender: replace temp with real message
           socket.emit("message-confirmed", { tempId: data.tempId, message: saved })

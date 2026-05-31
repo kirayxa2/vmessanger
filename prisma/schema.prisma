@@ -100,6 +100,8 @@ model Message {
   isEncrypted     Boolean   @default(false)
   replyMarkup     Json?     // inline_keyboard, keyboard и т.д.
   botId           Int?      // если сообщение от бота
+  linkPreview     Json?     // OG-превью ссылки: { url, title, description, image, siteName }
+  scheduledAt     DateTime? // отложенная отправка: пока > now — сообщение скрыто, доставляется по времени
 
   conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   receiver       User?         @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
@@ -112,6 +114,7 @@ model Message {
   @@index([conversationId, createdAt])
   @@index([senderId])
   @@index([conversationId])
+  @@index([scheduledAt])
 }
 
 model MessageRead {
