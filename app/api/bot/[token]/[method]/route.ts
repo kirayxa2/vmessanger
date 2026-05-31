@@ -17,15 +17,25 @@ async function resolveBot(token: string) {
   return bot
 }
 
+// Callback-апдейтам даём update_id в отдельном диапазоне, чтобы не путать с message id.
+// Клиент должен трекать offset ТОЛЬКО по message-апдейтам (см. пример в доке).
+const CALLBACK_ID_BASE = 1_000_000_000
+
 // Тип update'а — формат как у Telegram getUpdates
 type BotUpdate = {
   update_id: number
-  message: {
+  message?: {
     message_id: number
     from: { id: number; username: string; is_bot: boolean }
     chat: { id: number; type: string }
     date: number
     text: string
+  }
+  callback_query?: {
+    id: number
+    from: { id: number; username: string }
+    message: { message_id: number; chat: { id: number } }
+    data: string
   }
 }
 
@@ -139,6 +149,49 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
       }
     }
 
+    // ── Callback queries (клики по инлайн-кнопкам) ──
+    // Отдаём непросмотренные (answeredAt IS NULL) и сразу помечаем доставленными,
+    // чтобы не пришли дважды. Дедуп идёт по answeredAt, НЕ по offset.
+    const pendingCallbacks = await prisma.botCallbackQuery.findMany({
+      where: { botId: bot.id, answeredAt: null },
+      orderBy: { id: "asc" },
+      take: limit,
+    })
+    if (pendingCallbacks.length > 0) {
+      const ids = pendingCallbacks.map(c => c.id)
+      await prisma.botCallbackQuery.updateMany({
+        where: { id: { in: ids } },
+        data: { answeredAt: new Date() },
+      })
+      // Подтягиваем данные отправителей для from
+      const userIds = [...new Set(pendingCallbacks.map(c => c.userId))]
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, username: true },
+      })
+      const userMap = new Map(users.map(u => [u.id, u]))
+      // conversationId callback'а определяем через сообщение
+      const msgIds = [...new Set(pendingCallbacks.map(c => c.messageId))]
+      const msgs = await prisma.message.findMany({
+        where: { id: { in: msgIds } },
+        select: { id: true, conversationId: true },
+      })
+      const msgMap = new Map(msgs.map(m => [m.id, m]))
+
+      for (const c of pendingCallbacks) {
+        const u = userMap.get(c.userId)
+        updates.push({
+          update_id: CALLBACK_ID_BASE + c.id,
+          callback_query: {
+            id: c.id,
+            from: { id: c.userId, username: u?.username ?? "" },
+            message: { message_id: c.messageId, chat: { id: msgMap.get(c.messageId)?.conversationId ?? 0 } },
+            data: c.callbackData,
+          },
+        })
+      }
+    }
+
     return ok(updates)
   }
 
@@ -215,6 +268,64 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
       date: Math.floor(msg.createdAt.getTime() / 1000),
       text: msg.content,
     })
+  }
+
+  // ── sendPhoto / sendDocument ──
+  if (method === "sendPhoto" || method === "sendDocument") {
+    const isPhoto = method === "sendPhoto"
+    const chatId = Number(body.chat_id)
+    const fileUrl = String((isPhoto ? body.photo : body.document) ?? "")
+    const caption = typeof body.caption === "string" ? body.caption : ""
+    const fileName = typeof body.file_name === "string" ? body.file_name : (isPhoto ? "photo.jpg" : "file")
+    if (!chatId || !fileUrl) {
+      return err(`chat_id and ${isPhoto ? "photo" : "document"} (url) are required`)
+    }
+
+    const conversation = await prisma.conversation.findUnique({ where: { id: chatId } })
+    if (!conversation) return err("chat not found", 404)
+
+    const senderId = bot.userId ?? bot.ownerId
+    if (bot.userId) {
+      await prisma.conversationParticipant.upsert({
+        where: { userId_conversationId: { userId: bot.userId, conversationId: chatId } },
+        update: {},
+        create: { userId: bot.userId, conversationId: chatId, role: "member" },
+      })
+    }
+
+    const msg = await prisma.message.create({
+      data: {
+        conversationId: chatId,
+        senderId,
+        content: caption,
+        botId: bot.id,
+        fileUrl,
+        fileName,
+        fileType: isPhoto ? "image/jpeg" : "application/octet-stream",
+        fileSize: 0,
+        replyMarkup: body.reply_markup ? (body.reply_markup as object) : undefined,
+      },
+      include: { sender: { select: { id: true, username: true, avatar: true } } },
+    })
+
+    await prisma.conversation.update({ where: { id: chatId }, data: { updatedAt: new Date() } })
+
+    const g = global as unknown as {
+      __io?: { to: (r: string) => { emit: (e: string, d: unknown) => void } }
+      __emitToUser?: (userId: number | string, event: string, data: unknown) => void
+    }
+    const roomId = String(chatId)
+    g.__io?.to(roomId).emit("new-message", { ...msg, conversationId: chatId })
+    const parts = await prisma.conversationParticipant.findMany({
+      where: { conversationId: chatId },
+      select: { userId: true },
+    })
+    for (const p of parts) {
+      g.__emitToUser?.(p.userId, "new-message", { ...msg, conversationId: chatId })
+      g.__emitToUser?.(p.userId, "conversation-updated", { conversationId: roomId, lastMessage: msg })
+    }
+
+    return ok({ message_id: msg.id, chat: { id: chatId }, date: Math.floor(msg.createdAt.getTime() / 1000) })
   }
 
   // ── editMessageText ──

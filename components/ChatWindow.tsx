@@ -1809,6 +1809,17 @@ const MessageItem = React.memo(function MessageItem({
     } catch { }
   }, [socket, apiId])
 
+  // Клик по инлайн-кнопке бота → шлём callback на сервер
+  const handleCallback = useCallback(async (messageId: string, data: string, botId: number) => {
+    try {
+      await fetch("/api/bot/callback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: Number(messageId), botId, callbackData: data, conversationId: Number(apiId) }),
+      })
+    } catch { }
+  }, [apiId])
+
   return (
     <div ref={el => { messageRefs.current[msg.id.toString()] = el }} className="rounded-lg">
       {msg.fileUrl ? (
@@ -1850,6 +1861,9 @@ const MessageItem = React.memo(function MessageItem({
           onMentionClick={handleMentionClick}
           animateIn={newMsgIds.current.has(msg.id.toString())}
           onReaction={handleReactionClick}
+          replyMarkup={(msg as any).replyMarkup}
+          botId={(msg as any).botId}
+          onCallback={handleCallback}
         />
       )}
     </div>

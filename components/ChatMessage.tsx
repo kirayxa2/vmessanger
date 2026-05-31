@@ -75,6 +75,10 @@ interface ChatMessageProps {
   isGroupChat?: boolean;
   onMentionClick?: (username: string) => void;
   animateIn?: boolean;
+  // Bot inline keyboard (Telegram-style)
+  replyMarkup?: { inline_keyboard?: { text: string; callback_data?: string; url?: string }[][] } | null;
+  botId?: number | null;
+  onCallback?: (messageId: string, data: string, botId: number) => void;
 }
 
 const ChatMessage = React.memo(function ChatMessage({
@@ -82,7 +86,8 @@ const ChatMessage = React.memo(function ChatMessage({
   replyTo, isForwarded, isRead, voiceUrl, voiceDuration, isTemp, failed,
   onDelete, onEdit, onReply, onForward, onScrollToMessage,
   openMenuId, onMenuOpen, onMenuClose, menuPos, senderName, senderId,
-  reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat, onMentionClick, animateIn
+  reactions, onPin, onReaction, currentUserId, selfDestructAt, isGroupChat, onMentionClick, animateIn,
+  replyMarkup, botId, onCallback
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const { filter } = useProfanityFilter();
@@ -385,6 +390,34 @@ const ChatMessage = React.memo(function ChatMessage({
             </div>
           )}
         </motion.div>
+
+        {/* ── Inline keyboard (bot buttons) ── */}
+        {replyMarkup?.inline_keyboard && replyMarkup.inline_keyboard.length > 0 && (
+          <div className="mt-1 flex flex-col gap-1" style={{ maxWidth: 360 }}>
+            {replyMarkup.inline_keyboard.map((row, ri) => (
+              <div key={ri} className="flex gap-1">
+                {row.map((btn, bi) => (
+                  <motion.button
+                    key={bi}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (btn.url) {
+                        window.open(btn.url, "_blank", "noopener,noreferrer")
+                      } else if (btn.callback_data != null) {
+                        onCallback?.(messageId, btn.callback_data, botId ?? 0)
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 rounded-lg text-[13px] font-medium text-white transition-colors"
+                    style={{ backgroundColor: "rgba(126,133,225,0.22)", border: "1px solid rgba(126,133,225,0.35)" }}
+                  >
+                    {btn.text}
+                  </motion.button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
         {showMenu && typeof document !== "undefined" && createPortal(
           <AnimatePresence>
