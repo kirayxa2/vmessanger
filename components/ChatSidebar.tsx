@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
 import { motion, AnimatePresence } from "framer-motion"
 import { VerifiedBadge } from "./VerifiedBadge"
+import { stripFormatting } from "@/lib/formatText"
 import { useProfanityFilter } from "@/hooks/useProfanityFilter"
 import { useNotificationSound, SOUND_LABELS, SoundType } from "@/hooks/useNotificationSound"
 import TitleBadge from "./TitleBadge"
@@ -1480,12 +1481,14 @@ const ChatListItem = React.memo(function ChatListItem({
   }
 
   const lastMsg = chat.messages?.[0]
-  const previewText = isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
+  const previewText = stripFormatting(
+    isSaved ? (lastMsg?.content || t("saved_chat_subtitle"))
     : isSystem ? t("service_notifications")
       : isBotFather ? (lastMsg?.content || "Управление ботами")
       : isGroup
         ? lastMsg ? `${lastMsg.sender?.username || ""}: ${lastMsg.content || "📎"}` : t("no_messages")
         : (lastMsg?.content || t("no_messages"))
+  )
 
   const lpTimer = useRef<any>(null)
   const handleTouchStart = useCallback((e: React.TouchEvent) => {

@@ -2,12 +2,13 @@
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock, LayoutGrid } from "lucide-react"
+import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock, LayoutGrid, Bold, Italic, Strikethrough, Code, Link2, EyeOff } from "lucide-react"
 import { Virtuoso } from "react-virtuoso"
 import Linkify from "linkify-react"
 import EmojiGifPicker from "./EmojiGifPicker"
 import useSound from "use-sound"
 import ChatMessage from "./ChatMessage"
+import { stripFormatting } from "@/lib/formatText"
 import FileMessage from "./FileMessage"
 import CallModal from "./CallModal"
 import { AnimatePresence, motion, LazyMotion, domAnimation } from "framer-motion"
@@ -158,6 +159,58 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const replyKbSig = activeReplyKeyboard ? JSON.stringify(activeReplyKeyboard.keyboard) : ""
   useEffect(() => { if (replyKbSig) setShowReplyKb(true) }, [replyKbSig])
   const btnText = (b: { text: string } | string) => (typeof b === "string" ? b : b?.text || "")
+
+  // ── Text formatting toolbar (Telegram-style) ──
+  // Выделяешь текст → всплывает панель форматирования. Оборачиваем выделение в markdown-маркеры.
+  const [fmtSel, setFmtSel] = useState<{ start: number; end: number } | null>(null)
+
+  const handleInputSelect = useCallback(() => {
+    const el = inputRef.current
+    if (!el) { setFmtSel(null); return }
+    const s = el.selectionStart ?? 0
+    const e = el.selectionEnd ?? 0
+    setFmtSel(e > s ? { start: s, end: e } : null)
+  }, [])
+
+  // Оборачиваем выделение в инпуте маркерами (читаем live-значение из ref, без устаревших замыканий)
+  const applyFormat = useCallback((open: string, close: string = open) => {
+    const el = inputRef.current
+    if (!el) return
+    const s = el.selectionStart ?? 0
+    const e = el.selectionEnd ?? 0
+    if (e <= s) return
+    const val = el.value
+    const selected = val.slice(s, e)
+    const newVal = val.slice(0, s) + open + selected + close + val.slice(e)
+    setInput(newVal)
+    requestAnimationFrame(() => {
+      el.focus()
+      const ns = s + open.length
+      const ne = e + open.length
+      el.setSelectionRange(ns, ne)
+      setFmtSel({ start: ns, end: ne })
+    })
+  }, [])
+
+  const applyLink = useCallback(() => {
+    const el = inputRef.current
+    if (!el) return
+    const s = el.selectionStart ?? 0
+    const e = el.selectionEnd ?? 0
+    if (e <= s) return
+    const url = window.prompt("Ссылка (URL):", "https://")
+    if (!url) return
+    const val = el.value
+    const md = `[${val.slice(s, e)}](${url})`
+    const newVal = val.slice(0, s) + md + val.slice(e)
+    setInput(newVal)
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = s + md.length
+      el.setSelectionRange(pos, pos)
+      setFmtSel(null)
+    })
+  }, [])
 
   // ── Mention toast ─────────────────────────────────────────────
   const [mentionToast, setMentionToast] = useState<{ senderName: string; messageId: string } | null>(null)
@@ -957,9 +1010,19 @@ useEffect(() => {
   }, [forwardingMsg, session, socket])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Горячие клавиши форматирования (как в Telegram desktop)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const k = e.key.toLowerCase()
+      if (k === "b") { e.preventDefault(); applyFormat("**"); return }
+      if (k === "i") { e.preventDefault(); applyFormat("__"); return }
+      if (k === "k") { e.preventDefault(); applyLink(); return }
+      if (e.shiftKey && k === "x") { e.preventDefault(); applyFormat("~~"); return }
+      if (e.shiftKey && k === "m") { e.preventDefault(); applyFormat("`"); return }
+      if (e.shiftKey && k === "p") { e.preventDefault(); applyFormat("||"); return }
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage() }
     if (e.key === "Escape") { if (editingMessageId) cancelEdit(); if (replyingTo) cancelReply() }
-  }, [sendMessage, editingMessageId, cancelEdit, replyingTo, cancelReply])
+  }, [sendMessage, editingMessageId, cancelEdit, replyingTo, cancelReply, applyFormat, applyLink])
 
   // ── Pin message handler ──
   const handlePinMessage = useCallback(async (messageId: string) => {
@@ -1537,7 +1600,7 @@ useEffect(() => {
                               <p className="text-[12px] text-gray-400 truncate leading-tight">{input}</p></>
                           ) : replyingTo ? (
                             <><p className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{replyingTo.senderName}</p>
-                              <p className="text-[12px] text-gray-400 truncate leading-tight">{replyingTo.content}</p></>
+                              <p className="text-[12px] text-gray-400 truncate leading-tight">{stripFormatting(replyingTo.content)}</p></>
                           ) : null}
                         </div>
                         <motion.button onClick={editingMessageId ? cancelEdit : cancelReply} whileTap={{ scale: 0.88 }}
@@ -1560,6 +1623,40 @@ useEffect(() => {
                   }}
                   className="relative flex items-center w-full px-2 py-1 min-h-[46px] shadow-lg"
                 >
+                  {/* ── Toolbar форматирования (Telegram-style): появляется при выделении текста ── */}
+                  <AnimatePresence>
+                    {fmtSel && !isRecording && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                        transition={{ duration: 0.13 }}
+                        onMouseDown={e => e.preventDefault()}
+                        className="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5 px-1 py-1 rounded-xl shadow-2xl z-30"
+                        style={{ bottom: "calc(100% + 8px)", backgroundColor: "#2b2b33", border: "1px solid rgba(255,255,255,0.08)" }}
+                      >
+                        {([
+                          { icon: <Bold size={17} />, title: "Жирный (Ctrl+B)", fn: () => applyFormat("**") },
+                          { icon: <Italic size={17} />, title: "Курсив (Ctrl+I)", fn: () => applyFormat("__") },
+                          { icon: <Strikethrough size={17} />, title: "Зачёркнутый (Ctrl+Shift+X)", fn: () => applyFormat("~~") },
+                          { icon: <Code size={17} />, title: "Моноширинный (Ctrl+Shift+M)", fn: () => applyFormat("`") },
+                          { icon: <EyeOff size={17} />, title: "Спойлер (Ctrl+Shift+P)", fn: () => applyFormat("||") },
+                          { icon: <Link2 size={17} />, title: "Ссылка (Ctrl+K)", fn: applyLink },
+                        ] as const).map((b, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={b.fn}
+                            title={b.title}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                          >
+                            {b.icon}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   <motion.button
                     type="button"
                     whileTap={{ scale: 0.85, rotate: 15 }}
@@ -1600,6 +1697,7 @@ useEffect(() => {
                       }
                     }}
                     onKeyDown={handleKeyDown}
+                    onSelect={handleInputSelect}
                     className="flex-1 bg-transparent border-none outline-none text-white text-[15px] px-2 py-2 placeholder-gray-500 min-w-0 disabled:opacity-50"
                   />
                   <div className="absolute bottom-px -right-2 w-2 h-4 pointer-events-none">

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Linkify from "linkify-react";
+import { stripFormatting } from "@/lib/formatText";
 import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Pin, Clock } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -351,7 +352,7 @@ const ChatMessage = React.memo(function ChatMessage({
                   <div className="w-[3px] rounded-l-lg shrink-0" style={{ backgroundColor: isSender ? "rgba(255,255,255,0.6)" : ACCENT }} />
                   <div className="px-2 py-1.5 min-w-0">
                     <p className="text-[12px] font-semibold truncate" style={{ color: isSender ? "rgba(255,255,255,0.85)" : ACCENT }}>{replyTo.sender.username}</p>
-                    <p className="text-[12px] opacity-70 truncate">{replyTo.content}</p>
+                    <p className="text-[12px] opacity-70 truncate">{stripFormatting(replyTo.content)}</p>
                   </div>
                 </div>
               </motion.div>
@@ -374,8 +375,8 @@ const ChatMessage = React.memo(function ChatMessage({
             ) : (
               <div className="flex items-end gap-x-2 flex-wrap">
                 <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                  <Linkify options={{ target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100" }}>
-                    {renderWithMentions(displayContent, onMentionClick)}
+                  <Linkify options={{ target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100", ignoreTags: ["a", "code", "pre"] }}>
+                    {renderRichText(displayContent, onMentionClick)}
                   </Linkify>
                 </span>
                 <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">{timeStr}<ReadIndicator /></span>
@@ -473,6 +474,89 @@ function renderWithMentions(text: string, onMentionClick?: (username: string) =>
         >{part}</span>
       : <span key={i}>{part}</span>
   )
+}
+
+// Telegram-стиль: парсим markdown-разметку (bold/italic/strike/моно/спойлер/ссылка) + @упоминания
+// Маркеры: **жирный**  __курсив__  ~~зачёркнутый~~  `моно`  ```блок```  ||спойлер||  [текст](url)
+const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace'
+
+const FORMAT_PATTERNS: { type: string; re: RegExp }[] = [
+  { type: "pre", re: /```([\s\S]+?)```/ },
+  { type: "code", re: /`([^`\n]+?)`/ },
+  { type: "bold", re: /\*\*([\s\S]+?)\*\*/ },
+  { type: "strike", re: /~~([\s\S]+?)~~/ },
+  { type: "spoiler", re: /\|\|([\s\S]+?)\|\|/ },
+  { type: "italic", re: /__([\s\S]+?)__/ },
+  { type: "link", re: /\[([^\]\n]+?)\]\((https?:\/\/[^\s)]+)\)/ },
+]
+
+// Спойлер: размыт, раскрывается по клику (как в Telegram)
+function Spoiler({ children }: { children: React.ReactNode }) {
+  const [revealed, setRevealed] = useState(false)
+  return (
+    <span
+      onClick={e => { if (!revealed) { e.stopPropagation(); setRevealed(true) } }}
+      style={{
+        cursor: revealed ? "inherit" : "pointer",
+        filter: revealed ? "none" : "blur(5px)",
+        backgroundColor: revealed ? "transparent" : "rgba(150,150,160,0.25)",
+        borderRadius: 4,
+        padding: revealed ? 0 : "0 2px",
+        transition: "filter .25s, background-color .25s",
+        WebkitUserSelect: revealed ? "auto" : "none",
+        userSelect: revealed ? "auto" : "none",
+      }}
+    >{children}</span>
+  )
+}
+
+function renderRich(text: string, onMentionClick: ((u: string) => void) | undefined, c: { n: number }): React.ReactNode[] {
+  if (!text) return []
+  let best: { idx: number; len: number; type: string; g1: string; g2?: string } | null = null
+  for (const p of FORMAT_PATTERNS) {
+    const m = p.re.exec(text)
+    if (m && (best === null || m.index < best.idx)) {
+      best = { idx: m.index, len: m[0].length, type: p.type, g1: m[1], g2: m[2] }
+    }
+  }
+  if (!best) {
+    return [<React.Fragment key={`t${c.n++}`}>{renderWithMentions(text, onMentionClick)}</React.Fragment>]
+  }
+  const before = text.slice(0, best.idx)
+  const after = text.slice(best.idx + best.len)
+  const out: React.ReactNode[] = []
+  if (before) out.push(...renderRich(before, onMentionClick, c))
+  const key = `f${c.n++}`
+  switch (best.type) {
+    case "pre":
+      out.push(<code key={key} style={{ display: "block", whiteSpace: "pre-wrap", fontFamily: MONO_FONT, fontSize: "0.9em", background: "rgba(0,0,0,0.28)", padding: "8px 10px", borderRadius: 8, margin: "3px 0" }}>{best.g1}</code>)
+      break
+    case "code":
+      out.push(<code key={key} style={{ fontFamily: MONO_FONT, fontSize: "0.92em", background: "rgba(0,0,0,0.25)", padding: "1px 5px", borderRadius: 4 }}>{best.g1}</code>)
+      break
+    case "bold":
+      out.push(<strong key={key} style={{ fontWeight: 700 }}>{renderRich(best.g1, onMentionClick, c)}</strong>)
+      break
+    case "italic":
+      out.push(<em key={key}>{renderRich(best.g1, onMentionClick, c)}</em>)
+      break
+    case "strike":
+      out.push(<s key={key}>{renderRich(best.g1, onMentionClick, c)}</s>)
+      break
+    case "spoiler":
+      out.push(<Spoiler key={key}>{renderRich(best.g1, onMentionClick, c)}</Spoiler>)
+      break
+    case "link":
+      out.push(<a key={key} href={best.g2} target="_blank" rel="noopener noreferrer" className="underline opacity-90 hover:opacity-100" onClick={e => e.stopPropagation()}>{best.g1}</a>)
+      break
+  }
+  if (after) out.push(...renderRich(after, onMentionClick, c))
+  return out
+}
+
+// Точка входа: разметка + @упоминания, ссылки автолинкуются обёрткой <Linkify>
+function renderRichText(text: string, onMentionClick?: (username: string) => void): React.ReactNode {
+  return renderRich(text, onMentionClick, { n: 0 })
 }
 
 function WrappedText({ text }: { text: string }) {
