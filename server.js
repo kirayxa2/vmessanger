@@ -348,6 +348,49 @@ app.prepare().then(() => {
             console.error("[BotFather] reply error:", bfErr)
           }
 
+          // ── Webhook-режим: доставка сообщения боту-участнику ──────────
+          // Если в чате есть бот (User.isBot) с настроенным webhookUrl —
+          // шлём ему update POST'ом (как Telegram). Боты на polling сюда
+          // не попадают (у них webhookUrl = null) и забирают через getUpdates.
+          try {
+            const botParticipants = await prisma.conversationParticipant.findMany({
+              where: {
+                conversationId: Number(data.conversationId),
+                userId: { not: Number(currentUserId) },
+                user: { isBot: true },
+              },
+              select: { userId: true },
+            })
+            if (botParticipants.length > 0 && hasText) {
+              const bots = await prisma.bot.findMany({
+                where: {
+                  userId: { in: botParticipants.map(p => p.userId) },
+                  isActive: true,
+                  webhookUrl: { not: null },
+                },
+                select: { id: true, webhookUrl: true, webhookSecret: true },
+              })
+              for (const bot of bots) {
+                const update = {
+                  update_id: message.id,
+                  message: {
+                    message_id: message.id,
+                    from: { id: message.sender.id, username: message.sender.username, is_bot: false },
+                    chat: { id: Number(data.conversationId), type: "private" },
+                    date: Math.floor(new Date(message.createdAt).getTime() / 1000),
+                    text: message.content,
+                  },
+                }
+                const headers = { "Content-Type": "application/json" }
+                if (bot.webhookSecret) headers["X-Vortex-Bot-Secret"] = bot.webhookSecret
+                fetch(bot.webhookUrl, { method: "POST", headers, body: JSON.stringify(update) })
+                  .catch(e => console.error("[bot webhook] dispatch:", e?.message || e))
+              }
+            }
+          } catch (whErr) {
+            console.error("[bot webhook] error:", whErr)
+          }
+
         } catch (err) {
           console.error("Socket send-message DB error:", err)
           // Notify sender of failure so they can show error state

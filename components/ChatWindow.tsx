@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock } from "lucide-react"
+import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLeft, CheckCircle, X, Forward, Bookmark, Phone, Video, Pin, Clock, LayoutGrid } from "lucide-react"
 import { Virtuoso } from "react-virtuoso"
 import Linkify from "linkify-react"
 import EmojiGifPicker from "./EmojiGifPicker"
@@ -138,6 +138,26 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   // ── Self-destruct timer ────────────────────────────────────
   const [selfDestructSeconds, setSelfDestructSeconds] = useState<number | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+
+  // ── Reply keyboard (Telegram-style кастомная клавиатура снизу) ──
+  // Активная клавиатура = из последнего сообщения с replyMarkup.keyboard.
+  // remove_keyboard сбрасывает её. Состояние персистит, т.к. берётся из истории сообщений.
+  const [showReplyKb, setShowReplyKb] = useState(true)
+  const activeReplyKeyboard = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const rm = (messages[i] as any)?.replyMarkup
+      if (!rm) continue
+      if (rm.remove_keyboard) return null
+      if (Array.isArray(rm.keyboard) && rm.keyboard.length > 0) {
+        return rm as { keyboard: ({ text: string } | string)[][]; resize_keyboard?: boolean; one_time_keyboard?: boolean }
+      }
+    }
+    return null
+  }, [messages])
+  // Когда пришла НОВАЯ клавиатура — снова показываем её
+  const replyKbSig = activeReplyKeyboard ? JSON.stringify(activeReplyKeyboard.keyboard) : ""
+  useEffect(() => { if (replyKbSig) setShowReplyKb(true) }, [replyKbSig])
+  const btnText = (b: { text: string } | string) => (typeof b === "string" ? b : b?.text || "")
 
   // ── Mention toast ─────────────────────────────────────────────
   const [mentionToast, setMentionToast] = useState<{ senderName: string; messageId: string } | null>(null)
@@ -824,12 +844,15 @@ useEffect(() => {
   }, [session, apiId, socket, participantIds, input, t])
 
   // ── Send text message — через сокет, без HTTP POST ────────────
-  const sendMessage = useCallback(async (e?: React.FormEvent) => {
+  // overrideText — текст с reply-кнопки (Telegram-style клавиатура): шлётся как обычное сообщение
+  const sendMessage = useCallback(async (e?: React.FormEvent, overrideText?: string) => {
     e?.preventDefault()
-    if (!input.trim() || !session?.user) return
+    const isOverride = typeof overrideText === "string"
+    const textToSend = isOverride ? overrideText : input
+    if (!textToSend.trim() || !session?.user) return
 
-    // Редактирование — через сокет (без HTTP)
-    if (editingMessageId) {
+    // Редактирование — через сокет (без HTTP). Кнопки reply-клавиатуры редактирование не триггерят.
+    if (editingMessageId && !isOverride) {
       if (!socket) return
       const tempEditId = "edit-" + Date.now()
       // Обновляем оптимистично — сразу показываем изменение в UI
@@ -863,10 +886,11 @@ useEffect(() => {
     if (!socket) return
 
     const tempId = "temp-" + Date.now()
+    const currentReplyTo = isOverride ? null : replyingTo
     const optimisticMsg: Message = {
-      id: tempId, content: input, conversationId: String(apiId),
+      id: tempId, content: textToSend, conversationId: String(apiId),
       createdAt: new Date().toISOString(), isRead: false,
-      replyTo: replyingTo ? { id: parseInt(replyingTo.id), content: replyingTo.content, sender: { id: parseInt(replyingTo.id), username: replyingTo.senderName } } : null,
+      replyTo: currentReplyTo ? { id: parseInt(currentReplyTo.id), content: currentReplyTo.content, sender: { id: parseInt(currentReplyTo.id), username: currentReplyTo.senderName } } : null,
       sender: { id: session.user.id, username: session.user.name || "Me", avatar: session.user.image || undefined }
     }
     stableKeys.current.set(tempId, tempId)
@@ -874,9 +898,9 @@ useEffect(() => {
     // 1. Показываем сообщение МГНОВЕННО с часиками
     setMessages(prev => [...prev, optimisticMsg])
     if (onNewMessage) onNewMessage(optimisticMsg)
-    const currentInput = input
-    const currentReplyTo = replyingTo
-    setInput(""); setReplyingTo(null)
+    const currentInput = textToSend
+    if (!isOverride) setInput("")
+    setReplyingTo(null)
 
     // 2. E2E: шифруем перед отправкой — сервер хранит две зашифрованных копии:
     //    content (для получателя, ключ собеседника) + contentForSender (для меня, self-key)
@@ -1439,6 +1463,39 @@ useEffect(() => {
               )}
             </AnimatePresence>
 
+            {/* ── Reply keyboard (Telegram-style кастомная клавиатура) ── */}
+            <AnimatePresence>
+              {activeReplyKeyboard && showReplyKb && !isRecording && !editingMessageId && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 36 }}
+                  className="flex flex-col gap-1.5 mb-2 overflow-hidden"
+                >
+                  {activeReplyKeyboard.keyboard.map((row, ri) => (
+                    <div key={ri} className="flex gap-1.5">
+                      {row.map((btn, bi) => (
+                        <motion.button
+                          key={bi}
+                          type="button"
+                          whileTap={{ scale: 0.96 }}
+                          onClick={() => {
+                            const txt = btnText(btn)
+                            if (!txt) return
+                            sendMessage(undefined, txt)
+                            if (activeReplyKeyboard.one_time_keyboard) setShowReplyKb(false)
+                          }}
+                          className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-white text-[14px] font-medium truncate transition-colors hover:brightness-110"
+                          style={{ backgroundColor: "var(--input-bg)" }}
+                        >
+                          {btnText(btn)}
+                        </motion.button>
+                      ))}
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Main input row */}
             <div className="flex items-end gap-2">
               {/* Paperclip */}
@@ -1512,6 +1569,18 @@ useEffect(() => {
                   >
                     <Smile size={24} />
                   </motion.button>
+                  {activeReplyKeyboard && (
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.85 }}
+                      onClick={() => setShowReplyKb(v => !v)}
+                      className="text-gray-400 hover:text-white transition-colors shrink-0 p-1"
+                      style={{ color: showReplyKb ? ACCENT : undefined }}
+                      title="Показать/скрыть клавиатуру"
+                    >
+                      <LayoutGrid size={22} />
+                    </motion.button>
+                  )}
                   <input
                     ref={inputRef}
                     type="text"
