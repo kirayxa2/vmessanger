@@ -108,14 +108,16 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
     const offset = Number(body.offset ?? 0) || 0
     const limit = Math.min(Number(body.limit ?? 100) || 100, 100)
     const timeout = Math.min(Math.max(Number(body.timeout ?? 0) || 0, 0), 30)
+    const botUserId = bot.userId!
 
-    const fetchUpdates = async (): Promise<BotUpdate[]> => {
+    // Новые сообщения от пользователей (не от самого бота)
+    const fetchMessages = async (): Promise<BotUpdate[]> => {
       const messages = await prisma.message.findMany({
         where: {
           id: { gt: offset },
-          senderId: { not: bot.userId! },
+          senderId: { not: botUserId },
           conversation: {
-            participants: { some: { userId: bot.userId! } },
+            participants: { some: { userId: botUserId } },
           },
         },
         include: {
@@ -137,58 +139,57 @@ async function handleMethod(req: NextRequest, token: string, method: string) {
       }))
     }
 
-    let updates = await fetchUpdates()
+    // Клики по инлайн-кнопкам. Захватываем АТОМАРНО одним UPDATE ... RETURNING:
+    // строка переводится answeredAt=NULL → NOW() под блокировкой Postgres, поэтому
+    // даже при нескольких параллельных getUpdates каждый callback достаётся ровно
+    // одному поллеру. Это убирает дубли ("два ответа на один клик").
+    const fetchCallbacks = async (): Promise<BotUpdate[]> => {
+      const claimed = await prisma.$queryRaw<
+        Array<{ id: number; userId: number; messageId: number; callbackData: string }>
+      >`
+        UPDATE "BotCallbackQuery"
+        SET "answeredAt" = NOW()
+        WHERE "botId" = ${bot.id} AND "answeredAt" IS NULL
+        RETURNING id, "userId", "messageId", "callbackData"
+      `
+      if (claimed.length === 0) return []
 
-    // Long polling: если ничего нет и просили подождать — поллим раз в секунду
-    if (updates.length === 0 && timeout > 0) {
-      const deadline = Date.now() + timeout * 1000
-      while (Date.now() < deadline) {
-        await new Promise(r => setTimeout(r, 1000))
-        updates = await fetchUpdates()
-        if (updates.length > 0) break
-      }
-    }
-
-    // ── Callback queries (клики по инлайн-кнопкам) ──
-    // Отдаём непросмотренные (answeredAt IS NULL) и сразу помечаем доставленными,
-    // чтобы не пришли дважды. Дедуп идёт по answeredAt, НЕ по offset.
-    const pendingCallbacks = await prisma.botCallbackQuery.findMany({
-      where: { botId: bot.id, answeredAt: null },
-      orderBy: { id: "asc" },
-      take: limit,
-    })
-    if (pendingCallbacks.length > 0) {
-      const ids = pendingCallbacks.map(c => c.id)
-      await prisma.botCallbackQuery.updateMany({
-        where: { id: { in: ids } },
-        data: { answeredAt: new Date() },
-      })
-      // Подтягиваем данные отправителей для from
-      const userIds = [...new Set(pendingCallbacks.map(c => c.userId))]
+      const userIds = [...new Set(claimed.map(c => c.userId))]
       const users = await prisma.user.findMany({
         where: { id: { in: userIds } },
         select: { id: true, username: true },
       })
       const userMap = new Map(users.map(u => [u.id, u]))
-      // conversationId callback'а определяем через сообщение
-      const msgIds = [...new Set(pendingCallbacks.map(c => c.messageId))]
+
+      const msgIds = [...new Set(claimed.map(c => c.messageId))]
       const msgs = await prisma.message.findMany({
         where: { id: { in: msgIds } },
         select: { id: true, conversationId: true },
       })
       const msgMap = new Map(msgs.map(m => [m.id, m]))
 
-      for (const c of pendingCallbacks) {
-        const u = userMap.get(c.userId)
-        updates.push({
-          update_id: CALLBACK_ID_BASE + c.id,
-          callback_query: {
-            id: c.id,
-            from: { id: c.userId, username: u?.username ?? "" },
-            message: { message_id: c.messageId, chat: { id: msgMap.get(c.messageId)?.conversationId ?? 0 } },
-            data: c.callbackData,
-          },
-        })
+      return claimed.map(c => ({
+        update_id: CALLBACK_ID_BASE + c.id,
+        callback_query: {
+          id: c.id,
+          from: { id: c.userId, username: userMap.get(c.userId)?.username ?? "" },
+          message: { message_id: c.messageId, chat: { id: msgMap.get(c.messageId)?.conversationId ?? 0 } },
+          data: c.callbackData,
+        },
+      }))
+    }
+
+    let updates = [...(await fetchMessages()), ...(await fetchCallbacks())]
+
+    // Long polling: ждём появления сообщений ИЛИ кликов, проверяя оба раз в секунду.
+    // Раньше в цикле проверялись только сообщения, а callback'и забирались ОДИН раз
+    // после выхода из цикла → клик "висел" до конца timeout (~25с). Теперь ≤ 1с.
+    if (updates.length === 0 && timeout > 0) {
+      const deadline = Date.now() + timeout * 1000
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 1000))
+        updates = [...(await fetchMessages()), ...(await fetchCallbacks())]
+        if (updates.length > 0) break
       }
     }
 

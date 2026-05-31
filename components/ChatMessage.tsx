@@ -14,22 +14,24 @@ const ACCENT = "var(--accent, #7e85e1)";
 const DEV_USER_ID = 1;
 
 // Telegram-стиль скруглений пузыря (как в официальном приложении)
-function getBubbleRadius(isSender: boolean, isFirstInGroup: boolean, isLastInGroup: boolean, hasAbove: boolean) {
+// hasButtons: под пузырём прилеплены инлайн-кнопки — хвостик убираем, низ скругляем
+function getBubbleRadius(isSender: boolean, isFirstInGroup: boolean, isLastInGroup: boolean, hasAbove: boolean, hasButtons = false) {
   const BIG = "18px"
   const SMALL = "4px"
   const TAIL = "4px"
+  const bottom = hasButtons ? BIG : (isLastInGroup ? TAIL : SMALL)
   if (isSender) {
     return {
       borderTopLeftRadius: BIG,
       borderTopRightRadius: hasAbove ? SMALL : BIG,
       borderBottomLeftRadius: BIG,
-      borderBottomRightRadius: isLastInGroup ? TAIL : SMALL,
+      borderBottomRightRadius: bottom,
     }
   } else {
     return {
       borderTopLeftRadius: hasAbove ? SMALL : BIG,
       borderTopRightRadius: BIG,
-      borderBottomLeftRadius: isLastInGroup ? TAIL : SMALL,
+      borderBottomLeftRadius: bottom,
       borderBottomRightRadius: BIG,
     }
   }
@@ -94,6 +96,7 @@ const ChatMessage = React.memo(function ChatMessage({
   const messageId = id.toString();
   const displayContent = filter(content);
   const showMenu = openMenuId === messageId;
+  const hasButtons = !!(replyMarkup?.inline_keyboard && replyMarkup.inline_keyboard.length > 0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showQuickReactions, setShowQuickReactions] = useState(false);
   const quickReactionEmojis = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
@@ -320,7 +323,7 @@ const ChatMessage = React.memo(function ChatMessage({
         <motion.div ref={swipeWrapRef} style={{ x: swipeX, willChange: "transform" }} onContextMenu={handleContextMenu} className="relative">
           <div
             style={{
-              ...getBubbleRadius(isSender, isFirstInGroup, isLastInGroup, hasAbove),
+              ...getBubbleRadius(isSender, isFirstInGroup, isLastInGroup, hasAbove, hasButtons),
               backgroundColor: bubbleColor,
               opacity: isDeleting ? 0 : 1,
               transform: isDeleting ? "scale(0.8)" : "scale(1)",
@@ -379,7 +382,7 @@ const ChatMessage = React.memo(function ChatMessage({
               </div>
             )}
           </div>
-          {isLastInGroup && !isDeleting && (
+          {isLastInGroup && !isDeleting && !hasButtons && (
             <div className={`absolute bottom-0 w-[11px] h-[20px] ${isSender ? "-right-[9px]" : "-left-[9px]"} z-0 overflow-hidden`}>
               <svg width="11" height="20" viewBox="0 0 11 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {isSender
