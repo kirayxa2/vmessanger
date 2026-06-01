@@ -15,6 +15,37 @@ const RECIPIENT_COLOR = "var(--recipient-bubble, #212d3b)";
 const ACCENT = "var(--accent, #7e85e1)";
 const DEV_USER_ID = 1;
 
+// ── Реальная звуковая кривая голосовых ──────────────────────────
+// Декодируем аудио через Web Audio API и считаем пики амплитуды по N столбикам.
+// Кэшируем по URL, чтобы не пересчитывать. AudioContext один на всё приложение.
+const waveformCache = new Map<string, number[]>();
+let sharedAudioCtx: AudioContext | null = null;
+
+async function computeWaveform(url: string, buckets = 48): Promise<number[]> {
+  if (waveformCache.has(url)) return waveformCache.get(url)!;
+  const AC: typeof AudioContext | undefined =
+    (typeof window !== "undefined" && (window.AudioContext || (window as any).webkitAudioContext)) || undefined;
+  if (!AC) return [];
+  if (!sharedAudioCtx) sharedAudioCtx = new AC();
+  const res = await fetch(url);
+  const arr = await res.arrayBuffer();
+  const audioBuf: AudioBuffer = await sharedAudioCtx.decodeAudioData(arr);
+  const raw = audioBuf.getChannelData(0);
+  const block = Math.max(1, Math.floor(raw.length / buckets));
+  const peaks: number[] = [];
+  let max = 0;
+  for (let i = 0; i < buckets; i++) {
+    let sum = 0;
+    for (let j = 0; j < block; j++) sum += Math.abs(raw[i * block + j] || 0);
+    const avg = sum / block;
+    peaks.push(avg);
+    if (avg > max) max = avg;
+  }
+  const norm = peaks.map(p => (max > 0 ? p / max : 0)); // 0..1
+  waveformCache.set(url, norm);
+  return norm;
+}
+
 // Telegram-стиль скруглений пузыря (как в официальном приложении)
 // hasButtons: под пузырём прилеплены инлайн-кнопки — хвостик убираем, низ скругляем
 function getBubbleRadius(isSender: boolean, isFirstInGroup: boolean, isLastInGroup: boolean, hasAbove: boolean, hasButtons = false) {
@@ -215,6 +246,18 @@ const ChatMessage = React.memo(function ChatMessage({
     });
   }, []);
 
+  // Реальная звуковая кривая: из кэша сразу, иначе лениво декодируем
+  const [waveform, setWaveform] = useState<number[] | null>(null);
+  useEffect(() => {
+    if (!voiceUrl) return;
+    if (waveformCache.has(voiceUrl)) { setWaveform(waveformCache.get(voiceUrl)!); return; }
+    let cancelled = false;
+    const id = setTimeout(() => {
+      computeWaveform(voiceUrl).then(w => { if (!cancelled && w.length) setWaveform(w); }).catch(() => {});
+    }, 150);
+    return () => { cancelled = true; clearTimeout(id); };
+  }, [voiceUrl]);
+
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -391,8 +434,8 @@ const ChatMessage = React.memo(function ChatMessage({
                       setAudioProgress(pct * 100)
                       if (audioRef.current && audioRef.current.duration) audioRef.current.currentTime = pct * audioRef.current.duration
                     }}>
-                    {waveBars.map((h, i) => (
-                      <div key={i} className="rounded-full flex-1 transition-all duration-100" style={{ height: `${h}px`, backgroundColor: (i / waveBars.length) * 100 < audioProgress ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.32)" }} />
+                    {(waveform && waveform.length ? waveform.map(p => 3 + p * 19) : waveBars).map((h, i, arr) => (
+                      <div key={i} className="rounded-full flex-1 transition-all duration-100" style={{ height: `${h}px`, backgroundColor: (i / arr.length) * 100 < audioProgress ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.32)" }} />
                     ))}
                   </div>
                   <span className="text-[10px] opacity-60">{fmt(audioDuration)}</span>
