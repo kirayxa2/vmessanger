@@ -6,7 +6,7 @@ import { ArrowLeft, Search, EllipsisVertical, Phone, Bookmark } from "lucide-rea
 import { VerifiedBadge } from "../VerifiedBadge"
 import TitleBadge from "../TitleBadge"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 interface ChatHeaderProps {
   chatTitle: string

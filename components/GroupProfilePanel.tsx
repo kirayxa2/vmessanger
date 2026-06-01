@@ -27,7 +27,7 @@ interface GroupProfilePanelProps {
   onUserClick?: (userId: string | number) => void
 }
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 const DEV_USER_ID = 1
 
 export default function GroupProfilePanel({ name, participants, currentUserId, onClose, isMobile, onUserClick }: GroupProfilePanelProps) {

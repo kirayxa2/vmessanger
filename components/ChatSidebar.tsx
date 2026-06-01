@@ -6,7 +6,7 @@ import {
   Search, Menu, LogOut, Moon, Globe, Bookmark,
   ArrowLeft, Camera, Loader2, Check, X, AtSign, Info,
   Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus, Sun, Lock, QrCode,
-  Archive, BellOff, Trash2, BellRing
+  Archive, BellOff, Trash2, BellRing, Palette
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
@@ -20,6 +20,7 @@ import CreateGroupModal from "./CreateGroupModal"
 import DevicesScreen from "./DevicesScreen"
 import { useDeviceSession } from "@/hooks/useDeviceSession"
 import QRCodeSidebar from "./QRCodeSidebar"
+import ThemePicker from "./ThemePicker"
 import StoriesRow from "./StoriesRow"
 import { useTheme } from "@/lib/theme"
 import { Virtuoso } from "react-virtuoso"
@@ -427,6 +428,7 @@ export default function ChatSidebar({
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [showQRCode, setShowQRCode] = useState(false)
+  const [showAppearance, setShowAppearance] = useState(false)
 
   // ── Контекстное меню чата ────────────────────────────────────
   const [chatMenu, setChatMenu] = useState<{ id: string; x: number; y: number; isArchived: boolean; isMuted: boolean } | null>(null)
@@ -806,6 +808,7 @@ export default function ChatSidebar({
                 }
                 onClick={toggleTheme}
               />
+              <SettingsRow icon={<Palette size={17} />} iconColor={ACCENT} label="Внешний вид" badge="тема и цвет" onClick={() => setShowAppearance(true)} />
               <SettingsRow icon={<Lock size={17} />} iconColor="#d45555" label="Сменить пароль" onClick={() => setShowPasswordChange(true)} />
               <SettingsRow icon={<Monitor size={17} />} iconColor="#e08a3c" label={t("devices")} onClick={() => setShowDevices(true)} />
               <SettingsRow icon={<Folder size={17} />} iconColor="#8b6fd6" label={t("chat_folders")} />
@@ -868,6 +871,11 @@ export default function ChatSidebar({
                 currentSessionId={sessionId}
               />
             )}
+          </AnimatePresence>
+
+          {/* Appearance / theme picker overlay */}
+          <AnimatePresence>
+            {showAppearance && <ThemePicker onBack={() => setShowAppearance(false)} />}
           </AnimatePresence>
 
           {/* Password change overlay */}

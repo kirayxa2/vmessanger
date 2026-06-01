@@ -9,7 +9,7 @@ import { useProfanityFilter } from "@/hooks/useProfanityFilter";
 import TitleBadge from "./TitleBadge";
 import { VerifiedBadge } from "./VerifiedBadge";
 
-const SENDER_COLOR = "#5b67ea";
+const SENDER_COLOR = "var(--sender-bubble, #5b67ea)";
 const RECIPIENT_COLOR = "#212d3b";
 const ACCENT = "var(--accent, #7e85e1)";
 const DEV_USER_ID = 1;
@@ -254,6 +254,13 @@ const ChatMessage = React.memo(function ChatMessage({
     });
   }, [id]);
 
+  const waveBars = useMemo(() => {
+    const num = typeof id === "number" ? id : parseInt(("" + id).replace(/\D/g, "") || "0");
+    let seed = num || 1;
+    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    return Array.from({ length: 32 }).map(() => 3 + Math.round(rnd() * 19)); // высоты 3..22px
+  }, [id]);
+
   const timeStr = new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const { menuStyle, transformOrigin } = useMemo(() => {
@@ -365,9 +372,16 @@ const ChatMessage = React.memo(function ChatMessage({
                   {isPlaying ? <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><rect x="2" y="1" width="4" height="12" rx="1.5" /><rect x="8" y="1" width="4" height="12" rx="1.5" /></svg> : <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M3 2l9 5-9 5V2z" /></svg>}
                 </motion.button>
                 <div className="flex-1 min-w-0">
-                  <div className="relative h-[28px] flex items-center gap-[2px]">
-                    {Array.from({ length: 28 }).map((_, i) => (
-                      <div key={i} className="rounded-full flex-1 transition-all duration-100" style={{ height: `${[3, 5, 8, 12, 16, 20, 18, 14, 10, 7, 5, 8, 14, 20, 18, 12, 8, 5, 7, 11, 17, 20, 16, 11, 7, 5, 4, 3][i % 28]}px`, backgroundColor: (i / 28) * 100 < audioProgress ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }} />
+                  <div className="relative h-[28px] flex items-center gap-[2px] cursor-pointer"
+                    onClick={e => {
+                      e.stopPropagation()
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+                      setAudioProgress(pct * 100)
+                      if (audioRef.current && audioRef.current.duration) audioRef.current.currentTime = pct * audioRef.current.duration
+                    }}>
+                    {waveBars.map((h, i) => (
+                      <div key={i} className="rounded-full flex-1 transition-all duration-100" style={{ height: `${h}px`, backgroundColor: (i / waveBars.length) * 100 < audioProgress ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.32)" }} />
                     ))}
                   </div>
                   <span className="text-[10px] opacity-60">{fmt(audioDuration)}</span>
@@ -454,6 +468,30 @@ const ChatMessage = React.memo(function ChatMessage({
           </div>
         )}
 
+        {/* ── Reactions bar ── */}
+        {reactions && reactions.length > 0 && (() => {
+          const groups = new Map<string, { count: number; mine: boolean }>()
+          for (const r of reactions) {
+            const g = groups.get(r.emoji) || { count: 0, mine: false }
+            g.count++
+            if (currentUserId != null && String(r.userId) === String(currentUserId)) g.mine = true
+            groups.set(r.emoji, g)
+          }
+          return (
+            <div className={`flex flex-wrap gap-1 mt-1 ${isSender ? "justify-end" : "justify-start"}`}>
+              {Array.from(groups.entries()).map(([emoji, g]) => (
+                <motion.button key={emoji} whileTap={{ scale: 0.85 }} initial={{ scale: 0 }} animate={{ scale: 1 }}
+                  onClick={e => { e.stopPropagation(); onReaction?.(messageId, emoji) }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[12px] font-semibold"
+                  style={{ backgroundColor: g.mine ? "var(--accent)" : "rgba(255,255,255,0.13)", color: "#fff" }}>
+                  <span style={{ fontSize: 13 }}>{emoji}</span>
+                  <span>{g.count}</span>
+                </motion.button>
+              ))}
+            </div>
+          )
+        })()}
+
         {showMenu && typeof document !== "undefined" && createPortal(
           <AnimatePresence>
             <motion.div
@@ -466,6 +504,16 @@ const ChatMessage = React.memo(function ChatMessage({
               style={{ ...menuStyle, transformOrigin, zIndex: 99999 }}
               onClick={e => e.stopPropagation()}
             >
+              {/* Быстрые реакции */}
+              <div className="flex items-center justify-between px-2 py-1.5 border-b border-white/8">
+                {quickReactionEmojis.map(emoji => (
+                  <motion.button key={emoji} whileHover={{ scale: 1.3 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => { onReaction?.(messageId, emoji); onMenuClose(); }}
+                    className="text-[22px] leading-none p-1">
+                    {emoji}
+                  </motion.button>
+                ))}
+              </div>
               <MenuItem icon={<Reply size={17} />} label={t("reply")} onClick={() => { onReply?.({ id: messageId, content, senderName: senderName || "" }); onMenuClose(); }} />
               {isSender && <MenuItem icon={<Pencil size={17} />} label={t("edit")} onClick={() => { onEdit?.(messageId, content); onMenuClose(); }} />}
               <MenuItem icon={<Copy size={17} />} label={t("copy")} onClick={() => { navigator.clipboard.writeText(content); onMenuClose(); }} />
@@ -500,7 +548,7 @@ function renderWithMentions(text: string, onMentionClick?: (username: string) =>
     /^@\w+$/.test(part)
       ? <span
           key={i}
-          style={{ color: '#7e85e1', fontWeight: 600, cursor: 'pointer' }}
+          style={{ color: 'var(--accent, #7e85e1)', fontWeight: 600, cursor: 'pointer' }}
           onClick={e => { e.stopPropagation(); onMentionClick?.(part.slice(1)) }}
         >{part}</span>
       : <span key={i}>{part}</span>

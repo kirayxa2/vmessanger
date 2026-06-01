@@ -6,7 +6,7 @@ import { Smile, Image, Sticker, Search, X } from "lucide-react"
 import data from "@emoji-mart/data"
 import Picker from "@emoji-mart/react"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 const TABS = [
   { id: "emoji", icon: <Smile size={18} />, label: "Эмодзи" },
   { id: "gif", icon: <Image size={18} />, label: "GIF" },

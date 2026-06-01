@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Phone, PhoneOff, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, Signal } from "lucide-react"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 interface CallModalProps {
   incomingCall?: {

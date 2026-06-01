@@ -7,7 +7,7 @@ import { QRCodeSVG } from "qrcode.react"
 import { useTranslation } from "react-i18next"
 import { useRouter } from "next/navigation"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 interface UserProfilePanelProps {
   userId: string | number | null

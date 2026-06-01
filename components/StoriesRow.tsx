@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X, ChevronLeft, ChevronRight, Plus, Camera } from "lucide-react"
 import { useSession } from "next-auth/react"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 interface StoryUser {
   user: { id: number; username: string; avatar?: string | null }

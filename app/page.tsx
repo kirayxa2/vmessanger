@@ -5,7 +5,8 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import ChatWindow from "@/components/ChatWindow"
 import ChatSidebar from "@/components/ChatSidebar"
-import { Loader2, MessageSquare, Settings, User } from "lucide-react"
+import { MessageSquare, Settings, User } from "lucide-react"
+import { AppLoadingSkeleton } from "@/components/Skeleton"
 import { useSocket } from "./ClientProviders"
 import TitleBar from "@/components/TitleBar"
 import { motion, AnimatePresence } from "framer-motion"
@@ -307,8 +308,8 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex items-center justify-center h-full w-full bg-[#0e1621] fixed inset-0">
-        <Loader2 className="animate-spin" size={40} style={{ color: ACCENT }} />
+      <div className="h-full w-full fixed inset-0">
+        <AppLoadingSkeleton />
       </div>
     )
   }

@@ -6,7 +6,7 @@ import { ArrowLeft, Monitor, Smartphone, Tablet, Loader2, LogOut, Trash2, Wifi }
 import { useSocket } from "@/app/ClientProviders"
 import { useSession } from "next-auth/react"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 interface SessionData {
   id: string

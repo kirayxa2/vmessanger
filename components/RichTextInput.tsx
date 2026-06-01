@@ -7,7 +7,7 @@ import {
   Type, MoreVertical, Copy, Scissors, X
 } from "lucide-react"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 const MAX_FORMATS = 2
 
 // ── Типы форматирования ───────────────────────────────────────

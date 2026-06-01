@@ -15,7 +15,7 @@ interface QRCodeSidebarProps {
   onBack: () => void
 }
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 const QR_THEMES = [
   { id: "classic", bg: "linear-gradient(135deg, #7e85e1 0%, #5b61b9 100%)", color: "#ffffff" },

@@ -7,7 +7,7 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { Loader2 } from "lucide-react"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 export default function LoginPage() {
   const router = useRouter()

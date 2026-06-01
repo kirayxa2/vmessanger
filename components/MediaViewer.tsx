@@ -7,7 +7,7 @@ import {
   ArrowLeft, MoreVertical, Reply, Forward, Bookmark, ChevronRight
 } from "lucide-react"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 function formatTime(sec: number) {
   if (!isFinite(sec) || isNaN(sec)) return "0:00"

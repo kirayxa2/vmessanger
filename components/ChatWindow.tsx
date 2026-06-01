@@ -6,10 +6,12 @@ import { Loader2, Search, EllipsisVertical, Smile, Paperclip, Send, Mic, ArrowLe
 import { Virtuoso } from "react-virtuoso"
 import Linkify from "linkify-react"
 import EmojiGifPicker from "./EmojiGifPicker"
+import { MessagesSkeleton } from "./Skeleton"
 import useSound from "use-sound"
 import ChatMessage from "./ChatMessage"
 import { stripFormatting } from "@/lib/formatText"
 import FileMessage from "./FileMessage"
+import { ImageViewer } from "./MediaViewer"
 import CallModal from "./CallModal"
 import { AnimatePresence, motion, LazyMotion, domAnimation } from "framer-motion"
 import { useTranslation } from "react-i18next"
@@ -22,7 +24,7 @@ import ChatHeader from "./chat/ChatHeader"
 import PinnedMessageBanner from "./chat/PinnedMessageBanner"
 import { useE2E } from "@/hooks/useE2E"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 interface Message {
   id: string | number
@@ -1501,6 +1503,7 @@ useEffect(() => {
               <Loader2 size={20} className="animate-spin text-[#7e85e1]" />
             </div>
           )}
+          {loading && messages.length === 0 && <MessagesSkeleton />}
           <div className="flex flex-col w-full max-w-[850px] mx-auto">
             {isSystemChat && messages.map((msg, idx) => (
               <motion.div key={msg.id.toString()} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
@@ -1529,7 +1532,8 @@ useEffect(() => {
               type Item =
                 | { kind: 'divider'; label: string; key: string }
                 | { kind: 'msg'; msg: Message; idx: number }
-              const items: Item[] = []
+                | { kind: 'album'; msgs: Message[]; key: string }
+              const raw: Item[] = []
               let lastDateKey = ''
               messages.forEach((msg, idx) => {
                 const d = new Date(msg.createdAt)
@@ -1545,10 +1549,33 @@ useEffect(() => {
                   else if (diffDays === 1) label = 'Вчера'
                   else if (diffDays < 7) label = d.toLocaleDateString('ru-RU', { weekday: 'long' })
                   else label = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: diffDays > 365 ? 'numeric' : undefined })
-                  items.push({ kind: 'divider', label, key: `divider-${dateKey}` })
+                  raw.push({ kind: 'divider', label, key: `divider-${dateKey}` })
                 }
-                items.push({ kind: 'msg', msg, idx })
+                raw.push({ kind: 'msg', msg, idx })
               })
+
+              // M4: группируем подряд идущие картинки одного отправителя в альбом
+              const isImg = (m: Message) => !!m.fileUrl && (m.fileType || "").startsWith("image/")
+              const items: Item[] = []
+              for (let i = 0; i < raw.length; i++) {
+                const it = raw[i]
+                if (it.kind === 'msg' && isImg(it.msg)) {
+                  const runMsgs: Message[] = [it.msg]
+                  let j = i + 1
+                  while (j < raw.length) {
+                    const nx = raw[j]
+                    if (nx.kind === 'msg' && isImg(nx.msg) && nx.msg.sender.id?.toString() === it.msg.sender.id?.toString()) {
+                      runMsgs.push(nx.msg); j++
+                    } else break
+                  }
+                  if (runMsgs.length >= 2) {
+                    items.push({ kind: 'album', msgs: runMsgs, key: 'album-' + it.msg.id })
+                    i = j - 1
+                    continue
+                  }
+                }
+                items.push(it)
+              }
 
               return items.map(item => {
                 if (item.kind === 'divider') {
@@ -1574,6 +1601,9 @@ useEffect(() => {
                       </motion.div>
                     </div>
                   )
+                }
+                if (item.kind === 'album') {
+                  return <AlbumMessage key={item.key} msgs={item.msgs} session={session} messageRefs={messageRefs} />
                 }
                 const { msg, idx } = item
                 const isSender = msg.sender.id?.toString() === session?.user?.id?.toString()
@@ -2173,6 +2203,70 @@ function MentionProfilePanel({ username, onClose, isMobile }: { username: string
     />
   )
 }
+
+// M4: альбом — несколько картинок одного отправителя одной сеткой
+const AlbumMessage = React.memo(function AlbumMessage({ msgs, session, messageRefs }: {
+  msgs: Message[]
+  session: any
+  messageRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>
+}) {
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null)
+  const isSender = msgs[0]?.sender.id?.toString() === session?.user?.id?.toString()
+  const images = msgs.filter(m => m.fileUrl)
+  const shown = images.slice(0, 4)
+  const extra = images.length - shown.length
+  const last = msgs[msgs.length - 1]
+  const caption = msgs.map(m => m.content).find(c => c && c.trim())
+  const timeStr = new Date(last.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  const senderName = msgs[0]?.sender.username || ""
+
+  return (
+    <div className={`flex mb-2 ${isSender ? "justify-end" : "justify-start"}`}>
+      <div style={{ maxWidth: 280 }}>
+        <div
+          ref={el => { msgs.forEach(m => { messageRefs.current[m.id.toString()] = el }) }}
+          className="grid grid-cols-2 gap-[3px] rounded-2xl overflow-hidden"
+          style={{ width: 280 }}
+        >
+          {shown.map((m, i) => {
+            const big = shown.length === 3 && i === 0
+            return (
+              <motion.div
+                key={m.id.toString()}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setViewerUrl(m.fileUrl!)}
+                className={`relative cursor-pointer ${big ? "col-span-2" : ""}`}
+                style={{ aspectRatio: big ? "2 / 1" : "1 / 1" }}
+              >
+                <img src={m.fileUrl || ""} alt="" className="w-full h-full object-cover block" loading="lazy" />
+                {i === 3 && extra > 0 && (
+                  <div className="absolute inset-0 bg-black/55 flex items-center justify-center text-white text-2xl font-bold">+{extra}</div>
+                )}
+              </motion.div>
+            )
+          })}
+        </div>
+        {caption && <p className="text-[14px] text-white mt-1 px-1 whitespace-pre-wrap break-words">{caption}</p>}
+        <div className={`flex ${isSender ? "justify-end" : "justify-start"} mt-0.5 px-1`}>
+          <span className="text-[10px] text-gray-400">{timeStr}</span>
+        </div>
+      </div>
+      <AnimatePresence>
+        {viewerUrl && (
+          <ImageViewer
+            url={viewerUrl}
+            senderName={senderName}
+            sentAt={last.createdAt}
+            timeStr={timeStr}
+            isRead={!!last.isRead}
+            isSender={isSender}
+            onClose={() => setViewerUrl(null)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  )
+})
 
 // Мемоизированный компонент для рендера одного сообщения
 const MessageItem = React.memo(function MessageItem({

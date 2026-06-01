@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { generateKeyPair } from "@/lib/crypto"
 import { Loader2, ArrowLeft, MailCheck } from "lucide-react"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 export default function RegisterPage() {
   const router = useRouter()

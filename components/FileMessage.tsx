@@ -6,7 +6,7 @@ import { Download, FileText, FileArchive, FileCode, Play, Pause, Volume2, Check,
 import { useTranslation } from "react-i18next"
 import { VideoViewer, ImageViewer } from "./MediaViewer"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B"

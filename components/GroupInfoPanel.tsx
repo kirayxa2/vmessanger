@@ -6,7 +6,7 @@ import { X, Users, Crown, Shield, User, MessageSquare } from "lucide-react"
 import TitleBadge from "./TitleBadge"
 import { VerifiedBadge } from "./VerifiedBadge"
 
-const ACCENT = "#7e85e1"
+const ACCENT = "var(--accent, #7e85e1)"
 const DEV_USER_ID = 1
 
 interface GroupMember {
