@@ -1316,9 +1316,9 @@ useEffect(() => {
         </div>
         {/* Skeleton input */}
         <div className="px-3 pb-4 pt-2 flex items-center gap-2">
-          <div className="w-[46px] h-[46px] rounded-full bg-white/8 animate-pulse shrink-0" />
-          <div className="flex-1 h-[46px] rounded-2xl bg-white/8 animate-pulse" />
-          <div className="w-[46px] h-[46px] rounded-full bg-white/8 animate-pulse shrink-0" />
+          <div className="w-12 h-12 rounded-full bg-white/8 animate-pulse shrink-0" />
+          <div className="flex-1 h-12 rounded-2xl bg-white/8 animate-pulse" />
+          <div className="w-12 h-12 rounded-full bg-white/8 animate-pulse shrink-0" />
         </div>
       </div>
     )
@@ -1504,7 +1504,7 @@ useEffect(() => {
             </div>
           )}
           {loading && messages.length === 0 && <MessagesSkeleton />}
-          <div className="flex flex-col w-full max-w-[850px] mx-auto">
+          <div className="flex flex-col w-full max-w-[728px] mx-auto">
             {isSystemChat && messages.map((msg, idx) => (
               <motion.div key={msg.id.toString()} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.04, duration: 0.22 }} className="mb-3 mx-auto w-full max-w-[560px]">
@@ -1693,7 +1693,7 @@ useEffect(() => {
               {isRecording && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                  className="flex items-center gap-3 px-3 py-2 mb-2 rounded-xl mx-auto w-full max-w-[calc(100%-108px)]"
+                  className="flex items-center gap-3 px-3 py-2 mb-2 rounded-xl mx-auto w-full max-w-[calc(100%-112px)]"
                   style={{ backgroundColor: "var(--input-bg)" }}
                 >
                   <motion.div className="w-3 h-3 rounded-full bg-red-500"
@@ -1743,10 +1743,10 @@ useEffect(() => {
             </AnimatePresence>
 
             {/* Main input row */}
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-2 w-full max-w-[728px] mx-auto">
               {/* Paperclip */}
               <div
-                className="relative w-[46px] h-[46px] rounded-full shrink-0 flex items-center justify-center text-gray-400"
+                className="relative w-12 h-12 rounded-full shrink-0 flex items-center justify-center text-gray-400"
                 style={{ backgroundColor: "var(--input-bg)" }}
               >
                 {isUploading
@@ -1996,7 +1996,7 @@ useEffect(() => {
                   onTouchMove={() => { if (sendLongPressRef.current) clearTimeout(sendLongPressRef.current) }}
                   whileHover={{ scale: 1.06 }}
                   whileTap={{ scale: 0.88 }}
-                  className="text-white w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 shadow-lg"
+                  className="text-white w-12 h-12 rounded-full flex items-center justify-center shrink-0 shadow-lg"
                   style={{ backgroundColor: isRecording ? "#e53935" : ACCENT }}
                 >
                   <AnimatePresence mode="wait">
