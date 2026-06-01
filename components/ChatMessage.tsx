@@ -312,7 +312,7 @@ const ChatMessage = React.memo(function ChatMessage({
     const num = typeof id === "number" ? id : parseInt(("" + id).replace(/\D/g, "") || "0");
     let seed = num || 1;
     const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
-    return Array.from({ length: 32 }).map(() => 3 + Math.round(rnd() * 19)); // высоты 3..22px
+    return Array.from({ length: 48 }).map(() => 3 + Math.round(rnd() * 19)); // высоты 3..22px
   }, [id]);
 
   const timeStr = new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -426,7 +426,7 @@ const ChatMessage = React.memo(function ChatMessage({
                   {isPlaying ? <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><rect x="2" y="1" width="4" height="12" rx="1.5" /><rect x="8" y="1" width="4" height="12" rx="1.5" /></svg> : <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M3 2l9 5-9 5V2z" /></svg>}
                 </motion.button>
                 <div className="flex-1 min-w-0">
-                  <div className="relative h-[28px] flex items-center gap-[2px] cursor-pointer"
+                  <div className="relative h-[28px] flex items-center gap-[1px] cursor-pointer"
                     onClick={e => {
                       e.stopPropagation()
                       const rect = e.currentTarget.getBoundingClientRect()
@@ -435,7 +435,7 @@ const ChatMessage = React.memo(function ChatMessage({
                       if (audioRef.current && audioRef.current.duration) audioRef.current.currentTime = pct * audioRef.current.duration
                     }}>
                     {(waveform && waveform.length ? waveform.map(p => 3 + p * 19) : waveBars).map((h, i, arr) => (
-                      <div key={i} className="rounded-full flex-1 transition-all duration-100" style={{ height: `${h}px`, backgroundColor: (i / arr.length) * 100 < audioProgress ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.32)" }} />
+                      <div key={i} className="rounded-full shrink-0 transition-all duration-100" style={{ width: 2, height: `${h}px`, backgroundColor: (i / arr.length) * 100 < audioProgress ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.4)" }} />
                     ))}
                   </div>
                   <span className="text-[10px] opacity-60">{fmt(audioDuration)}</span>
