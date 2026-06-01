@@ -2,214 +2,216 @@
 @import "tailwindcss";
 
 :root, [data-theme="dark"] {
-  --background: #0e1621;
-  --foreground: #ffffff;
-  --sidebar-bg: #1c242f;
-  --accent: #7e85e1;
-  --accent-hover: #6b73d4;
-  --sidebar-item-active: #7e85e1;
-  --header-bg: #1c242f;
-  --chat-bg: #0e1621;
-  --sender-bubble: #5b67ea;
-  --sender-text: #ffffff;
-  --recipient-bubble: #212d3b;
-  --recipient-text: #ffffff;
-  --input-bg: #242f3d;
-  --pattern-color: rgba(255, 255, 255, 0.05);
-  --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-  --surface-primary: #1c242f;
-  --surface-secondary: #0a0f17;
-  --text-primary: #ffffff;
-  --text-secondary: #8896a5;
-  --border-subtle: rgba(255, 255, 255, 0.05);
+--background: #0e1621;
+--foreground: #ffffff;
+--sidebar-bg: #1c242f;
+--accent: #7e85e1;
+--accent-hover: #6b73d4;
+--sidebar-item-active: #7e85e1;
+--header-bg: #1c242f;
+--chat-bg: #0e1621;
+--sender-bubble: #5b67ea;
+--sender-text: #ffffff;
+--recipient-bubble: #212d3b;
+--recipient-text: #ffffff;
+--input-bg: #242f3d;
+--pattern-color: rgba(255, 255, 255, 0.05);
+--font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+--surface-primary: #1c242f;
+--surface-secondary: #0a0f17;
+--text-primary: #ffffff;
+--text-secondary: #8896a5;
+--border-subtle: rgba(255, 255, 255, 0.05);
+--messages-container-width: 45.5rem;
+--composer-height: 3rem;
 }
 
 [data-theme="light"] {
-  --background: #f0f2f5;
-  --foreground: #1a1a1a;
-  --sidebar-bg: #ffffff;
-  --accent: #7e85e1;
-  --accent-hover: #6b73d4;
-  --sidebar-item-active: #7e85e1;
-  --header-bg: #ffffff;
-  --chat-bg: #e8ecf1;
-  --sender-bubble: #5b67ea;
-  --sender-text: #ffffff;
-  --recipient-bubble: #ffffff;
-  --recipient-text: #1a1a1a;
-  --input-bg: #ffffff;
-  --pattern-color: rgba(0, 0, 0, 0.03);
-  --surface-primary: #ffffff;
-  --surface-secondary: #f0f2f5;
-  --text-primary: #1a1a1a;
-  --text-secondary: #65737e;
-  --border-subtle: rgba(0, 0, 0, 0.08);
+--background: #f0f2f5;
+--foreground: #1a1a1a;
+--sidebar-bg: #ffffff;
+--accent: #7e85e1;
+--accent-hover: #6b73d4;
+--sidebar-item-active: #7e85e1;
+--header-bg: #ffffff;
+--chat-bg: #e8ecf1;
+--sender-bubble: #5b67ea;
+--sender-text: #ffffff;
+--recipient-bubble: #ffffff;
+--recipient-text: #1a1a1a;
+--input-bg: #ffffff;
+--pattern-color: rgba(0, 0, 0, 0.03);
+--surface-primary: #ffffff;
+--surface-secondary: #f0f2f5;
+--text-primary: #1a1a1a;
+--text-secondary: #65737e;
+--border-subtle: rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="amoled"] {
-  --background: #000000;
-  --foreground: #ffffff;
-  --sidebar-bg: #0c0c0c;
-  --header-bg: #0c0c0c;
-  --chat-bg: #000000;
-  --sender-text: #ffffff;
-  --recipient-bubble: #18181b;
-  --recipient-text: #ffffff;
-  --input-bg: #141414;
-  --pattern-color: rgba(255, 255, 255, 0.04);
-  --surface-primary: #0c0c0c;
-  --surface-secondary: #000000;
-  --text-primary: #ffffff;
-  --text-secondary: #8896a5;
-  --border-subtle: rgba(255, 255, 255, 0.07);
+--background: #000000;
+--foreground: #ffffff;
+--sidebar-bg: #0c0c0c;
+--header-bg: #0c0c0c;
+--chat-bg: #000000;
+--sender-text: #ffffff;
+--recipient-bubble: #18181b;
+--recipient-text: #ffffff;
+--input-bg: #141414;
+--pattern-color: rgba(255, 255, 255, 0.04);
+--surface-primary: #0c0c0c;
+--surface-secondary: #000000;
+--text-primary: #ffffff;
+--text-secondary: #8896a5;
+--border-subtle: rgba(255, 255, 255, 0.07);
 }
 
 [data-theme="night"] {
-  --background: #0b1b2b;
-  --foreground: #ffffff;
-  --sidebar-bg: #13293f;
-  --header-bg: #13293f;
-  --chat-bg: #0b1b2b;
-  --sender-text: #ffffff;
-  --recipient-bubble: #1c3a54;
-  --recipient-text: #ffffff;
-  --input-bg: #16314a;
-  --pattern-color: rgba(255, 255, 255, 0.05);
-  --surface-primary: #13293f;
-  --surface-secondary: #081522;
-  --text-primary: #ffffff;
-  --text-secondary: #8aa0b5;
-  --border-subtle: rgba(255, 255, 255, 0.06);
+--background: #0b1b2b;
+--foreground: #ffffff;
+--sidebar-bg: #13293f;
+--header-bg: #13293f;
+--chat-bg: #0b1b2b;
+--sender-text: #ffffff;
+--recipient-bubble: #1c3a54;
+--recipient-text: #ffffff;
+--input-bg: #16314a;
+--pattern-color: rgba(255, 255, 255, 0.05);
+--surface-primary: #13293f;
+--surface-secondary: #081522;
+--text-primary: #ffffff;
+--text-secondary: #8aa0b5;
+--border-subtle: rgba(255, 255, 255, 0.06);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+--color-background: var(--background);
+--color-foreground: var(--foreground);
 }
 
 /* media query removed — theme is controlled by data-theme attribute only */
 
 input, select, textarea {
-  font-size: 16px !important; /* Prevents auto-zoom on mobile safari */
+font-size: 16px !important; /* Prevents auto-zoom on mobile safari */
 }
 
 html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  /* height контролируется через --app-height из layout.tsx visualViewport */
-  height: 100vh; /* Fallback */
-  height: var(--app-height, 100vh); /* Динамическая высота с учетом клавиатуры */
-  overflow: hidden;
-  overscroll-behavior: none; /* Отключить pull-to-refresh браузера */
-  --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu,
-  Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-  --font-family-monospace: "Cascadia Mono", "Roboto Mono", "Droid Sans Mono", 'SF Mono', "Menlo", "Ubuntu Mono",
-  "Consolas", monospace;
-  --font-family-rounded: -ui-rounded, "Numbers Rounded", "Roboto", "Helvetica Neue", sans-serif;
-  --font-family-condensed: "Roboto Condensed", "Roboto", "Helvetica Neue", sans-serif;
-  --font-weight-semibold: 500; /* Note: Roboto is naturally quite bold, so 500 works well as default */
+margin: 0;
+padding: 0;
+width: 100%;
+/* height контролируется через --app-height из layout.tsx visualViewport */
+height: 100vh; /* Fallback */
+height: var(--app-height, 100vh); /* Динамическая высота с учетом клавиатуры */
+overflow: hidden;
+overscroll-behavior: none; /* Отключить pull-to-refresh браузера */
+--font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu,
+Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+--font-family-monospace: "Cascadia Mono", "Roboto Mono", "Droid Sans Mono", 'SF Mono', "Menlo", "Ubuntu Mono",
+"Consolas", monospace;
+--font-family-rounded: -ui-rounded, "Numbers Rounded", "Roboto", "Helvetica Neue", sans-serif;
+--font-family-condensed: "Roboto Condensed", "Roboto", "Helvetica Neue", sans-serif;
+--font-weight-semibold: 500; /* Note: Roboto is naturally quite bold, so 500 works well as default */
 
-  --color-borders-input: rgb(91, 91, 90, 1);
-  --border-radius-messages: 0.9375rem;
+--color-borders-input: rgb(91, 91, 90, 1);
+--border-radius-messages: 0.9375rem;
 
-  font-family: var(--font-family);
+font-family: var(--font-family);
 
-  font-size: 16px;
-  font-weight: var(--font-weight-normal);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  line-height: 1.5;
-  color: var(--color-text);
-  text-align: left;
+font-size: 16px;
+font-weight: var(--font-weight-normal);
+-webkit-font-smoothing: antialiased;
+-moz-osx-font-smoothing: grayscale;
+line-height: 1.5;
+color: var(--color-text);
+text-align: left;
 
-  background-color: var(--color-background);
+background-color: var(--color-background);
 
-  /* Фикс для iOS Safari и Huawei — предотвращает скролл body при открытии клавиатуры */
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+/* Фикс для iOS Safari и Huawei — предотвращает скролл body при открытии клавиатуры */
+position: fixed;
+top: 0;
+left: 0;
+right: 0;
+bottom: 0;
 }
 
 /* Huawei-specific fix */
 @supports (-webkit-touch-callout: none) {
-  body {
-    min-height: 100vh;
-    min-height: -webkit-fill-available;
-  }
+body {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+}
 }
 
 /* Дополнительный фикс для input на мобильных */
 input, textarea {
-  /* Предотвращает zoom на фокусе */
-  font-size: 16px !important;
-  /* Huawei fix: убираем transform который может сломать позиционирование */
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
+/* Предотвращает zoom на фокусе */
+font-size: 16px !important;
+/* Huawei fix: убираем transform который может сломать позиционирование */
+transform: translateZ(0);
+-webkit-transform: translateZ(0);
 }
 
 .wrapperinput {
-    box-shadow: 0 1px 2px var(--color-default-shadow);
+  box-shadow: 0 1px 2px var(--color-default-shadow);
 }
 
 
 html[lang="fa"],
 html[lang="fa"] body {
-  --font-family: "Vazirmatn", "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen,
+--font-family: "Vazirmatn", "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen,
+Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+
+&.is-ios,
+&.is-macos {
+  --font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Roboto", "Apple Color Emoji", "Segoe UI", Oxygen,
   Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+}
 
-  &.is-ios,
-  &.is-macos {
-    --font-family: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Roboto", "Apple Color Emoji", "Segoe UI", Oxygen,
-    Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-  }
 
-  
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-family);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  user-select: none;
-  -webkit-user-select: none;
-  overscroll-behavior: none;
+background: var(--background);
+color: var(--foreground);
+font-family: var(--font-family);
+-webkit-font-smoothing: antialiased;
+-moz-osx-font-smoothing: grayscale;
+user-select: none;
+-webkit-user-select: none;
+overscroll-behavior: none;
 }
 
 *, *::before, *::after {
-  font-family: var(--font-family) !important;
-  box-sizing: border-box;
+font-family: var(--font-family) !important;
+box-sizing: border-box;
 }
 
 input, textarea, [contenteditable="true"], .message-text {
-  user-select: text !important;
-  -webkit-user-select: text !important;
+user-select: text !important;
+-webkit-user-select: text !important;
 }
 
 .tg-bg {
-  background-color: var(--chat-bg);
-  background-image: url("/pattern.svg");
-  background-size: 540px;
-  background-repeat: repeat;
-  background-attachment: local;
+background-color: var(--chat-bg);
+background-image: url("/pattern.svg");
+background-size: 540px;
+background-repeat: repeat;
+background-attachment: local;
 }
 
 /* ── Обои чата (управляются data-wallpaper на <html>) ── */
 [data-wallpaper="solid"] .tg-bg {
-  background-image: none;
+background-image: none;
 }
 [data-wallpaper="ocean"] .tg-bg,
 [data-wallpaper="sunset"] .tg-bg,
 [data-wallpaper="forest"] .tg-bg,
 [data-wallpaper="grape"] .tg-bg,
 [data-wallpaper="rose"] .tg-bg {
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+background-size: cover;
+background-repeat: no-repeat;
+background-attachment: fixed;
 }
 [data-wallpaper="ocean"] .tg-bg  { background-image: linear-gradient(160deg, #1a2980, #26d0ce); }
 [data-wallpaper="sunset"] .tg-bg { background-image: linear-gradient(160deg, #ff8008, #ffc837); }
@@ -219,74 +221,71 @@ input, textarea, [contenteditable="true"], .message-text {
 
 /* Анимированный градиентный фон */
 [data-wallpaper="aurora"] .tg-bg {
-  background-image: linear-gradient(-45deg, var(--accent, #5b67ea), #22b8b8, #e15a7e, #8b5cf6);
-  background-size: 400% 400%;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  animation: aurora-shift 20s ease infinite;
+background-image: linear-gradient(-45deg, var(--accent, #5b67ea), #22b8b8, #e15a7e, #8b5cf6);
+background-size: 400% 400%;
+background-repeat: no-repeat;
+background-attachment: fixed;
+animation: aurora-shift 20s ease infinite;
 }
 @keyframes aurora-shift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+0% { background-position: 0% 50%; }
+50% { background-position: 100% 50%; }
+100% { background-position: 0% 50%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-wallpaper="aurora"] .tg-bg { animation: none; }
+[data-wallpaper="aurora"] .tg-bg { animation: none; }
 }
 
 .hide-scrollbar::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
+display: none;
+width: 0;
+height: 0;
 }
 
 .hide-scrollbar {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+scrollbar-width: none; /* Firefox */
+-ms-overflow-style: none; /* IE/Edge */
 }
 
 /* Virtuoso inner scroller */
 .hide-scrollbar [data-virtuoso-scroller] {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+scrollbar-width: none;
+-ms-overflow-style: none;
 }
 .hide-scrollbar [data-virtuoso-scroller]::-webkit-scrollbar {
-  display: none;
-  width: 0;
+display: none;
+width: 0;
 }
 
 .bubble-shadow {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 /* Клавиатурный фикс — переменная высота применяется через --app-height из JS */
 #mobile-chat-wrap {
-  /* transition не добавляем: плавность может сдвинуть контент при ресайзе */
-  will-change: height;
+/* transition не добавляем: плавность может сдвинуть контент при ресайзе */
+will-change: height;
 }
 
 
 /* ── Skeleton loaders (shimmer) ───────────────────────────── */
 .skeleton {
-  position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+position: relative;
+overflow: hidden;
+background: rgba(255, 255, 255, 0.06);
+border-radius: 8px;
 }
 [data-theme="light"] .skeleton {
-  background: rgba(0, 0, 0, 0.06);
+background: rgba(0, 0, 0, 0.06);
 }
 .skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09), transparent);
-  animation: skeleton-sweep 1.4s ease-in-out infinite;
+content: "";
+position: absolute;
+inset: 0;
+transform: translateX(-100%);
+background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09), transparent);
+animation: skeleton-sweep 1.4s ease-in-out infinite;
 }
 [data-theme="light"] .skeleton::after {
-  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.06), transparent);
-}
-@keyframes skeleton-sweep {
-  100% { transform: translateX(100%); }
+background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.06), transparent);
 }
