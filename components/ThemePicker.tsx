@@ -1,12 +1,12 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { ArrowLeft, Check, Moon, Sun, Pipette } from "lucide-react"
+import { ArrowLeft, Check, Pipette } from "lucide-react"
 import { useRef } from "react"
-import { useTheme, ACCENT_PRESETS } from "@/lib/theme"
+import { useTheme, ACCENT_PRESETS, THEMES, WALLPAPERS, type ThemeId } from "@/lib/theme"
 
 export default function ThemePicker({ onBack }: { onBack: () => void }) {
-  const { theme, accent, setTheme, setAccent } = useTheme()
+  const { theme, accent, wallpaper, setTheme, setAccent, setWallpaper } = useTheme()
   const colorInputRef = useRef<HTMLInputElement>(null)
 
   const isPreset = ACCENT_PRESETS.some(c => c.toLowerCase() === accent.toLowerCase())
@@ -28,19 +28,19 @@ export default function ThemePicker({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="flex-1 overflow-y-auto hide-scrollbar p-5">
-        {/* ── Живое превью ── */}
-        <div className="rounded-2xl overflow-hidden mb-6 border border-white/8" style={{ backgroundColor: "var(--chat-bg, #0e1621)" }}>
-          <div className="tg-bg p-4 flex flex-col gap-2">
-            <div className="self-start max-w-[75%] px-3 py-2 rounded-2xl rounded-bl-md text-[14px] text-white shadow"
-              style={{ backgroundColor: "var(--recipient-bubble, #212d3b)" }}>
-              Привет! Как тебе новая тема? 🎨
+        {/* ── Живое превью (реагирует на тему + обои + акцент) ── */}
+        <div className="rounded-2xl overflow-hidden mb-6 border border-white/8" style={{ backgroundColor: "var(--chat-bg)" }}>
+          <div className="tg-bg p-4 flex flex-col gap-2" style={{ minHeight: 120 }}>
+            <div className="self-start max-w-[75%] px-3 py-2 rounded-2xl rounded-bl-md text-[14px] shadow"
+              style={{ backgroundColor: "var(--recipient-bubble)", color: "var(--recipient-text)" }}>
+              Привет! Как тебе тема? 🎨
             </div>
             <div className="self-end max-w-[75%] px-3 py-2 rounded-2xl rounded-br-md text-[14px] text-white shadow"
               style={{ backgroundColor: "var(--accent)" }}>
-              Огонь! Цвет меняется везде ✨
+              Огонь! Меняется везде ✨
             </div>
           </div>
-          <div className="flex items-center gap-2 p-3 border-t border-white/5" style={{ backgroundColor: "var(--input-bg, #242f3d)" }}>
+          <div className="flex items-center gap-2 p-3 border-t border-white/5" style={{ backgroundColor: "var(--input-bg)" }}>
             <div className="flex-1 h-9 rounded-full bg-black/20 flex items-center px-3 text-gray-500 text-[13px]">Сообщение…</div>
             <div className="w-9 h-9 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: "var(--accent)" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" /></svg>
@@ -51,10 +51,29 @@ export default function ThemePicker({ onBack }: { onBack: () => void }) {
         {/* ── Тема ── */}
         <p className="text-[12px] font-semibold uppercase tracking-wider text-gray-500 mb-3">Тема</p>
         <div className="grid grid-cols-2 gap-3 mb-7">
-          <ThemeCard active={theme === "dark"} onClick={() => setTheme("dark")} label="Тёмная"
-            icon={<Moon size={16} />} bg="#0e1621" bar="#1c242f" bubble={accent} />
-          <ThemeCard active={theme === "light"} onClick={() => setTheme("light")} label="Светлая"
-            icon={<Sun size={16} />} bg="#e8ecf1" bar="#ffffff" bubble={accent} />
+          {THEMES.map(t => (
+            <ThemeCard key={t.id} active={theme === t.id} onClick={() => setTheme(t.id)} label={t.label}
+              bg={t.bg} bar={t.bar} bubble={accent} />
+          ))}
+        </div>
+
+        {/* ── Обои чата ── */}
+        <p className="text-[12px] font-semibold uppercase tracking-wider text-gray-500 mb-3">Обои чата</p>
+        <div className="grid grid-cols-4 gap-3 mb-7">
+          {WALLPAPERS.map(w => {
+            const active = wallpaper === w.id
+            return (
+              <motion.button key={w.id} whileTap={{ scale: 0.95 }} onClick={() => setWallpaper(w.id)}
+                className="flex flex-col items-center gap-1.5">
+                <div className="w-full rounded-xl relative overflow-hidden"
+                  style={{ aspectRatio: "1 / 1.3", background: w.preview, backgroundSize: "cover", border: active ? "2px solid var(--accent)" : "2px solid rgba(255,255,255,0.1)" }}>
+                  {w.id === "aurora" && <span className="absolute top-1 right-1 text-[9px] bg-black/40 text-white px-1 rounded">live</span>}
+                  {active && <div className="absolute inset-0 flex items-center justify-center bg-black/25"><Check size={18} className="text-white" /></div>}
+                </div>
+                <span className="text-[11px] text-gray-400">{w.label}</span>
+              </motion.button>
+            )
+          })}
         </div>
 
         {/* ── Акцентный цвет ── */}
@@ -83,25 +102,26 @@ export default function ThemePicker({ onBack }: { onBack: () => void }) {
               className="absolute inset-0 opacity-0 cursor-pointer" tabIndex={-1} />
           </motion.button>
         </div>
-        <p className="text-[12px] text-gray-500 mt-3">Выбери готовый цвет или нажми на радужный кружок для точного выбора. Тема применяется ко всему мессенджеру.</p>
+        <p className="text-[12px] text-gray-500 mt-3">Тема, обои и акцент применяются ко всему мессенджеру и сохраняются на этом устройстве.</p>
       </div>
     </motion.div>
   )
 }
 
-function ThemeCard({ active, onClick, label, icon, bg, bar, bubble }: {
-  active: boolean; onClick: () => void; label: string; icon: React.ReactNode; bg: string; bar: string; bubble: string
+function ThemeCard({ active, onClick, label, bg, bar, bubble }: {
+  active: boolean; onClick: () => void; label: string; bg: string; bar: string; bubble: string
 }) {
+  const lightish = bg === "#e8ecf1" || bg === "#ffffff"
   return (
     <motion.button whileTap={{ scale: 0.97 }} onClick={onClick}
       className="rounded-2xl overflow-hidden border-2 transition-colors text-left"
       style={{ borderColor: active ? "var(--accent)" : "rgba(255,255,255,0.1)" }}>
-      <div className="h-20 p-2 flex flex-col justify-between" style={{ backgroundColor: bg }}>
-        <div className="h-3 w-2/3 rounded-full" style={{ backgroundColor: bar }} />
-        <div className="self-end h-4 w-1/2 rounded-full" style={{ backgroundColor: bubble }} />
+      <div className="h-16 p-2 flex flex-col justify-between" style={{ backgroundColor: bg }}>
+        <div className="h-2.5 w-2/3 rounded-full" style={{ backgroundColor: bar }} />
+        <div className="self-end h-3.5 w-1/2 rounded-full" style={{ backgroundColor: bubble }} />
       </div>
       <div className="flex items-center justify-between px-3 py-2" style={{ backgroundColor: bar }}>
-        <span className="flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: bg === "#e8ecf1" ? "#1a1a1a" : "#fff" }}>{icon}{label}</span>
+        <span className="text-[13px] font-semibold" style={{ color: lightish ? "#1a1a1a" : "#fff" }}>{label}</span>
         {active && <Check size={15} style={{ color: "var(--accent)" }} />}
       </div>
     </motion.button>

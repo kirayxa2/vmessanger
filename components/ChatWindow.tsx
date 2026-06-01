@@ -1285,9 +1285,9 @@ useEffect(() => {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-full bg-[#0e1621]">
+      <div className="flex flex-col h-full bg-[var(--chat-bg)]">
         {/* Skeleton header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5" style={{ backgroundColor: "#1c242f" }}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5" style={{ backgroundColor: "var(--header-bg)" }}>
           <div className="w-8 h-8 rounded-full bg-white/8 animate-pulse shrink-0" />
           <div className="w-10 h-10 rounded-full bg-white/8 animate-pulse shrink-0" />
           <div className="flex-1 flex flex-col gap-1.5">
@@ -1331,7 +1331,7 @@ useEffect(() => {
   return (
     <LazyMotion features={domAnimation}>
     <motion.div
-      className="flex-1 flex flex-row h-full bg-[#1c242f] relative"
+      className="flex-1 flex flex-row h-full bg-[var(--sidebar-bg)] relative"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -1347,9 +1347,9 @@ useEffect(() => {
           >
             <motion.div
               initial={{ scale: 0.8 }} animate={{ scale: 1 }} exit={{ scale: 0.8 }}
-              className="bg-[#1c242f] border-2 border-dashed border-[#7e85e1] rounded-3xl px-12 py-10 text-center"
+              className="bg-[var(--sidebar-bg)] border-2 border-dashed border-[var(--accent)] rounded-3xl px-12 py-10 text-center"
             >
-              <Paperclip size={48} className="mx-auto mb-3 text-[#7e85e1]" />
+              <Paperclip size={48} className="mx-auto mb-3" style={{ color: "var(--accent)" }} />
               <p className="text-white text-lg font-bold">Перетащите файл сюда</p>
               <p className="text-gray-400 text-sm mt-1">Максимум 50 МБ</p>
             </motion.div>
@@ -1447,7 +1447,7 @@ useEffect(() => {
           {showSearch && (
             <motion.div
               initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-              className="bg-[#1c242f] border-b border-white/5 overflow-hidden"
+              className="bg-[var(--header-bg)] border-b border-white/5 overflow-hidden"
             >
               <div className="flex items-center gap-2 px-4 py-2">
                 <Search size={16} className="text-gray-500 shrink-0" />

@@ -13,6 +13,7 @@ import { useSocket } from "@/app/ClientProviders"
 import { motion, AnimatePresence } from "framer-motion"
 import { VerifiedBadge } from "./VerifiedBadge"
 import { stripFormatting } from "@/lib/formatText"
+import { peerColor } from "@/lib/peerColor"
 import { useProfanityFilter } from "@/hooks/useProfanityFilter"
 import { useNotificationSound, SOUND_LABELS, SoundType } from "@/hooks/useNotificationSound"
 import TitleBadge from "./TitleBadge"
@@ -165,7 +166,7 @@ function EditProfileScreen({ session, profile, onSave, onBack, isUploading, file
   }
 
   return (
-    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[#1c242f]"
+    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]"
       initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
       transition={{ type: "spring", stiffness: 340, damping: 30 }}>
       <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
@@ -224,7 +225,7 @@ function NotificationsScreen({ onBack }: { onBack: () => void }) {
   const sounds = Object.keys(SOUND_LABELS) as SoundType[]
 
   return (
-    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[#1c242f]"
+    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]"
       initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
       transition={{ type: "spring", stiffness: 380, damping: 32 }}>
 
@@ -305,7 +306,7 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
   const { enabled, toggle } = useProfanityFilter()
 
   return (
-    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[#1c242f]"
+    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]"
       initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
       transition={{ type: "spring", stiffness: 380, damping: 32 }}>
 
@@ -745,7 +746,7 @@ export default function ChatSidebar({
   if (view === "settings") {
     return (
       <div className="w-full h-full flex flex-col relative overflow-hidden">
-        <motion.div className="w-full h-full flex flex-col bg-[#1c242f] relative overflow-hidden"
+        <motion.div className="w-full h-full flex flex-col bg-[var(--sidebar-bg)] relative overflow-hidden"
           initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
           <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
 
@@ -800,11 +801,11 @@ export default function ChatSidebar({
                 onClick={() => setShowPrivacy(true)}
               />
               <SettingsRow
-                icon={theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
+                icon={theme !== "light" ? <Moon size={17} /> : <Sun size={17} />}
                 iconColor="#e0a83c"
-                label={theme === "dark" ? "Тёмная тема" : "Светлая тема"}
+                label={theme !== "light" ? "Тёмная тема" : "Светлая тема"}
                 rightEl={
-                  <ToggleSwitch enabled={theme === "dark"} onToggle={toggleTheme} />
+                  <ToggleSwitch enabled={theme !== "light"} onToggle={toggleTheme} />
                 }
                 onClick={toggleTheme}
               />
@@ -881,7 +882,7 @@ export default function ChatSidebar({
           {/* Password change overlay */}
           <AnimatePresence>
             {showPasswordChange && (
-              <motion.div className="absolute inset-0 z-50 flex flex-col bg-[#1c242f]"
+              <motion.div className="absolute inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]"
                 initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
                 transition={{ type: "spring", stiffness: 380, damping: 32 }}>
                 <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
@@ -935,7 +936,7 @@ export default function ChatSidebar({
 
   // ── CHATS SCREEN ─────────────────────────────────────────────
   return (
-    <div className="w-full h-full flex flex-col relative bg-[#1c242f]">
+    <div className="w-full h-full flex flex-col relative bg-[var(--sidebar-bg)]">
       {/* Create Group Modal */}
       <AnimatePresence>
         {showCreateGroup && (
@@ -1135,7 +1136,7 @@ export default function ChatSidebar({
       ) : (
         /* ── DESKTOP HEADER ── */
         <div>
-          <motion.div className="px-3 flex items-center gap-2 relative bg-[#1c242f] overflow-hidden"
+          <motion.div className="px-3 flex items-center gap-2 relative bg-[var(--sidebar-bg)] overflow-hidden"
             layout style={{ height: 56 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
             <div className="relative w-10 h-10 shrink-0">
               <motion.button onClick={() => setShowDropdown(v => !v)}
@@ -1176,8 +1177,8 @@ export default function ChatSidebar({
                         <div className="h-px" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
                         <div className="py-1">
                           <DropdownItem icon={<Bookmark size={16} />} label={t("saved_messages")} />
-                          <DropdownItem icon={theme === "dark" ? <Moon size={16} /> : <Sun size={16} />} label={theme === "dark" ? t("night_mode") : "Светлая тема"}
-                            isToggle toggleEnabled={theme === "dark"} onClick={() => { toggleTheme(); setShowDropdown(false) }} />
+                          <DropdownItem icon={theme !== "light" ? <Moon size={16} /> : <Sun size={16} />} label={theme !== "light" ? t("night_mode") : "Светлая тема"}
+                            isToggle toggleEnabled={theme !== "light"} onClick={() => { toggleTheme(); setShowDropdown(false) }} />
                         </div>
                         <div className="h-px mx-2" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
                         <div className="py-1">
@@ -1474,6 +1475,7 @@ const ChatListItem = React.memo(function ChatListItem({
     avatarBg = "#7e85e1"
     displayNameEl = <span className="flex items-center gap-1"><Users size={14} className="shrink-0 opacity-70" /><span>{chat.name}</span></span>
   } else {
+    avatarBg = peerColor(otherUser?.id)
     avatarContent = otherUser?.avatar ? <img src={otherUser.avatar} className="w-full h-full object-cover" />
       : <span className="font-bold text-xl">{otherUser?.username?.[0]?.toUpperCase() || "U"}</span>
     const isDevUser = otherUser?.id !== undefined && (

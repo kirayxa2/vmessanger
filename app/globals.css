@@ -46,6 +46,42 @@
   --border-subtle: rgba(0, 0, 0, 0.08);
 }
 
+[data-theme="amoled"] {
+  --background: #000000;
+  --foreground: #ffffff;
+  --sidebar-bg: #0c0c0c;
+  --header-bg: #0c0c0c;
+  --chat-bg: #000000;
+  --sender-text: #ffffff;
+  --recipient-bubble: #18181b;
+  --recipient-text: #ffffff;
+  --input-bg: #141414;
+  --pattern-color: rgba(255, 255, 255, 0.04);
+  --surface-primary: #0c0c0c;
+  --surface-secondary: #000000;
+  --text-primary: #ffffff;
+  --text-secondary: #8896a5;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+}
+
+[data-theme="night"] {
+  --background: #0b1b2b;
+  --foreground: #ffffff;
+  --sidebar-bg: #13293f;
+  --header-bg: #13293f;
+  --chat-bg: #0b1b2b;
+  --sender-text: #ffffff;
+  --recipient-bubble: #1c3a54;
+  --recipient-text: #ffffff;
+  --input-bg: #16314a;
+  --pattern-color: rgba(255, 255, 255, 0.05);
+  --surface-primary: #13293f;
+  --surface-secondary: #081522;
+  --text-primary: #ffffff;
+  --text-secondary: #8aa0b5;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -160,6 +196,42 @@ input, textarea, [contenteditable="true"], .message-text {
   background-size: 540px;
   background-repeat: repeat;
   background-attachment: local;
+}
+
+/* ── Обои чата (управляются data-wallpaper на <html>) ── */
+[data-wallpaper="solid"] .tg-bg {
+  background-image: none;
+}
+[data-wallpaper="ocean"] .tg-bg,
+[data-wallpaper="sunset"] .tg-bg,
+[data-wallpaper="forest"] .tg-bg,
+[data-wallpaper="grape"] .tg-bg,
+[data-wallpaper="rose"] .tg-bg {
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+[data-wallpaper="ocean"] .tg-bg  { background-image: linear-gradient(160deg, #1a2980, #26d0ce); }
+[data-wallpaper="sunset"] .tg-bg { background-image: linear-gradient(160deg, #ff8008, #ffc837); }
+[data-wallpaper="forest"] .tg-bg { background-image: linear-gradient(160deg, #134e5e, #71b280); }
+[data-wallpaper="grape"] .tg-bg  { background-image: linear-gradient(160deg, #8e2de2, #4a00e0); }
+[data-wallpaper="rose"] .tg-bg   { background-image: linear-gradient(160deg, #ee9ca7, #ffdde1); }
+
+/* Анимированный градиентный фон */
+[data-wallpaper="aurora"] .tg-bg {
+  background-image: linear-gradient(-45deg, var(--accent, #5b67ea), #22b8b8, #e15a7e, #8b5cf6);
+  background-size: 400% 400%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: aurora-shift 20s ease infinite;
+}
+@keyframes aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-wallpaper="aurora"] .tg-bg { animation: none; }
 }
 
 .hide-scrollbar::-webkit-scrollbar {

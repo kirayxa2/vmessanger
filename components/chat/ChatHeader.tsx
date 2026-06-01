@@ -38,7 +38,7 @@ export default function ChatHeader({
 
   return (
     <div
-      className="px-4 flex items-center justify-between h-[63px] bg-[#1c242f] relative z-10 cursor-pointer select-none"
+      className="px-4 flex items-center justify-between h-[63px] bg-[var(--header-bg)] relative z-10 cursor-pointer select-none"
       onClick={onProfileClick}
       onTouchStart={(e) => {
         touchStartX.current = e.touches[0].clientX

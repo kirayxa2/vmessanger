@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { createPortal } from "react-dom";
 import Linkify from "linkify-react";
 import { stripFormatting } from "@/lib/formatText";
+import { peerColor } from "@/lib/peerColor";
 import { Reply, Pencil, Copy, Forward, Trash2, Check, CheckCheck, Pin, Clock } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useTranslation } from "react-i18next";
@@ -10,7 +11,7 @@ import TitleBadge from "./TitleBadge";
 import { VerifiedBadge } from "./VerifiedBadge";
 
 const SENDER_COLOR = "var(--sender-bubble, #5b67ea)";
-const RECIPIENT_COLOR = "#212d3b";
+const RECIPIENT_COLOR = "var(--recipient-bubble, #212d3b)";
 const ACCENT = "var(--accent, #7e85e1)";
 const DEV_USER_ID = 1;
 
@@ -204,6 +205,15 @@ const ChatMessage = React.memo(function ChatMessage({
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioDuration, setAudioDuration] = useState(voiceDuration || 0);
+  const [playRate, setPlayRate] = useState(1);
+
+  const cyclePlayRate = useCallback(() => {
+    setPlayRate(prev => {
+      const next = prev === 1 ? 1.5 : prev === 1.5 ? 2 : 1;
+      if (audioRef.current) audioRef.current.playbackRate = next;
+      return next;
+    });
+  }, []);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -231,10 +241,11 @@ const ChatMessage = React.memo(function ChatMessage({
         setIsPlaying(false);
         setAudioProgress(0);
       };
+      audioRef.current.playbackRate = playRate;
     }
     if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
     else { audioRef.current.play(); setIsPlaying(true); }
-  }, [voiceUrl, isPlaying, audioDuration]);
+  }, [voiceUrl, isPlaying, audioDuration, playRate]);
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
   const bubbleColor = isSender ? SENDER_COLOR : RECIPIENT_COLOR;
@@ -323,7 +334,7 @@ const ChatMessage = React.memo(function ChatMessage({
       </motion.div>
 
       {!isSender && isGroupChat && isLastInGroup && senderName && (
-        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-1 mr-2 self-end overflow-hidden outline outline-1 outline-white/10" style={{ backgroundColor: ACCENT }}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-1 mr-2 self-end overflow-hidden outline outline-1 outline-white/10" style={{ backgroundColor: peerColor(senderId) }}>
           <span className="text-white text-xs font-bold">{senderName[0]?.toUpperCase()}</span>
         </div>
       )}
@@ -344,7 +355,7 @@ const ChatMessage = React.memo(function ChatMessage({
           >
             {!isSender && isGroupChat && isLastInGroup && senderName && (
               <div className="flex items-center gap-1 mb-[3px] flex-wrap">
-                <span className="text-[12px] font-semibold leading-tight" style={{ color: ACCENT }}>{senderName}</span>
+                <span className="text-[12px] font-semibold leading-tight" style={{ color: peerColor(senderId) }}>{senderName}</span>
                 {isDevUser && <VerifiedBadge size={13} />}
                 <TitleBadge userId={senderId} />
               </div>
@@ -386,6 +397,12 @@ const ChatMessage = React.memo(function ChatMessage({
                   </div>
                   <span className="text-[10px] opacity-60">{fmt(audioDuration)}</span>
                 </div>
+                <motion.button whileTap={{ scale: 0.85 }} onClick={e => { e.stopPropagation(); cyclePlayRate(); }}
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 self-center"
+                  style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }}
+                  title="Скорость воспроизведения">
+                  {playRate}x
+                </motion.button>
                 <span className="text-[10px] opacity-60 whitespace-nowrap flex items-center gap-0.5 shrink-0 self-end pb-0.5">{timeStr}<ReadIndicator /></span>
               </div>
             ) : (
@@ -432,8 +449,8 @@ const ChatMessage = React.memo(function ChatMessage({
             <div className={`absolute bottom-0 w-[11px] h-[20px] ${isSender ? "-right-[9px]" : "-left-[9px]"} z-0 overflow-hidden`}>
               <svg width="11" height="20" viewBox="0 0 11 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {isSender
-                  ? <path d="M11 20H0L0.002 0C0.196 3.127 0.88 6.362 2.054 9.66 3.23 12.96 5.25 15.97 8.12 18.68A2 2 0 0011 20z" fill={SENDER_COLOR} />
-                  : <path d="M0 20h11L10.998 0C10.804 3.127 10.12 6.362 8.946 9.66 7.77 12.96 5.75 15.97 2.88 18.68A2 2 0 010 20z" fill={RECIPIENT_COLOR} />
+                  ? <path d="M11 20H0L0.002 0C0.196 3.127 0.88 6.362 2.054 9.66 3.23 12.96 5.25 15.97 8.12 18.68A2 2 0 0011 20z" style={{ fill: SENDER_COLOR }} />
+                  : <path d="M0 20h11L10.998 0C10.804 3.127 10.12 6.362 8.946 9.66 7.77 12.96 5.75 15.97 2.88 18.68A2 2 0 010 20z" style={{ fill: RECIPIENT_COLOR }} />
                 }
               </svg>
             </div>
@@ -569,23 +586,64 @@ const FORMAT_PATTERNS: { type: string; re: RegExp }[] = [
   { type: "link", re: /\[([^\]\n]+?)\]\((https?:\/\/[^\s)]+)\)/ },
 ]
 
-// Спойлер: размыт, раскрывается по клику (как в Telegram)
+// Спойлер: анимированный «шум» из точек поверх текста (как в Telegram), раскрывается по клику
 function Spoiler({ children }: { children: React.ReactNode }) {
   const [revealed, setRevealed] = useState(false)
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    if (revealed) return
+    const canvas = canvasRef.current
+    const wrap = wrapRef.current
+    if (!canvas || !wrap) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    let raf = 0, running = true, frame = 0
+    const resize = () => {
+      const r = wrap.getBoundingClientRect()
+      canvas.width = Math.max(1, Math.ceil(r.width))
+      canvas.height = Math.max(1, Math.ceil(r.height))
+    }
+    resize()
+    const ro = new ResizeObserver(resize)
+    ro.observe(wrap)
+    const draw = () => {
+      if (!running) return
+      frame++
+      if (frame % 2 === 0) { // ~30fps — экономим CPU
+        const w = canvas.width, h = canvas.height
+        ctx.clearRect(0, 0, w, h)
+        const count = Math.min(900, Math.floor((w * h) / 28))
+        ctx.fillStyle = "#dfe6f0"
+        for (let i = 0; i < count; i++) {
+          ctx.globalAlpha = Math.random() * 0.8 + 0.15
+          ctx.fillRect(Math.random() * w, Math.random() * h, 1.3, 1.3)
+        }
+        ctx.globalAlpha = 1
+      }
+      raf = requestAnimationFrame(draw)
+    }
+    draw()
+    return () => { running = false; cancelAnimationFrame(raf); ro.disconnect() }
+  }, [revealed])
   return (
     <span
+      ref={wrapRef}
       onClick={e => { if (!revealed) { e.stopPropagation(); setRevealed(true) } }}
       style={{
+        position: "relative", display: "inline-block", borderRadius: 4,
         cursor: revealed ? "inherit" : "pointer",
-        filter: revealed ? "none" : "blur(5px)",
-        backgroundColor: revealed ? "transparent" : "rgba(150,150,160,0.25)",
-        borderRadius: 4,
-        padding: revealed ? 0 : "0 2px",
-        transition: "filter .25s, background-color .25s",
-        WebkitUserSelect: revealed ? "auto" : "none",
-        userSelect: revealed ? "auto" : "none",
+        WebkitUserSelect: revealed ? "auto" : "none", userSelect: revealed ? "auto" : "none",
       }}
-    >{children}</span>
+    >
+      <span style={{ opacity: revealed ? 1 : 0, transition: "opacity .2s" }}>{children}</span>
+      {!revealed && (
+        <canvas
+          ref={canvasRef}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", borderRadius: 4, background: "rgba(120,125,140,0.22)" }}
+        />
+      )}
+    </span>
   )
 }
 

@@ -320,8 +320,8 @@ export default function HomePage({ conversationId }: { conversationId?: string }
   // ── DESKTOP LAYOUT ────────────────────────────────────────────
   if (!isMobile) {
     return (
-      <div className="flex h-[100dvh] w-full bg-[#0e1621] overflow-hidden fixed inset-0">
-        <div className="w-full md:w-[420px] h-full flex flex-col shrink-0 overflow-hidden bg-[#1c242f] border-r border-white/5">
+      <div className="flex h-[100dvh] w-full bg-[var(--background)] overflow-hidden fixed inset-0">
+        <div className="w-full md:w-[420px] h-full flex flex-col shrink-0 overflow-hidden bg-[var(--sidebar-bg)] border-r border-white/5">
           <TitleBar />
           <ChatSidebar
             currentUser={session?.user}
@@ -332,7 +332,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
             onConversationCreated={handleConversationCreated}
           />
         </div>
-        <div className="flex-1 flex flex-col relative h-full overflow-hidden bg-[#0e1621]">
+        <div className="flex-1 flex flex-col relative h-full overflow-hidden bg-[var(--background)]">
           {selectedId ? (
             <ChatWindow
               key={selectedId}
@@ -360,7 +360,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
     <div
       id="mobile-chat-wrap"
       className="flex flex-col w-full overflow-hidden"
-      style={{ height: 'var(--app-height, 100dvh)', backgroundColor: '#0a0f17' }}
+      style={{ height: 'var(--app-height, 100dvh)', backgroundColor: 'var(--background)' }}
     >
 
       {/* ── Основной контент ── */}
@@ -375,7 +375,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 380, damping: 38, mass: 0.9 }}
               className="absolute inset-0 overflow-hidden"
-              style={{ backgroundColor: "#1c242f" }}
+              style={{ backgroundColor: "var(--sidebar-bg)" }}
             >
               <ChatWindow
                 key={selectedId}

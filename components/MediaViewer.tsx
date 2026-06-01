@@ -42,6 +42,7 @@ export function VideoViewer({
   const [showControls, setShowControls] = useState(true)
   const [showMore, setShowMore] = useState(false)
   const [zoom, setZoom] = useState(1)
+  const [vidRate, setVidRate] = useState(1)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768
 
@@ -282,6 +283,18 @@ export function VideoViewer({
                   style={{ left: `calc(${progress}% - 6px)` }} />
               </div>
               <span className="text-white/60 text-[13px] font-mono tabular-nums w-[40px] text-right">{formatTime(duration)}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const next = vidRate === 1 ? 1.5 : vidRate === 1.5 ? 2 : 1
+                  setVidRate(next)
+                  if (videoRef.current) videoRef.current.playbackRate = next
+                }}
+                className="text-white text-[12px] font-bold px-2 py-1 rounded-md shrink-0 hover:bg-white/10 transition-colors"
+                title="Скорость воспроизведения"
+              >
+                {vidRate}x
+              </button>
             </div>
           </motion.div>
         )}

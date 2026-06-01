@@ -2,43 +2,59 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react"
 
-type Theme = "dark" | "light"
+// Тема = id, под каждый id есть CSS-блок [data-theme="..."] в globals.css
+export type ThemeId = "dark" | "amoled" | "night" | "light"
 
-// Пресеты акцентного цвета (как палитра в Zen / Telegram)
+export const THEMES: { id: ThemeId; label: string; bg: string; bar: string }[] = [
+  { id: "dark", label: "Тёмная", bg: "#0e1621", bar: "#1c242f" },
+  { id: "amoled", label: "AMOLED", bg: "#000000", bar: "#0c0c0c" },
+  { id: "night", label: "Ночь", bg: "#0b1b2b", bar: "#13293f" },
+  { id: "light", label: "Светлая", bg: "#e8ecf1", bar: "#ffffff" },
+]
+
+// Пресеты акцентного цвета (палитра как в Zen / Telegram)
 export const ACCENT_PRESETS = [
-  "#7e85e1", // Vortex (default)
-  "#5b9bd5", // Sky
-  "#3ba55d", // Emerald
-  "#e0a83c", // Amber
-  "#e0533c", // Coral
-  "#e15a7e", // Rose
-  "#8b5cf6", // Violet
-  "#22b8b8", // Teal
-  "#d45fb0", // Pink
-  "#6b7280", // Graphite
+  "#7e85e1", "#5b9bd5", "#3ba55d", "#e0a83c", "#e0533c",
+  "#e15a7e", "#8b5cf6", "#22b8b8", "#d45fb0", "#6b7280",
+]
+
+// Обои чата: id → подпись + превью-градиент для свотча
+export const WALLPAPERS: { id: string; label: string; preview: string }[] = [
+  { id: "default", label: "Узор", preview: "repeating-linear-gradient(45deg,#2a3545,#2a3545 6px,#1c242f 6px,#1c242f 12px)" },
+  { id: "solid", label: "Сплошной", preview: "var(--chat-bg)" },
+  { id: "aurora", label: "Aurora", preview: "linear-gradient(-45deg,#5b67ea,#22b8b8,#e15a7e)" },
+  { id: "ocean", label: "Океан", preview: "linear-gradient(160deg,#1a2980,#26d0ce)" },
+  { id: "sunset", label: "Закат", preview: "linear-gradient(160deg,#ff8008,#ffc837)" },
+  { id: "forest", label: "Лес", preview: "linear-gradient(160deg,#134e5e,#71b280)" },
+  { id: "grape", label: "Виноград", preview: "linear-gradient(160deg,#8e2de2,#4a00e0)" },
+  { id: "rose", label: "Роза", preview: "linear-gradient(160deg,#ee9ca7,#ffdde1)" },
 ]
 
 const DEFAULT_ACCENT = "#7e85e1"
 
 interface ThemeContextType {
-  theme: Theme
+  theme: ThemeId
   accent: string
+  wallpaper: string
   toggleTheme: () => void
-  setTheme: (t: Theme) => void
+  setTheme: (t: ThemeId) => void
   setAccent: (hex: string) => void
+  setWallpaper: (id: string) => void
 }
 
 const ThemeContext = createContext<ThemeContextType>({
   theme: "dark",
   accent: DEFAULT_ACCENT,
+  wallpaper: "default",
   toggleTheme: () => {},
   setTheme: () => {},
   setAccent: () => {},
+  setWallpaper: () => {},
 })
 
 export const useTheme = () => useContext(ThemeContext)
 
-// Затемнение hex-цвета на коэффициент (для hover-состояния)
+// Затемнение hex-цвета (для hover-состояния)
 function shade(hex: string, factor: number): string {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.trim())
   if (!m) return hex
@@ -49,7 +65,7 @@ function shade(hex: string, factor: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`
 }
 
-// Применяем акцент во ВСЕХ местах через CSS-переменные на <html>
+// Акцент применяется во ВСЕХ местах через CSS-переменные на <html>
 function applyAccentVars(hex: string) {
   const root = document.documentElement
   root.style.setProperty("--accent", hex)
@@ -59,23 +75,32 @@ function applyAccentVars(hex: string) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("dark")
+  const [theme, setThemeState] = useState<ThemeId>("dark")
   const [accent, setAccentState] = useState<string>(DEFAULT_ACCENT)
+  const [wallpaper, setWallpaperState] = useState<string>("default")
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("vortex-theme") as Theme | null
-    if (savedTheme === "dark" || savedTheme === "light") {
+    const root = document.documentElement
+    const savedTheme = localStorage.getItem("vortex-theme") as ThemeId | null
+    if (savedTheme && THEMES.some(t => t.id === savedTheme)) {
       setThemeState(savedTheme)
-      document.documentElement.setAttribute("data-theme", savedTheme)
+      root.setAttribute("data-theme", savedTheme)
     }
     const savedAccent = localStorage.getItem("vortex-accent")
     if (savedAccent && /^#[0-9a-f]{6}$/i.test(savedAccent)) {
       setAccentState(savedAccent)
       applyAccentVars(savedAccent)
     }
+    const savedWp = localStorage.getItem("vortex-wallpaper")
+    if (savedWp) {
+      setWallpaperState(savedWp)
+      root.setAttribute("data-wallpaper", savedWp)
+    } else {
+      root.setAttribute("data-wallpaper", "default")
+    }
   }, [])
 
-  const setTheme = useCallback((t: Theme) => {
+  const setTheme = useCallback((t: ThemeId) => {
     setThemeState(t)
     localStorage.setItem("vortex-theme", t)
     document.documentElement.setAttribute("data-theme", t)
@@ -83,7 +108,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const toggleTheme = useCallback(() => {
     setThemeState(prev => {
-      const next = prev === "dark" ? "light" : "dark"
+      const next: ThemeId = prev === "light" ? "dark" : "light"
       localStorage.setItem("vortex-theme", next)
       document.documentElement.setAttribute("data-theme", next)
       return next
@@ -97,8 +122,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyAccentVars(hex)
   }, [])
 
+  const setWallpaper = useCallback((id: string) => {
+    setWallpaperState(id)
+    localStorage.setItem("vortex-wallpaper", id)
+    document.documentElement.setAttribute("data-wallpaper", id)
+  }, [])
+
   return (
-    <ThemeContext.Provider value={{ theme, accent, toggleTheme, setTheme, setAccent }}>
+    <ThemeContext.Provider value={{ theme, accent, wallpaper, toggleTheme, setTheme, setAccent, setWallpaper }}>
       {children}
     </ThemeContext.Provider>
   )
