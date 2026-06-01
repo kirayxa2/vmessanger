@@ -49,7 +49,7 @@ async function computeWaveform(url: string, buckets = 48): Promise<number[]> {
 // Telegram-стиль скруглений пузыря (как в официальном приложении)
 // hasButtons: под пузырём прилеплены инлайн-кнопки — хвостик убираем, низ скругляем
 function getBubbleRadius(isSender: boolean, isFirstInGroup: boolean, isLastInGroup: boolean, hasAbove: boolean, hasButtons = false) {
-  const BIG = "18px"
+  const BIG = "15px"
   const SMALL = "4px"
   const TAIL = "4px"
   const bottom = hasButtons ? BIG : (isLastInGroup ? TAIL : SMALL)
