@@ -13,6 +13,7 @@ model User {
   email            String                    @unique
   username         String                    @unique
   password         String
+  emailVerified    Boolean                   @default(false)
   avatar           String?
   bio              String?
   lastSeen         DateTime?
@@ -39,6 +40,22 @@ model User {
 
   @@index([lastSeen])
   @@index([isBot])
+}
+
+// Ожидающая подтверждения регистрация: юзер создаётся только после ввода кода с почты
+model PendingRegistration {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  username     String
+  passwordHash String
+  publicKey    String?
+  codeHash     String
+  expiresAt    DateTime
+  attempts     Int      @default(0)
+  lastSentAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Conversation {
