@@ -44,6 +44,62 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   const [mobileTab, setMobileTab] = useState<"chats" | "settings" | "profile">("chats")
 
+  // ── Sidebar resize state ────────────────────────────────────
+  const MIN_SIDEBAR_WIDTH = 340
+  const MAX_SIDEBAR_WIDTH = 520
+  const DEFAULT_SIDEBAR_WIDTH = 420
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartX = useRef(0)
+  const resizeStartWidth = useRef(DEFAULT_SIDEBAR_WIDTH)
+
+  // Load sidebar width from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("sidebarWidth")
+    if (saved) {
+      const parsed = parseInt(saved, 10)
+      if (parsed >= MIN_SIDEBAR_WIDTH && parsed <= MAX_SIDEBAR_WIDTH) {
+        setSidebarWidth(parsed)
+      }
+    }
+  }, [])
+
+  // Resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    resizeStartX.current = e.clientX
+    resizeStartWidth.current = sidebarWidth
+  }, [sidebarWidth])
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return
+    const delta = e.clientX - resizeStartX.current
+    const newWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, resizeStartWidth.current + delta))
+    setSidebarWidth(newWidth)
+  }, [isResizing])
+
+  const handleResizeEnd = useCallback(() => {
+    if (!isResizing) return
+    setIsResizing(false)
+    localStorage.setItem("sidebarWidth", sidebarWidth.toString())
+  }, [isResizing, sidebarWidth])
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener("mousemove", handleResizeMove)
+      document.addEventListener("mouseup", handleResizeEnd)
+      document.body.style.cursor = "ew-resize"
+      document.body.style.userSelect = "none"
+      return () => {
+        document.removeEventListener("mousemove", handleResizeMove)
+        document.removeEventListener("mouseup", handleResizeEnd)
+        document.body.style.cursor = ""
+        document.body.style.userSelect = ""
+      }
+    }
+  }, [isResizing, handleResizeMove, handleResizeEnd])
+
   // Кнопка назад на Android
   useEffect(() => {
     if (!isMobile) return
@@ -321,7 +377,10 @@ export default function HomePage({ conversationId }: { conversationId?: string }
   if (!isMobile) {
     return (
       <div className="flex h-[100dvh] w-full bg-[var(--background)] overflow-hidden fixed inset-0">
-        <div className="w-full md:w-[420px] h-full flex flex-col shrink-0 overflow-hidden bg-[var(--sidebar-bg)] border-r border-white/5">
+        <div 
+          className="h-full flex flex-col shrink-0 overflow-hidden bg-[var(--sidebar-bg)] border-r border-white/5 relative"
+          style={{ width: `${sidebarWidth}px` }}
+        >
           <TitleBar />
           <ChatSidebar
             currentUser={session?.user}
@@ -331,7 +390,19 @@ export default function HomePage({ conversationId }: { conversationId?: string }
             onSelect={handleSelectConversation}
             onConversationCreated={handleConversationCreated}
           />
+          
+          {/* Resize handle */}
+          <div 
+            onMouseDown={handleResizeStart}
+            className="absolute top-0 right-0 w-1 h-full cursor-ew-resize hover:bg-[var(--accent)] transition-colors z-50 group"
+            style={{ 
+              background: isResizing ? "var(--accent)" : "transparent"
+            }}
+          >
+            <div className="absolute inset-y-0 -right-1 w-3" /> {/* Wider hit area */}
+          </div>
         </div>
+        
         <div className="flex-1 flex flex-col relative h-full overflow-hidden bg-[var(--background)]">
           {selectedId ? (
             <ChatWindow
