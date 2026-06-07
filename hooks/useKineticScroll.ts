@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
  * Kinetic scrolling hook (как в Telegram Desktop)
  * Добавляет инерционный скролл с плавным замедлением
  */
-export function useKineticScroll(elementRef: React.RefObject<HTMLElement>, enabled = true) {
+export function useKineticScroll(elementRef: React.RefObject<HTMLElement | null>, enabled = true) {
   const velocityY = useRef(0);
   const lastY = useRef(0);
   const lastTime = useRef(0);
