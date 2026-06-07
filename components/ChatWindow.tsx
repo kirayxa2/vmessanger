@@ -23,6 +23,8 @@ import TitleBadge from "./TitleBadge"
 import ChatHeader from "./chat/ChatHeader"
 import PinnedMessageBanner from "./chat/PinnedMessageBanner"
 import { useE2E } from "@/hooks/useE2E"
+import TextSelectionMenu from "./TextSelectionMenu"
+import { useKineticScroll } from "@/hooks/useKineticScroll"
 
 const ACCENT = "var(--accent, #7e85e1)"
 
@@ -96,6 +98,9 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const stableKeys = useRef<Map<string, string>>(new Map())
   const newMsgIds = useRef<Set<string>>(new Set())
+  
+  // ── Kinetic scrolling ──
+  useKineticScroll(scrollContainerRef, true)
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
@@ -126,8 +131,12 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   const [searchResults, setSearchResults] = useState<Message[]>([])
   const [isSearching, setIsSearching] = useState(false)
 
-  // ── Pinned message ──────────────────────────────────────────
-  const [pinnedMessage, setPinnedMessage] = useState<Message | null>(null)
+  // ── Pinned messages (multiple) ──────────────────────────────
+  const [pinnedMessages, setPinnedMessages] = useState<Message[]>([])
+
+  const handleUnpinMessage = useCallback((id: string) => {
+    setPinnedMessages(prev => prev.filter(m => m.id.toString() !== id))
+  }, [])
 
   // ── Drag & Drop ─────────────────────────────────────────────
   const [isDragOver, setIsDragOver] = useState(false)
@@ -418,14 +427,14 @@ useEffect(() => {
         setConversations(convs)
         const conv = convs.find((c: any) => c.id?.toString() === apiId.toString() || c._realId?.toString() === apiId.toString())
         setInput(conv?.drafts?.[0]?.text || "")
-        // Load pinned message if exists
+        // Load pinned messages if exist (support multiple)
         if (conv?.pinnedMessageId) {
           fetch(`/api/messages?conversationId=${apiId}&limit=100`)
             .then(r => r.json())
             .then(mData => {
               const allMsgs = Array.isArray(mData.messages) ? mData.messages : []
               const pinned = allMsgs.find((m: any) => m.id === conv.pinnedMessageId)
-              if (pinned) setPinnedMessage(pinned)
+              if (pinned) setPinnedMessages([pinned]) // Добавляем в массив
             })
             .catch(() => { })
         }
@@ -1137,7 +1146,7 @@ useEffect(() => {
     if (e.key === "Escape") { if (editingMessageId) cancelEdit(); if (replyingTo) cancelReply() }
   }, [sendMessage, editingMessageId, cancelEdit, replyingTo, cancelReply, applyFormat, applyLink])
 
-  // ── Pin message handler ──
+  // ── Pin message handler (multiple pins) ──
   const handlePinMessage = useCallback(async (messageId: string) => {
     try {
       const res = await fetch("/api/conversations/pin", {
@@ -1147,18 +1156,13 @@ useEffect(() => {
       })
       if (res.ok) {
         const data = await res.json()
-        setPinnedMessage(data.pinnedMessage)
+        const newPinned = data.pinnedMessage
+        // Добавляем в массив если ещё нет
+        setPinnedMessages(prev => {
+          if (prev.find(m => m.id === newPinned.id)) return prev
+          return [...prev, newPinned]
+        })
         socket?.emit("message-pinned", { conversationId: String(apiId), ...data })
-      }
-    } catch { }
-  }, [apiId, socket])
-
-  const handleUnpinMessage = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/conversations/pin?conversationId=${apiId}`, { method: "DELETE" })
-      if (res.ok) {
-        setPinnedMessage(null)
-        socket?.emit("message-unpinned", { conversationId: String(apiId) })
       }
     } catch { }
   }, [apiId, socket])
@@ -1217,10 +1221,18 @@ useEffect(() => {
   useEffect(() => {
     if (!socket) return
     const handlePinned = (data: any) => {
-      if (String(data.conversationId) === String(apiId)) setPinnedMessage(data.pinnedMessage)
+      if (String(data.conversationId) === String(apiId)) {
+        const newPinned = data.pinnedMessage
+        setPinnedMessages(prev => {
+          if (prev.find(m => m.id === newPinned.id)) return prev
+          return [...prev, newPinned]
+        })
+      }
     }
     const handleUnpinned = (data: any) => {
-      if (String(data.conversationId) === String(apiId)) setPinnedMessage(null)
+      if (String(data.conversationId) === String(apiId)) {
+        setPinnedMessages(prev => prev.filter(m => m.id !== data.messageId))
+      }
     }
     socket.on("message-pinned", handlePinned)
     socket.on("message-unpinned", handleUnpinned)
@@ -1477,9 +1489,9 @@ useEffect(() => {
           )}
         </AnimatePresence>
 
-        {/* Pinned message banner */}
+        {/* Pinned messages banner */}
         <PinnedMessageBanner
-          pinnedMessage={pinnedMessage}
+          pinnedMessages={pinnedMessages}
           onUnpin={handleUnpinMessage}
           onScrollTo={scrollToMessage}
         />
@@ -2157,6 +2169,23 @@ useEffect(() => {
           />
         )}
       </AnimatePresence>
+      
+      {/* Text Selection Menu */}
+      <TextSelectionMenu
+        onReply={(text) => {
+          setReplyingTo({
+            id: "",
+            content: text,
+            senderName: "Выделенный текст"
+          })
+        }}
+        onCopy={(text) => {
+          navigator.clipboard.writeText(text)
+        }}
+        onQuote={(text) => {
+          setInput(prev => prev + `> ${text}\n\n`)
+        }}
+      />
     </motion.div>
   </LazyMotion>
   )

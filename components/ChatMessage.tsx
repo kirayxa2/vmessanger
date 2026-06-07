@@ -144,6 +144,18 @@ const ChatMessage = React.memo(function ChatMessage({
   const gestureDir = useRef<"none" | "horizontal" | "vertical">("none");
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const swipeWrapRef = useRef<HTMLDivElement>(null);
+  
+  // ── Double-tap для реакции ────────────────────────────────────
+  const lastTapTime = useRef(0);
+  const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  
+  const handleDoubleTap = useCallback(() => {
+    const DEFAULT_REACTION = "❤️";
+    onReaction?.(messageId, DEFAULT_REACTION);
+    setShowHeartAnimation(true);
+    if (navigator.vibrate) navigator.vibrate(20);
+    setTimeout(() => setShowHeartAnimation(false), 1000);
+  }, [messageId, onReaction]);
 
   const replyIconOpacity = useTransform(
     swipeX,
@@ -171,6 +183,15 @@ const ChatMessage = React.memo(function ChatMessage({
       touchStartY.current = e.touches[0].clientY;
       gestureDir.current = "none";
       swipeTriggered.current = false;
+
+      // Double-tap detection
+      const now = Date.now();
+      if (now - lastTapTime.current < 300) {
+        handleDoubleTap();
+        lastTapTime.current = 0;
+        return;
+      }
+      lastTapTime.current = now;
 
       const touch = e.touches[0];
       longPressRef.current = setTimeout(() => {
@@ -230,13 +251,15 @@ const ChatMessage = React.memo(function ChatMessage({
       el.removeEventListener("touchend", onEnd);
       el.removeEventListener("touchcancel", onEnd);
     };
-  }, [isSender, messageId, content, senderName, onMenuOpen, onReply, swipeX]);
+  }, [isSender, messageId, content, senderName, onMenuOpen, onReply, swipeX, handleDoubleTap]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioDuration, setAudioDuration] = useState(voiceDuration || 0);
   const [playRate, setPlayRate] = useState(1);
+  const [showSpeedPicker, setShowSpeedPicker] = useState(false);
+  const speedPickerRef = useRef<HTMLDivElement>(null);
 
   const cyclePlayRate = useCallback(() => {
     setPlayRate(prev => {
@@ -245,6 +268,28 @@ const ChatMessage = React.memo(function ChatMessage({
       return next;
     });
   }, []);
+  
+  const setCustomPlayRate = useCallback((rate: number) => {
+    setPlayRate(rate);
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+    setShowSpeedPicker(false);
+  }, []);
+  
+  // Close speed picker on outside click
+  useEffect(() => {
+    if (!showSpeedPicker) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (speedPickerRef.current && !speedPickerRef.current.contains(e.target as Node)) {
+        setShowSpeedPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [showSpeedPicker]);
 
   // Реальная звуковая кривая: из кэша сразу, иначе лениво декодируем
   const [waveform, setWaveform] = useState<number[] | null>(null);
@@ -362,12 +407,35 @@ const ChatMessage = React.memo(function ChatMessage({
   return (
     <motion.div
       initial={isTemp || animateIn
-        ? { opacity: 0, scale: 0.92, y: 6, x: isSender ? 6 : -6 }
+        ? { opacity: 0, scale: 0.94, y: 8, filter: "blur(4px)" }
         : false
       }
-      animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-      exit={isDeleting ? { opacity: 0, transition: { duration: 0.2, delay: 0.75 } } : { opacity: 0, scale: 0.85, transition: { duration: 0.12 } }}
-      transition={{ type: "spring", stiffness: 500, damping: 36, mass: 0.6 }}
+      animate={{ 
+        opacity: 1, 
+        scale: 1, 
+        y: 0,
+        filter: "blur(0px)",
+        transition: {
+          type: "spring",
+          stiffness: 500,
+          damping: 36,
+          mass: 0.6
+        }
+      }}
+      exit={isDeleting 
+        ? { 
+            opacity: 0, 
+            scale: 0.8,
+            filter: "blur(8px)",
+            transition: { duration: 0.3 } 
+          } 
+        : { 
+            opacity: 0, 
+            scale: 0.85, 
+            transition: { duration: 0.12 } 
+          }
+      }
+      whileHover={!isTemp && !isDeleting ? { scale: 1.005 } : undefined}
       className={`flex w-full ${isSender ? "justify-end" : "justify-start"} mb-[2px] ${isFirstInGroup ? "mt-3" : "mt-0"} relative overflow-visible`}
     >
       <motion.div style={{ opacity: replyIconOpacity, scale: replyIconScale, position: "absolute", top: "50%", translateY: "-50%", ...(isSender ? { left: 8 } : { right: 8 }), pointerEvents: "none", zIndex: 0 }}>
@@ -375,6 +443,31 @@ const ChatMessage = React.memo(function ChatMessage({
           <Reply size={15} color="white" />
         </div>
       </motion.div>
+
+      {/* Double-tap heart animation */}
+      <AnimatePresence>
+        {showHeartAnimation && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: [0, 1.3, 1], opacity: [0, 1, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              translateX: "-50%",
+              translateY: "-50%",
+              pointerEvents: "none",
+              zIndex: 10,
+              fontSize: "48px",
+              filter: "drop-shadow(0 2px 8px rgba(255,0,0,0.5))"
+            }}
+          >
+            ❤️
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!isSender && isGroupChat && isLastInGroup && senderName && (
         <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-1 mr-2 self-end overflow-hidden outline outline-1 outline-white/10" style={{ backgroundColor: peerColor(senderId) }}>
@@ -389,12 +482,13 @@ const ChatMessage = React.memo(function ChatMessage({
             style={{
               ...getBubbleRadius(isSender, isFirstInGroup, isLastInGroup, hasAbove, hasButtons),
               backgroundColor: bubbleColor,
-              opacity: isDeleting ? 0 : 1,
-              transform: isDeleting ? "scale(0.8)" : "scale(1)",
-              filter: isDeleting ? "blur(6px)" : "none",
-              transition: isDeleting ? "opacity 0.3s, transform 0.3s, filter 0.3s" : "none",
+              willChange: "opacity, transform, filter"
             }}
-            className="relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px]"
+            className={`relative p-[6px] px-3 shadow-sm text-white cursor-pointer select-none z-10 min-w-[80px] transition-all duration-300 ${
+              isDeleting 
+                ? "opacity-0 scale-75 blur-md" 
+                : "opacity-100 scale-100 blur-0"
+            }`}
           >
             {!isSender && isGroupChat && isLastInGroup && senderName && (
               <div className="flex items-center gap-1 mb-[3px] flex-wrap">
@@ -440,12 +534,51 @@ const ChatMessage = React.memo(function ChatMessage({
                   </div>
                   <span className="text-[10px] opacity-60">{fmt(audioDuration)}</span>
                 </div>
-                <motion.button whileTap={{ scale: 0.85 }} onClick={e => { e.stopPropagation(); cyclePlayRate(); }}
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 self-center"
-                  style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }}
-                  title="Скорость воспроизведения">
-                  {playRate}x
-                </motion.button>
+                <div className="relative shrink-0 self-center">
+                  <motion.button 
+                    whileTap={{ scale: 0.85 }} 
+                    onClick={e => { e.stopPropagation(); setShowSpeedPicker(!showSpeedPicker); }}
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+                    style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }}
+                    title="Скорость воспроизведения">
+                    {playRate}x
+                  </motion.button>
+                  
+                  <AnimatePresence>
+                    {showSpeedPicker && typeof document !== "undefined" && createPortal(
+                      <motion.div
+                        ref={speedPickerRef}
+                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        className="fixed bg-[#1e1e1e]/96 backdrop-blur-xl rounded-xl shadow-2xl py-2 px-1 flex flex-col border border-white/8"
+                        style={{ 
+                          bottom: "80px",
+                          right: "20px",
+                          zIndex: 99999,
+                          minWidth: "140px"
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <p className="text-[11px] text-gray-400 px-3 pb-1 font-medium">Скорость</p>
+                        {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5].map(speed => (
+                          <motion.button
+                            key={speed}
+                            whileTap={{ scale: 0.96 }}
+                            onClick={() => setCustomPlayRate(speed)}
+                            className={`px-3 py-2 text-[13px] font-medium rounded-lg transition-colors text-left ${
+                              playRate === speed ? "bg-[var(--accent)] text-white" : "text-white hover:bg-white/5"
+                            }`}
+                          >
+                            {speed}x {playRate === speed && "✓"}
+                          </motion.button>
+                        ))}
+                      </motion.div>,
+                      document.body
+                    )}
+                  </AnimatePresence>
+                </div>
                 <span className="text-[10px] opacity-60 whitespace-nowrap flex items-center gap-0.5 shrink-0 self-end pb-0.5">{timeStr}<ReadIndicator /></span>
               </div>
             ) : (
