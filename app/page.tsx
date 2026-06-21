@@ -16,6 +16,34 @@ import { Capacitor } from '@capacitor/core'
 
 const ACCENT = "var(--accent, #7e85e1)"
 
+// ── IndexedDB helpers ─────────────────────────────────────────
+async function idbGet(key: string): Promise<any> {
+  return new Promise((resolve) => {
+    const req = indexedDB.open("vortex-offline", 1)
+    req.onupgradeneeded = () => req.result.createObjectStore("kv")
+    req.onsuccess = () => {
+      const tx = req.result.transaction("kv", "readonly")
+      const r = tx.objectStore("kv").get(key)
+      r.onsuccess = () => resolve(r.result ?? null)
+      r.onerror = () => resolve(null)
+    }
+    req.onerror = () => resolve(null)
+  })
+}
+async function idbSet(key: string, value: any): Promise<void> {
+  return new Promise((resolve) => {
+    const req = indexedDB.open("vortex-offline", 1)
+    req.onupgradeneeded = () => req.result.createObjectStore("kv")
+    req.onsuccess = () => {
+      const tx = req.result.transaction("kv", "readwrite")
+      tx.objectStore("kv").put(value, key)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => resolve()
+    }
+    req.onerror = () => resolve()
+  })
+}
+
 // Определяем тип платформы
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false)
@@ -158,9 +186,29 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   const resolveRealId = useCallback((id: string) => virtualToReal.current[id] ?? id, [])
 
+  const [isOnline, setIsOnline] = useState(true)
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+    const up = () => setIsOnline(true)
+    const down = () => setIsOnline(false)
+    window.addEventListener("online", up)
+    window.addEventListener("offline", down)
+    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down) }
+  }, [])
+
   const fetchConversations = useCallback(async (currentSelectedId?: string) => {
     if (isFetching.current) return
     isFetching.current = true
+
+    // 1. Сразу показываем кэш из IndexedDB — как Telegram
+    const cached = await idbGet("conversations")
+    if (cached?.length > 0) {
+      const allCached = applyVirtualIds(cached)
+      setConversations(allCached)
+      setLoading(false)
+    }
+
     try {
       await ensureSpecialChats()
       const response = await fetch("/api/conversations")
@@ -168,6 +216,8 @@ export default function HomePage({ conversationId }: { conversationId?: string }
       const raw = Array.isArray(data) ? data.filter((c: any) => c.id != null) : []
       const allChats = applyVirtualIds(raw)
       setConversations(allChats)
+      // Сохраняем в кэш для следующего офлайн-запуска
+      await idbSet("conversations", raw)
       const activeId = currentSelectedId ?? selectedIdRef.current
       if (!activeId && allChats.length > 0 && window.innerWidth >= 768) {
         const saved = allChats.find((c: any) => c.type === "saved")
@@ -175,6 +225,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
       }
     } catch (error) {
       console.error("Failed to fetch conversations:", error)
+      // Если нет инета и кэша тоже нет — просто убираем загрузку
     } finally {
       setLoading(false)
       isFetching.current = false
@@ -370,6 +421,19 @@ export default function HomePage({ conversationId }: { conversationId?: string }
     )
   }
 
+  // ── Офлайн баннер ─────────────────────────────────────────────
+  const OfflineBanner = () => !isOnline ? (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
+      background: "#1a1a2e", borderBottom: "1px solid rgba(255,255,255,0.08)",
+      padding: "6px 16px", display: "flex", alignItems: "center", gap: 8,
+      fontSize: 13, color: "#9ca3af", justifyContent: "center"
+    }}>
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />
+      Нет соединения — показываем кэш
+    </div>
+  ) : null
+
   const selectedConversation = conversations.find(c => c.id?.toString() === selectedId?.toString())
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
 
@@ -377,6 +441,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
   if (!isMobile) {
     return (
       <div className="flex h-[100dvh] w-full bg-[var(--background)] overflow-hidden fixed inset-0">
+        <OfflineBanner />
         <div 
           className="h-full flex flex-col shrink-0 overflow-hidden bg-[var(--sidebar-bg)] border-r border-white/5 relative"
           style={{ width: `${sidebarWidth}px` }}
@@ -433,6 +498,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
       className="flex flex-col w-full overflow-hidden"
       style={{ height: 'var(--app-height, 100dvh)', backgroundColor: 'var(--background)' }}
     >
+      <OfflineBanner />
 
       {/* ── Основной контент ── */}
       <div className="flex-1 overflow-hidden relative">
