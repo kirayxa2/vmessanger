@@ -44,14 +44,22 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
 }
 
 export async function sendEmail(to: string, subject: string, html: string): Promise<SendResult> {
+  console.log(`[email] sendEmail called for: ${to}`)
+  console.log(`[email] SMTP_HOST=${process.env.SMTP_HOST || '(not set)'}`)
+  console.log(`[email] SMTP_USER=${process.env.SMTP_USER || '(not set)'}`)
+  console.log(`[email] RESEND_API_KEY=${process.env.RESEND_API_KEY ? 're_***set***' : '(not set)'}`)
+  console.log(`[email] EMAIL_FROM=${process.env.EMAIL_FROM || '(not set)'}`)
   try {
     if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      console.log('[email] Using SMTP...')
       return await sendViaSmtp(to, subject, html)
     }
     if (process.env.RESEND_API_KEY) {
-      return await sendViaResend(to, subject, html)
+      console.log('[email] Using Resend...')
+      const result = await sendViaResend(to, subject, html)
+      console.log('[email] Resend result:', JSON.stringify(result))
+      return result
     }
-    // Фолбэк: почта не настроена — печатаем в консоль (для локальной разработки)
     console.warn(`[email] Не настроен провайдер (SMTP_* / RESEND_API_KEY). Письмо для ${to} НЕ отправлено.`)
     return { sent: false, dev: true }
   } catch (e: any) {
