@@ -312,10 +312,7 @@ model BotFatherSession {
 model UserSession {
   id           String   @id @default(cuid())
   userId       Int
-  deviceName   String
-  deviceType   String   @default("desktop")
-  os           String?
-  browser      String?
+  deviceType   String   @default("desktop") // "mobile" | "tablet" | "desktop"
   lastActive   DateTime @default(now())
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
