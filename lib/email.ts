@@ -1,16 +1,39 @@
-// Отправка писем. Поддерживает SMTP (nodemailer) и Resend (HTTP API).
-// Приоритет: SMTP_* → RESEND_API_KEY → dev-фолбэк (код в консоль сервера).
+// Отправка писем. Поддерживает Brevo API, Resend (HTTP API), SMTP.
+// Приоритет: BREVO_API_KEY → RESEND_API_KEY → SMTP_* → dev-фолбэк
 //
-// ENV (выставить на проде, напр. Render → Environment):
-//   SMTP вариант (например Gmail app password):
-//     SMTP_HOST=smtp.gmail.com  SMTP_PORT=465  SMTP_USER=you@gmail.com  SMTP_PASS=app_password
-//     EMAIL_FROM="Vortex <you@gmail.com>"
-//   Resend вариант:
-//     RESEND_API_KEY=re_xxx   EMAIL_FROM="Vortex <onboarding@resend.dev>"
+// ENV:
+//   Brevo: BREVO_API_KEY=xkeysib-xxx  EMAIL_FROM="Vortex <тут@email.com>"
+//   Resend: RESEND_API_KEY=re_xxx  EMAIL_FROM="Vortex <onboarding@resend.dev>"
+//   SMTP: SMTP_HOST=...  SMTP_PORT=...  SMTP_USER=...  SMTP_PASS=...
 
-const FROM = process.env.EMAIL_FROM || "Vortex <onboarding@resend.dev>"
+const FROM = process.env.EMAIL_FROM || "Vortex <noreply@vortex.app>"
 
 type SendResult = { sent: boolean; dev?: boolean; error?: string }
+
+async function sendViaBrevo(to: string, subject: string, html: string): Promise<SendResult> {
+  const fromMatch = FROM.match(/^(.+)\s<(.+)>$/)
+  const fromName = fromMatch ? fromMatch[1] : "Vortex"
+  const fromEmail = fromMatch ? fromMatch[2] : FROM
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": process.env.BREVO_API_KEY!,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: fromEmail },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    return { sent: false, error: `Brevo ${res.status}: ${text}` }
+  }
+  return { sent: true }
+}
 
 async function sendViaSmtp(to: string, subject: string, html: string): Promise<SendResult> {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env
@@ -45,11 +68,16 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
 
 export async function sendEmail(to: string, subject: string, html: string): Promise<SendResult> {
   console.log(`[email] sendEmail called for: ${to}`)
+  console.log(`[email] BREVO_API_KEY=${process.env.BREVO_API_KEY ? 'set' : '(not set)'}`)
   console.log(`[email] SMTP_HOST=${process.env.SMTP_HOST || '(not set)'}`)
-  console.log(`[email] SMTP_USER=${process.env.SMTP_USER || '(not set)'}`)
   console.log(`[email] RESEND_API_KEY=${process.env.RESEND_API_KEY ? 're_***set***' : '(not set)'}`)
-  console.log(`[email] EMAIL_FROM=${process.env.EMAIL_FROM || '(not set)'}`)
   try {
+    if (process.env.BREVO_API_KEY) {
+      console.log('[email] Using Brevo API...')
+      const result = await sendViaBrevo(to, subject, html)
+      console.log('[email] Brevo result:', JSON.stringify(result))
+      return result
+    }
     if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
       console.log('[email] Using SMTP...')
       return await sendViaSmtp(to, subject, html)
@@ -60,7 +88,7 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
       console.log('[email] Resend result:', JSON.stringify(result))
       return result
     }
-    console.warn(`[email] Не настроен провайдер (SMTP_* / RESEND_API_KEY). Письмо для ${to} НЕ отправлено.`)
+    console.warn(`[email] Не настроен провайдер. Письмо для ${to} НЕ отправлено.`)
     return { sent: false, dev: true }
   } catch (e: any) {
     console.error("[email] send error:", e?.message || e)

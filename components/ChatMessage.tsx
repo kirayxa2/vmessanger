@@ -18,7 +18,11 @@ const DEV_USER_ID = 1;
 // ── Реальная звуковая кривая голосовых ──────────────────────────
 // Декодируем аудио через Web Audio API и считаем пики амплитуды по N столбикам.
 // Кэшируем по URL, чтобы не пересчитывать. AudioContext один на всё приложение.
+// FIX #3: ограничиваем размер кэша waveform — не даём памяти расти бесконечно.
+// Храним максимум 100 записей, при переполнении удаляем самую старую (FIFO).
+const WAVEFORM_CACHE_MAX = 100
 const waveformCache = new Map<string, number[]>();
+// AudioContext — один на всё приложение, не пересоздаём
 let sharedAudioCtx: AudioContext | null = null;
 
 async function computeWaveform(url: string, buckets = 48): Promise<number[]> {
@@ -42,6 +46,11 @@ async function computeWaveform(url: string, buckets = 48): Promise<number[]> {
     if (avg > max) max = avg;
   }
   const norm = peaks.map(p => (max > 0 ? p / max : 0)); // 0..1
+  // FIX #3: FIFO — если кэш переполнен, удаляем самую старую запись
+  if (waveformCache.size >= WAVEFORM_CACHE_MAX) {
+    const firstKey = waveformCache.keys().next().value
+    waveformCache.delete(firstKey)
+  }
   waveformCache.set(url, norm);
   return norm;
 }

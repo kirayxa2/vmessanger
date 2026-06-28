@@ -51,13 +51,20 @@ function SocketInitializer({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Build a simple JWT-like token for Socket.IO auth
-    // We use the session info to create a verifiable token
-    const token = btoa(JSON.stringify({
-      id: session.user.id,
-      name: session.user.name,
-      email: session.user.email,
-    }));
+    // Получаем подписанный NextAuth JWT через API-роут и передаём его в сокет.
+    // Раньше здесь был небезопасный btoa(JSON.stringify(...)) без подписи —
+    // любой мог подделать userId. Теперь сервер проверяет подпись через NEXTAUTH_SECRET.
+    let token: string
+    try {
+      const res = await fetch("/api/auth/token")
+      if (!res.ok) throw new Error("token fetch failed")
+      const data = await res.json()
+      token = data.token
+      if (!token) throw new Error("no token in response")
+    } catch (err) {
+      console.error("[socket] Failed to get JWT token:", err)
+      return
+    }
 
     const socketInstance = io(process.env.NEXT_PUBLIC_SITE_URL || "", {
       path: "/api/socket/io",

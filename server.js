@@ -85,50 +85,27 @@ app.prepare().then(() => {
   })
 
   // ── JWT Authentication middleware ──────────────────────────────
+  // SECURITY: принимаем ТОЛЬКО подписанные JWT (NEXTAUTH_SECRET).
+  // base64-fallback без подписи удалён — он позволял подделать userId.
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token
     if (!token) {
       return next(new Error("Authentication required"))
     }
+    const secret = process.env.NEXTAUTH_SECRET
+    if (!secret) {
+      return next(new Error("Server configuration error"))
+    }
     try {
-      const secret = process.env.NEXTAUTH_SECRET
-      if (!secret) {
-        return next(new Error("Server configuration error"))
-      }
-      // NextAuth JWT uses jose under the hood; we decode the raw token
-      // For NextAuth v4 with JWT strategy, the token is a JWE.
-      // We'll verify the payload contains the user identity.
       const decoded = jwt.verify(token, secret)
       if (!decoded || !decoded.id) {
         return next(new Error("Invalid token"))
       }
       socket.data.userId = String(decoded.id)
       socket.data.username = decoded.name || ""
-      next()
+      return next()
     } catch (err) {
-      // If jsonwebtoken fails, try accepting NextAuth session token
-      // Client sends: btoa(JSON.stringify({ id, name, email }))
-      try {
-        let payload
-        if (token.includes(".")) {
-          // It might be a JWT-like structure (NextAuth JWE)
-          const parts = token.split(".")
-          if (parts.length === 3) {
-            payload = JSON.parse(Buffer.from(parts[1], "base64").toString())
-          }
-        } else {
-          // It's the base64 JSON directly from our ClientProviders
-          payload = JSON.parse(Buffer.from(token, "base64").toString())
-        }
-        
-        if (payload && payload.id) {
-          socket.data.userId = String(payload.id)
-          socket.data.username = payload.name || ""
-          return next()
-        }
-      } catch (parseErr) {
-        console.error("Token parse error:", parseErr, "Token was:", token)
-      }
+      console.error("[socket auth] JWT verification failed:", err.message)
       return next(new Error("Invalid token"))
     }
   })
@@ -235,13 +212,45 @@ app.prepare().then(() => {
 
     // Auto-register the authenticated user
     addUserSocket(currentUserId, socket.id)
-    io.emit("user-status", { userId: currentUserId, online: true })
+
+    // FIX #2: слать статус онлайна только контактам, а не io.emit всем подряд.
+    // При большом числе юзеров io.emit кладёт сервер и раскрывает статус чужим.
+    ;(async () => {
+      try {
+        const convs = await getUserConversations(currentUserId)
+        const contactIds = new Set()
+        for (const convId of convs) {
+          const parts = await prisma.conversationParticipant.findMany({
+            where: { conversationId: Number(convId) },
+            select: { userId: true },
+          })
+          parts.forEach(p => { if (String(p.userId) !== currentUserId) contactIds.add(String(p.userId)) })
+        }
+        contactIds.forEach(uid => emitToUser(uid, "user-status", { userId: currentUserId, online: true }))
+        // Себе тоже — чтобы multi-tab работал
+        socket.emit("user-status", { userId: currentUserId, online: true })
+      } catch {}
+    })()
 
     socket.on("user-online", (userId) => {
       // Only allow setting your own status (prevent spoofing)
       if (String(userId) !== currentUserId) return
       addUserSocket(currentUserId, socket.id)
-      io.emit("user-status", { userId: currentUserId, online: true })
+      // Аналогично — только контактам
+      ;(async () => {
+        try {
+          const convs = await getUserConversations(currentUserId)
+          const contactIds = new Set()
+          for (const convId of convs) {
+            const parts = await prisma.conversationParticipant.findMany({
+              where: { conversationId: Number(convId) },
+              select: { userId: true },
+            })
+            parts.forEach(p => { if (String(p.userId) !== currentUserId) contactIds.add(String(p.userId)) })
+          }
+          contactIds.forEach(uid => emitToUser(uid, "user-status", { userId: currentUserId, online: true }))
+        } catch {}
+      })()
     })
 
     socket.on("check-online", (userId) => {
@@ -644,7 +653,24 @@ app.prepare().then(() => {
         userConversationsCache.delete(currentUserId)
         if (!isUserOnline(currentUserId)) {
           const lastSeen = new Date().toISOString()
-          io.emit("user-status", { userId: currentUserId, online: false, lastSeen })
+          // FIX #2: offline тоже только контактам
+          ;(async () => {
+            try {
+              const convs = await getUserConversations(currentUserId)
+              const contactIds = new Set()
+              for (const convId of convs) {
+                const parts = await prisma.conversationParticipant.findMany({
+                  where: { conversationId: Number(convId) },
+                  select: { userId: true },
+                })
+                parts.forEach(p => { if (String(p.userId) !== currentUserId) contactIds.add(String(p.userId)) })
+              }
+              contactIds.forEach(uid => emitToUser(uid, "user-status", { userId: currentUserId, online: false, lastSeen }))
+            } catch {
+              // fallback — хотя бы своим вкладкам
+              socket.emit("user-status", { userId: currentUserId, online: false, lastSeen })
+            }
+          })()
           // Persist lastSeen to database
           try {
             await prisma.user.update({
