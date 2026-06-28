@@ -24,10 +24,8 @@ function SocketManager({ children, socket }: { children: React.ReactNode, socket
 
   useEffect(() => {
     if (socket && session?.user?.id) {
-      // Announce ourselves as online immediately
       socket.emit("user-online", session.user.id);
 
-      // Re-announce on reconnect
       const handleReconnect = () => {
         socket.emit("user-online", session.user.id);
       };
@@ -46,52 +44,57 @@ function SocketInitializer({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Only connect when authenticated
     if (status !== "authenticated" || !session?.user?.id) {
       return;
     }
 
-    // Получаем подписанный NextAuth JWT через API-роут и передаём его в сокет.
-    // Раньше здесь был небезопасный btoa(JSON.stringify(...)) без подписи —
-    // любой мог подделать userId. Теперь сервер проверяет подпись через NEXTAUTH_SECRET.
-    let token: string
-    try {
-      const res = await fetch("/api/auth/token")
-      if (!res.ok) throw new Error("token fetch failed")
-      const data = await res.json()
-      token = data.token
-      if (!token) throw new Error("no token in response")
-    } catch (err) {
-      console.error("[socket] Failed to get JWT token:", err)
-      return
-    }
+    // useEffect не может быть async — оборачиваем в IIFE
+    // cancelled флаг защищает от race condition если компонент размонтировался
+    // пока мы ждали токен
+    let cancelled = false;
+    let socketInstance: ReturnType<typeof io> | null = null;
 
-    const socketInstance = io(process.env.NEXT_PUBLIC_SITE_URL || "", {
-      path: "/api/socket/io",
-      addTrailingSlash: false,
-      transports: ["websocket"],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 10,
-      auth: { token },
-    });
+    (async () => {
+      // Получаем подписанный NextAuth JWT через API-роут.
+      // Раньше здесь был небезопасный btoa(JSON.stringify(...)) без подписи.
+      let token: string;
+      try {
+        const res = await fetch("/api/auth/token");
+        if (!res.ok) throw new Error("token fetch failed");
+        const data = await res.json();
+        token = data.token;
+        if (!token) throw new Error("no token in response");
+      } catch (err) {
+        console.error("[socket] Failed to get JWT token:", err);
+        return;
+      }
 
-    socketInstance.on("connect", () => {
-      setIsConnected(true);
-    });
+      if (cancelled) return;
 
-    socketInstance.on("disconnect", () => {
-      setIsConnected(false);
-    });
+      socketInstance = io(process.env.NEXT_PUBLIC_SITE_URL || "", {
+        path: "/api/socket/io",
+        addTrailingSlash: false,
+        transports: ["websocket"],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 10,
+        auth: { token },
+      });
 
-    socketInstance.on("connect_error", (err: Error) => {
-      console.error("Socket connection error:", err.message);
-    });
+      socketInstance.on("connect", () => setIsConnected(true));
+      socketInstance.on("disconnect", () => setIsConnected(false));
+      socketInstance.on("connect_error", (err: Error) => {
+        console.error("Socket connection error:", err.message);
+      });
 
-    setSocket(socketInstance);
+      setSocket(socketInstance);
+    })();
 
     return () => {
-      socketInstance.disconnect();
+      cancelled = true;
+      if (socketInstance) {
+        socketInstance.disconnect();
+      }
       setSocket(null);
     };
   }, [status, session?.user?.id]);
