@@ -217,6 +217,11 @@ app.prepare().then(() => {
     // При большом числе юзеров io.emit кладёт сервер и раскрывает статус чужим.
     ;(async () => {
       try {
+        const currentUser = await prisma.user.findUnique({
+          where: { id: Number(currentUserId) },
+          select: { showOnlineStatus: true },
+        })
+        if (!currentUser?.showOnlineStatus) return
         const convs = await getUserConversations(currentUserId)
         const contactIds = new Set()
         for (const convId of convs) {
@@ -239,6 +244,11 @@ app.prepare().then(() => {
       // Аналогично — только контактам
       ;(async () => {
         try {
+          const currentUser = await prisma.user.findUnique({
+            where: { id: Number(currentUserId) },
+            select: { showOnlineStatus: true },
+          })
+          if (!currentUser?.showOnlineStatus) return
           const convs = await getUserConversations(currentUserId)
           const contactIds = new Set()
           for (const convId of convs) {
@@ -653,9 +663,12 @@ app.prepare().then(() => {
         userConversationsCache.delete(currentUserId)
         if (!isUserOnline(currentUserId)) {
           const lastSeen = new Date().toISOString()
-          // FIX #2: offline тоже только контактам
           ;(async () => {
             try {
+              const currentUser = await prisma.user.findUnique({
+                where: { id: Number(currentUserId) },
+                select: { showOnlineStatus: true, showLastSeen: true },
+              })
               const convs = await getUserConversations(currentUserId)
               const contactIds = new Set()
               for (const convId of convs) {
@@ -665,10 +678,13 @@ app.prepare().then(() => {
                 })
                 parts.forEach(p => { if (String(p.userId) !== currentUserId) contactIds.add(String(p.userId)) })
               }
-              contactIds.forEach(uid => emitToUser(uid, "user-status", { userId: currentUserId, online: false, lastSeen }))
+              contactIds.forEach(uid => {
+                const payload = { userId: currentUserId, online: false }
+                if (currentUser?.showLastSeen) payload.lastSeen = lastSeen
+                if (currentUser?.showOnlineStatus) emitToUser(uid, "user-status", payload)
+              })
             } catch {
-              // fallback — хотя бы своим вкладкам
-              socket.emit("user-status", { userId: currentUserId, online: false, lastSeen })
+              socket.emit("user-status", { userId: currentUserId, online: false })
             }
           })()
           // Persist lastSeen to database

@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth/authOptions"
 import { NextRequest, NextResponse } from "next/server"
-import jwt from "jsonwebtoken"
+import { SignJWT } from "jose"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -14,14 +14,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Server misconfigured" }, { status: 500 })
   }
 
-  // Создаём обычный подписанный JWT (JWS).
-  // NextAuth хранит токен как JWE (зашифрованный) — jsonwebtoken его не понимает.
-  // Поэтому берём данные из сессии и подписываем сами тем же секретом.
-  const token = jwt.sign(
-    { id: session.user.id, name: session.user.name },
-    secret,
-    { expiresIn: "1d" }
-  )
+  // jose — нативный ESM без зависимости от @types, уже есть в next-auth.
+  // Подписываем тем же NEXTAUTH_SECRET, server.js верифицирует через jsonwebtoken.
+  const token = await new SignJWT({ id: session.user.id, name: session.user.name })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("1d")
+    .sign(new TextEncoder().encode(secret))
 
   return NextResponse.json({ token })
 }

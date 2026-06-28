@@ -14,7 +14,10 @@ export async function GET(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: Number(userId) },
-      select: { id: true, username: true, displayName: true, avatar: true, bio: true, createdAt: true }
+      select: { id: true, username: true, displayName: true, avatar: true, bio: true, createdAt: true,
+        // настройки приватности — только своему профилю
+        ...(String(userId) === session.user.id ? { showLastSeen: true, showOnlineStatus: true } : {})
+      }
     })
 
     if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -31,7 +34,7 @@ export async function PATCH(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json()
-    const { username, bio, displayName } = body
+    const { username, bio, displayName, showLastSeen, showOnlineStatus } = body
 
     // ── Input validation ──
     if (username !== undefined) {
@@ -64,8 +67,10 @@ export async function PATCH(req: NextRequest) {
         ...(username ? { username } : {}),
         ...(displayName !== undefined ? { displayName: displayName || null } : {}),
         ...(bio !== undefined ? { bio } : {}),
+        ...(showLastSeen !== undefined ? { showLastSeen: Boolean(showLastSeen) } : {}),
+        ...(showOnlineStatus !== undefined ? { showOnlineStatus: Boolean(showOnlineStatus) } : {}),
       },
-      select: { id: true, username: true, displayName: true, avatar: true, bio: true }
+      select: { id: true, username: true, displayName: true, avatar: true, bio: true, showLastSeen: true, showOnlineStatus: true }
     })
 
     return NextResponse.json(updated)

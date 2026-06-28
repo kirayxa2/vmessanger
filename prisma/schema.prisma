@@ -34,6 +34,8 @@ model User {
   displayName       String?   // Отображаемое имя (видят люди, не используется для поиска)
   publicKey         String?   // E2E: X25519/P-256 public key (base64, spki format)
   isBot             Boolean   @default(false) // системный аккаунт бота
+  showLastSeen      Boolean   @default(true)  // показывать ли время последнего визита
+  showOnlineStatus  Boolean   @default(true)  // показывать ли статус онлайн
   ownedBots         Bot[]     @relation("BotOwner")
   botProfile        Bot?      @relation("BotIdentity")
   botSessions       BotSession[]
@@ -314,7 +316,6 @@ model UserSession {
   deviceType   String   @default("desktop")
   os           String?
   browser      String?
-  ip           String?
   lastActive   DateTime @default(now())
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)

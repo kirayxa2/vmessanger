@@ -56,12 +56,11 @@ export async function POST(req: NextRequest) {
   const { sessionId, userAgent } = body
 
   const ua = userAgent || req.headers.get("user-agent") || ""
-  const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "Unknown"
   const parsed = parseUserAgent(ua)
 
   const userSession = await prisma.userSession.upsert({
     where: { id: sessionId || "nonexistent-id-00000" },
-    update: { lastActive: new Date(), ip },
+    update: { lastActive: new Date() },
     create: {
       id: sessionId,
       userId: Number(session.user.id),
@@ -69,7 +68,6 @@ export async function POST(req: NextRequest) {
       deviceType: parsed.deviceType,
       os: parsed.os,
       browser: parsed.browser,
-      ip,
       lastActive: new Date(),
     },
   })
