@@ -102,19 +102,23 @@ const SettingsRow = ({ icon, iconColor, label, badge, rightEl, onClick }: {
 )
 
 // ── Floating label input ───────────────────────────────────────
-const FloatInput = ({ label, value, onChange, multiline, maxLength, hint }: {
+const FloatInput = ({ label, value, onChange, multiline, maxLength, hint, type, prefix }: {
   label: string; value: string; onChange: (v: string) => void
   multiline?: boolean; maxLength?: number; hint?: string
+  type?: string   // для паролей — type="password"
+  prefix?: string // например "@" для username
 }) => {
   const [focused, setFocused] = useState(false)
   const active = focused || value.length > 0
+  const labelLeft = prefix && active ? `${prefix.length * 9 + 16}px` : "16px"
   return (
     <div className="flex flex-col gap-1">
       <div className="relative rounded-xl transition-all duration-200"
         style={{ border: `1.5px solid ${focused ? ACCENT : "rgba(255,255,255,0.12)"}` }}>
         <label
-          className="absolute left-4 pointer-events-none transition-all duration-200 text-gray-400"
+          className="absolute pointer-events-none transition-all duration-200 text-gray-400"
           style={{
+            left: labelLeft,
             top: active ? "6px" : "50%",
             transform: active ? "none" : "translateY(-50%)",
             fontSize: active ? "11px" : "15px",
@@ -123,16 +127,31 @@ const FloatInput = ({ label, value, onChange, multiline, maxLength, hint }: {
         >
           {label}
         </label>
-        {multiline ? (
-          <textarea value={value} onChange={e => onChange(e.target.value)}
-            onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-            maxLength={maxLength} rows={3}
-            className="w-full bg-transparent text-white text-[15px] px-4 pt-6 pb-2 outline-none resize-none" />
-        ) : (
-          <input type="text" value={value} onChange={e => onChange(e.target.value)}
-            onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-            maxLength={maxLength}
-            className="w-full bg-transparent text-white text-[15px] px-4 pt-6 pb-2 outline-none" />
+        <div className="flex items-center">
+          {prefix && active && (
+            <span className="pl-4 pt-5 pb-2 text-[15px] text-gray-400 select-none shrink-0">{prefix}</span>
+          )}
+          {multiline ? (
+            <textarea value={value} onChange={e => onChange(e.target.value)}
+              onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+              maxLength={maxLength} rows={3}
+              className="w-full bg-transparent text-white text-[15px] px-4 pt-6 pb-2 outline-none resize-none" />
+          ) : (
+            <input
+              type={type || "text"}
+              value={value}
+              onChange={e => onChange(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              maxLength={maxLength}
+              className={`w-full bg-transparent text-white text-[15px] pb-2 outline-none ${
+                prefix && active ? "pr-4 pt-5" : "px-4 pt-6"
+              }`}
+            />
+          )}
+        </div>
+        {maxLength && !multiline && active && (
+          <span className="absolute bottom-2 right-3 text-[11px] text-gray-500">{maxLength - value.length}</span>
         )}
         {maxLength && multiline && (
           <span className="absolute bottom-2 right-3 text-[11px] text-gray-500">{maxLength - value.length}</span>
@@ -145,22 +164,28 @@ const FloatInput = ({ label, value, onChange, multiline, maxLength, hint }: {
 
 // ── Edit Profile Screen ────────────────────────────────────────
 function EditProfileScreen({ session, profile, onSave, onBack, isUploading, fileInputRef, onAvatarClick }: {
-  session: any; profile: { username: string; bio: string }
-  onSave: (data: { username: string; bio: string }) => Promise<void>
+  session: any; profile: { username: string; displayName: string; bio: string }
+  onSave: (data: { username: string; displayName: string; bio: string }) => Promise<void>
   onBack: () => void; isUploading: boolean
   fileInputRef: React.RefObject<HTMLInputElement>; onAvatarClick: () => void
 }) {
   const { t } = useTranslation()
-  const [username, setUsername] = useState(profile.username)
+  const [username, setUsername] = useState(profile.username)         // @username — для поиска, только латиница/цифры/_
+  const [displayName, setDisplayName] = useState(profile.displayName) // имя которое видят люди
   const [bio, setBio] = useState(profile.bio)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-  const isDirty = username !== profile.username || bio !== profile.bio
+  const isDirty = username !== profile.username || displayName !== profile.displayName || bio !== profile.bio
+
+  // Валидация username на лету
+  const usernameValid = /^[a-zA-Z0-9_]{3,30}$/.test(username)
+  const usernameError = username.length > 0 && !usernameValid
+    ? "Только латиница, цифры и _ (3–30 символов)" : ""
 
   const handleSave = async () => {
-    if (!isDirty) return
+    if (!isDirty || usernameError) return
     setSaving(true); setError("")
-    try { await onSave({ username, bio }) }
+    try { await onSave({ username, displayName, bio }) }
     catch (e: any) { setError(e.message || "Ошибка") }
     finally { setSaving(false) }
   }
@@ -193,15 +218,49 @@ function EditProfileScreen({ session, profile, onSave, onBack, isUploading, file
             </div>
           </motion.div>
         </div>
-        <div className="p-5 flex flex-col gap-4">
-          <FloatInput label={t("first_name_label")} value={username} onChange={setUsername} maxLength={30} />
-          <FloatInput label={t("bio_label")} value={bio} onChange={setBio} multiline maxLength={200} hint={t("bio_hint")} />
-          {error && <p className="text-red-400 text-[13px] px-1">{error}</p>}
+
+        {/* ── Секция 1: имя и bio (как в Telegram — «Имя» и «О себе») ── */}
+        <div className="px-5 pt-5 pb-2">
+          <p className="text-[12px] font-semibold uppercase tracking-wider mb-3" style={{ color: ACCENT }}>Профиль</p>
+          <div className="flex flex-col gap-3">
+            <FloatInput
+              label="Отображаемое имя"
+              value={displayName}
+              onChange={setDisplayName}
+              maxLength={30}
+              hint="Это имя видят все пользователи"
+            />
+            <FloatInput
+              label={t("bio_label")}
+              value={bio}
+              onChange={setBio}
+              multiline
+              maxLength={200}
+              hint={t("bio_hint")}
+            />
+          </div>
         </div>
-        <div className="border-t border-white/5 px-5 py-5 flex flex-col gap-3">
-          <p className="text-white text-[16px] font-bold">{t("username_label")}</p>
-          <FloatInput label={t("username_label")} value={username} onChange={setUsername} maxLength={30} hint={t("username_hint")} />
+
+        {/* ── Секция 2: username (как в Telegram — отдельный блок внизу) ── */}
+        <div className="px-5 pt-4 pb-5 mt-2 border-t border-white/5">
+          <p className="text-[12px] font-semibold uppercase tracking-wider mb-1" style={{ color: ACCENT }}>Username</p>
+          <p className="text-[12px] text-gray-500 mb-3">
+            По нему вас находят в поиске. Только латиница, цифры и _
+          </p>
+          <FloatInput
+            label="Username"
+            value={username}
+            onChange={v => setUsername(v.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+            maxLength={30}
+            prefix="@"
+            hint={usernameError || `vortex.app/u/${username || "..."}  — публичная ссылка`}
+          />
+          {usernameError && (
+            <p className="text-red-400 text-[12px] mt-1 px-1">{usernameError}</p>
+          )}
         </div>
+
+        {error && <p className="text-red-400 text-[13px] px-5 pb-3">{error}</p>}
       </div>
       <AnimatePresence>
         {isDirty && (
@@ -562,7 +621,7 @@ export default function ChatSidebar({
   const [localConversations, setLocalConversations] = useState<any[]>(conversations)
   const isCreatingConversation = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [profile, setProfile] = useState<{ username: string; bio: string }>({ username: "", bio: "" })
+  const [profile, setProfile] = useState<{ username: string; displayName: string; bio: string }>({ username: "", displayName: "", bio: "" })
 
   // ── Profanity filter state (для иконки в настройках) ──
   const { enabled: profanityEnabled } = useProfanityFilter()
@@ -571,12 +630,12 @@ export default function ChatSidebar({
     if (view === "settings") {
       fetch("/api/users/profile")
         .then(r => r.json())
-        .then(d => setProfile({ username: d.username || session?.user?.name || "", bio: d.bio || "" }))
+        .then(d => setProfile({ username: d.username || session?.user?.name || "", displayName: d.displayName || "", bio: d.bio || "" }))
         .catch(() => { })
     }
   }, [view, session?.user?.name])
 
-  const handleSaveProfile = useCallback(async (data: { username: string; bio: string }) => {
+  const handleSaveProfile = useCallback(async (data: { username: string; displayName: string; bio: string }) => {
     const res = await fetch("/api/users/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -584,8 +643,8 @@ export default function ChatSidebar({
     })
     if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Error") }
     const saved = await res.json()
-    update({ name: saved.username })
-    setProfile({ username: saved.username || data.username, bio: data.bio })
+    update({ name: saved.displayName || saved.username })
+    setProfile({ username: saved.username || data.username, displayName: saved.displayName || "", bio: data.bio })
     setShowEditProfile(false)
   }, [update])
 
@@ -893,9 +952,9 @@ export default function ChatSidebar({
                   <h2 className="text-[18px] font-bold text-white flex-1">Смена пароля</h2>
                 </div>
                 <div className="flex-1 overflow-y-auto hide-scrollbar p-5 flex flex-col gap-4">
-                  <FloatInput label="Текущий пароль" value={currentPassword} onChange={setCurrentPassword} />
-                  <FloatInput label="Новый пароль" value={newPassword} onChange={setNewPassword} />
-                  <FloatInput label="Подтвердите пароль" value={confirmPassword} onChange={setConfirmPassword} />
+                  <FloatInput label="Текущий пароль" value={currentPassword} onChange={setCurrentPassword} type="password" />
+                  <FloatInput label="Новый пароль" value={newPassword} onChange={setNewPassword} type="password" />
+                  <FloatInput label="Подтвердите пароль" value={confirmPassword} onChange={setConfirmPassword} type="password" />
                   {passwordError && <p className="text-red-400 text-[13px]">{passwordError}</p>}
                   {passwordSuccess && (
                     <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}

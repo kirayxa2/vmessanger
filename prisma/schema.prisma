@@ -31,6 +31,7 @@ model User {
   sessions          UserSession[]
   stories           Story[]
   storyViews        StoryView[]
+  displayName       String?   // Отображаемое имя (видят люди, не используется для поиска)
   publicKey         String?   // E2E: X25519/P-256 public key (base64, spki format)
   isBot             Boolean   @default(false) // системный аккаунт бота
   ownedBots         Bot[]     @relation("BotOwner")

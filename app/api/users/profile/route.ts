@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: Number(userId) },
-      select: { id: true, username: true, avatar: true, bio: true, createdAt: true }
+      select: { id: true, username: true, displayName: true, avatar: true, bio: true, createdAt: true }
     })
 
     if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json()
-    const { username, bio } = body
+    const { username, bio, displayName } = body
 
     // ── Input validation ──
     if (username !== undefined) {
@@ -42,6 +42,9 @@ export async function PATCH(req: NextRequest) {
       if (!usernameRegex.test(username)) {
         return NextResponse.json({ error: "Username must be 3–30 characters (letters, numbers, underscores)" }, { status: 400 })
       }
+    }
+    if (displayName !== undefined && (typeof displayName !== "string" || displayName.length > 30)) {
+      return NextResponse.json({ error: "Display name must be under 30 characters" }, { status: 400 })
     }
     if (bio !== undefined && (typeof bio !== "string" || bio.length > 500)) {
       return NextResponse.json({ error: "Bio must be under 500 characters" }, { status: 400 })
@@ -59,9 +62,10 @@ export async function PATCH(req: NextRequest) {
       where: { id: Number(session.user.id) },
       data: {
         ...(username ? { username } : {}),
+        ...(displayName !== undefined ? { displayName: displayName || null } : {}),
         ...(bio !== undefined ? { bio } : {}),
       },
-      select: { id: true, username: true, avatar: true, bio: true }
+      select: { id: true, username: true, displayName: true, avatar: true, bio: true }
     })
 
     return NextResponse.json(updated)
