@@ -104,14 +104,14 @@ export async function POST(req: NextRequest) {
         where: {
           type: "private",
           AND: [
-            { participants: { some: { userId: currentUserId } } },
-            { participants: { some: { userId: otherUserId } } },
+            { participants: { some: { userId: currentUserId, deletedAt: null } } },
+            { participants: { some: { userId: otherUserId, deletedAt: null } } },
           ],
         },
         include: conversationInclude,
       })
 
-      if (existingConversation && existingConversation.participants.length === 2) {
+      if (existingConversation && existingConversation.participants.filter((p: any) => p.deletedAt === null).length === 2) {
         return NextResponse.json({
           ...existingConversation,
           drafts: existingConversation.drafts.filter((d: any) => d.userId === currentUserId),

@@ -215,7 +215,16 @@ export default function HomePage({ conversationId }: { conversationId?: string }
       const data = await response.json()
       const raw = Array.isArray(data) ? data.filter((c: any) => c.id != null) : []
       const allChats = applyVirtualIds(raw)
-      setConversations(allChats)
+      setConversations(prev => {
+        // Мержим: свежие данные с сервера + локальные чаты которых ещё нет на сервере
+        const freshIds = new Set(allChats.map((c: any) => c.id.toString()))
+        const localOnly = prev.filter(c => !freshIds.has(c.id.toString()))
+        return [...localOnly, ...allChats].sort((a: any, b: any) => {
+          const aTime = a.messages?.[0]?.createdAt || a.updatedAt || 0
+          const bTime = b.messages?.[0]?.createdAt || b.updatedAt || 0
+          return new Date(bTime).getTime() - new Date(aTime).getTime()
+        })
+      })
       // Сохраняем в кэш для следующего офлайн-запуска
       await idbSet("conversations", raw)
       const activeId = currentSelectedId ?? selectedIdRef.current
@@ -476,6 +485,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
               realConversationId={resolveRealId(selectedId)}
               conversation={selectedConversation}
               onBack={handleBackToSidebar}
+              onDeleteChat={() => { setSelectedId(null) }}
               initialMessages={messagesCache[selectedId] || []}
               onNewMessage={() => {}}
             />
@@ -520,6 +530,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
                 realConversationId={resolveRealId(selectedId)}
                 conversation={selectedConversation}
                 onBack={handleBackToSidebar}
+                onDeleteChat={() => { setSelectedId(null) }}
                 initialMessages={messagesCache[selectedId] || []}
                 onNewMessage={() => {}}
               />

@@ -67,12 +67,13 @@ interface ChatWindowProps {
   conversationId: string
   realConversationId?: string
   onBack?: () => void
+  onDeleteChat?: () => void
   initialMessages?: Message[]
   onNewMessage?: (message: Message) => void
   conversation?: any
 }
 
-export default function ChatWindow({ conversationId, realConversationId, onBack, initialMessages, onNewMessage, conversation }: ChatWindowProps) {
+export default function ChatWindow({ conversationId, realConversationId, onBack, onDeleteChat, initialMessages, onNewMessage, conversation }: ChatWindowProps) {
   const apiId = realConversationId ?? conversationId
   const { data: session } = useSession()
   const { t } = useTranslation()
@@ -1447,10 +1448,33 @@ useEffect(() => {
           isOtherTyping={isOtherTyping}
           isOtherUserDev={isOtherUserDev}
           conversation={conversation}
+          isMuted={!!conversation?._isMuted}
           onBack={onBack}
           onProfileClick={() => setShowProfile(p => !p)}
           onSearchClick={() => setShowSearch(true)}
           onCallClick={() => startCall("audio")}
+          onMute={async (mute) => {
+            await fetch(`/api/conversations`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ conversationId: apiId, action: mute ? "mute" : "unmute" }),
+            }).catch(() => {})
+          }}
+          onClearChat={async (forBoth) => {
+            await fetch(`/api/conversations/${apiId}/clear`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ forBoth }),
+            })
+            setMessages([])
+          }}
+          onDeleteChat={async () => {
+            await fetch(`/api/conversations/${apiId}/archive`, {
+              method: "DELETE",
+            })
+            onDeleteChat?.()
+            onBack?.()
+          }}
           t={t}
         />
 

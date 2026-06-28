@@ -43,3 +43,30 @@ export async function POST(
         return new NextResponse("Internal Server Error", { status: 500 });
     }
 }
+
+// DELETE — удалить чат только для себя (soft delete — ставится deletedAt)
+export async function DELETE(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params;
+        const session = await getServerSession(authOptions);
+        if (!session?.user?.id) {
+            return new NextResponse("Unauthorized", { status: 401 });
+        }
+
+        const conversationId = parseInt(id);
+        const userId = parseInt(session.user.id);
+
+        await prisma.conversationParticipant.update({
+            where: { userId_conversationId: { userId, conversationId } },
+            data: { deletedAt: new Date(), clearedAt: new Date() },
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error("Error deleting conversation:", error);
+        return new NextResponse("Internal Server Error", { status: 500 });
+    }
+}

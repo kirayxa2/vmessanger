@@ -363,6 +363,31 @@ function NotificationsScreen({ onBack }: { onBack: () => void }) {
 function PrivacyScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation()
   const { enabled, toggle } = useProfanityFilter()
+  const { data: session } = useSession()
+
+  const [showLastSeen, setShowLastSeen] = useState(true)
+  const [showOnlineStatus, setShowOnlineStatus] = useState(true)
+  const [privacyLoading, setPrivacyLoading] = useState(true)
+
+  // Загружаем текущие настройки
+  useEffect(() => {
+    if (!session?.user?.id) return
+    fetch(`/api/users/profile?userId=${session.user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.showLastSeen !== undefined) setShowLastSeen(data.showLastSeen)
+        if (data.showOnlineStatus !== undefined) setShowOnlineStatus(data.showOnlineStatus)
+      })
+      .finally(() => setPrivacyLoading(false))
+  }, [session?.user?.id])
+
+  const updatePrivacy = async (field: "showLastSeen" | "showOnlineStatus", value: boolean) => {
+    await fetch("/api/users/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    })
+  }
 
   return (
     <motion.div className="absolute inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]"
@@ -437,6 +462,67 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
 
         <p className="px-5 pt-2 pb-5 text-[12px] text-gray-600 leading-relaxed">
           {t("anti_profanity_desc")}
+        </p>
+
+        {/* Секция: Кто видит мой статус */}
+        <div className="pt-2 pb-1 px-5">
+          <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
+            Конфиденциальность
+          </p>
+        </div>
+
+        <div className="mx-3 rounded-2xl overflow-hidden" style={{ backgroundColor: "#1a2332" }}>
+          {/* Онлайн-статус */}
+          <div className="px-4 py-4 flex items-center gap-4">
+            <motion.div
+              className="w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0"
+              animate={{ backgroundColor: showOnlineStatus ? ACCENT : "#2d3f57" }}
+              transition={{ duration: 0.3 }}
+            >
+              <Globe size={20} color="white" />
+            </motion.div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] text-white font-semibold leading-tight">Статус онлайн</p>
+              <p className="text-[12px] text-gray-500 mt-0.5 leading-snug">Показывать контактам когда ты в сети</p>
+            </div>
+            <ToggleSwitch
+              enabled={showOnlineStatus}
+              onToggle={() => {
+                const next = !showOnlineStatus
+                setShowOnlineStatus(next)
+                updatePrivacy("showOnlineStatus", next)
+              }}
+            />
+          </div>
+
+          <div className="mx-4 h-px bg-white/5" />
+
+          {/* Последний визит */}
+          <div className="px-4 py-4 flex items-center gap-4">
+            <motion.div
+              className="w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0"
+              animate={{ backgroundColor: showLastSeen ? ACCENT : "#2d3f57" }}
+              transition={{ duration: 0.3 }}
+            >
+              <Bell size={20} color="white" />
+            </motion.div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] text-white font-semibold leading-tight">Время последнего визита</p>
+              <p className="text-[12px] text-gray-500 mt-0.5 leading-snug">Показывать контактам когда ты был в сети</p>
+            </div>
+            <ToggleSwitch
+              enabled={showLastSeen}
+              onToggle={() => {
+                const next = !showLastSeen
+                setShowLastSeen(next)
+                updatePrivacy("showLastSeen", next)
+              }}
+            />
+          </div>
+        </div>
+
+        <p className="px-5 pt-2 pb-5 text-[12px] text-gray-600 leading-relaxed">
+          Если отключить статус онлайн — другие не будут видеть когда ты в сети. И ты тоже не будешь видеть статусы других.
         </p>
 
       </div>

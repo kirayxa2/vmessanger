@@ -16,21 +16,32 @@ export async function POST(
 
         const conversationId = parseInt(id);
         const userId = parseInt(session.user.id);
+        const body = await request.json().catch(() => ({}))
+        const forBoth = body?.forBoth === true
 
-        // Update the `clearedAt` timestamp for this user in this conversation
-        const participant = await prisma.conversationParticipant.update({
-            where: {
-                userId_conversationId: {
-                    userId,
-                    conversationId,
-                },
-            },
-            data: {
-                clearedAt: new Date(),
-            },
-        });
+        // Проверяем что юзер участник чата
+        const participant = await prisma.conversationParticipant.findUnique({
+            where: { userId_conversationId: { userId, conversationId } }
+        })
+        if (!participant) return new NextResponse("Forbidden", { status: 403 })
 
-        return NextResponse.json({ success: true, clearedAt: participant.clearedAt });
+        if (forBoth) {
+            // Удаляем все сообщения для всех участников
+            await prisma.message.deleteMany({ where: { conversationId } })
+            // Сбрасываем clearedAt у всех
+            await prisma.conversationParticipant.updateMany({
+                where: { conversationId },
+                data: { clearedAt: new Date() }
+            })
+        } else {
+            // Только для себя — ставим clearedAt
+            await prisma.conversationParticipant.update({
+                where: { userId_conversationId: { userId, conversationId } },
+                data: { clearedAt: new Date() }
+            })
+        }
+
+        return NextResponse.json({ success: true, forBoth });
     } catch (error) {
         console.error("Error clearing conversation history:", error);
         return new NextResponse("Internal Server Error", { status: 500 });
