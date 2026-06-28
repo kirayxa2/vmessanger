@@ -48,7 +48,7 @@ async function computeWaveform(url: string, buckets = 48): Promise<number[]> {
   const norm = peaks.map(p => (max > 0 ? p / max : 0)); // 0..1
   // FIX #3: FIFO — если кэш переполнен, удаляем самую старую запись
   if (waveformCache.size >= WAVEFORM_CACHE_MAX) {
-    const firstKey = waveformCache.keys().next().value
+    const firstKey = waveformCache.keys().next().value as string
     waveformCache.delete(firstKey)
   }
   waveformCache.set(url, norm);
