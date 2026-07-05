@@ -101,7 +101,7 @@ export const authOptions: NextAuthOptions = {
 
         try {
           const employee = await prisma.employee.findUnique({
-            where: { login: credentials.login.trim() },
+            where: { login: credentials.login.trim().toLowerCase() },
             include: { user: true },
           })
 
