@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Loader2, ShieldCheck } from "lucide-react"
@@ -19,17 +18,33 @@ export default function AdminLoginPage() {
     setError("")
     setLoading(true)
     try {
-      const result = await signIn("admin-credentials", {
-        redirect: false,
-        login: formData.login,
-        password: formData.password,
+      // Важно: не используем signIn() из next-auth/react — он жёстко привязан к
+      // глобальному basePath "/api/auth" (основной NextAuth мессенджера),
+      // а админский провайдер живёт на /api/admin-auth. Делаем ручной POST на CSRF + callback.
+      const csrfRes = await fetch("/api/admin-auth/csrf")
+      const { csrfToken } = await csrfRes.json()
+
+      const res = await fetch("/api/admin-auth/callback/admin-credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          login: formData.login,
+          password: formData.password,
+          csrfToken,
+          json: "true",
+        }),
       })
-      if (result?.error) {
+
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok || data?.url?.includes("error")) {
         setError("Неверный логин или пароль")
         setLoading(false)
         return
       }
+
       router.push("/admin")
+      router.refresh()
     } catch {
       setError("Что-то пошло не так")
       setLoading(false)

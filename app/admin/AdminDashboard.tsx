@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { signOut } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { LogOut, Plus, Trash2, Pencil, Loader2, KeyRound, X, Users } from "lucide-react"
 
@@ -19,6 +19,7 @@ type Employee = {
 }
 
 export default function AdminDashboard({ adminName }: { adminName: string }) {
+  const router = useRouter()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -66,6 +67,22 @@ export default function AdminDashboard({ adminName }: { adminName: string }) {
     }
   }
 
+  const handleSignOut = async () => {
+    // Аналогично входу: signOut() из next-auth/react бьёт в /api/auth, а надо /api/admin-auth
+    try {
+      const csrfRes = await fetch("/api/admin-auth/csrf")
+      const { csrfToken } = await csrfRes.json()
+      await fetch("/api/admin-auth/signout", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ csrfToken, json: "true" }),
+      })
+    } finally {
+      router.push("/admin/login")
+      router.refresh()
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 sm:py-10">
       <div className="flex items-center justify-between mb-8">
@@ -87,7 +104,7 @@ export default function AdminDashboard({ adminName }: { adminName: string }) {
             <Plus size={16} /> Добавить
           </button>
           <button
-            onClick={() => signOut({ callbackUrl: "/admin/login" })}
+            onClick={handleSignOut}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm text-gray-300 transition-all active:scale-[0.97]"
             style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
           >
