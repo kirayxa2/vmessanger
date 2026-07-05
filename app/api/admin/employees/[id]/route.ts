@@ -4,11 +4,12 @@ import { getAdminSession } from "@/lib/auth/getAdminSession"
 import bcrypt from "bcryptjs"
 
 // PATCH — обновить данные сотрудника, сбросить пароль, активировать/деактивировать
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAdminSession()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const id = Number(params.id)
+  const { id: idParam } = await params
+  const id = Number(idParam)
   if (!Number.isInteger(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 })
 
   try {
@@ -46,11 +47,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE — удалить сотрудника (вместе со связанным User-аккаунтом)
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getAdminSession()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const id = Number(params.id)
+  const { id: idParam } = await params
+  const id = Number(idParam)
   if (!Number.isInteger(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 })
 
   try {
