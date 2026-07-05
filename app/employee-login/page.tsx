@@ -5,13 +5,13 @@ import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Loader2 } from "lucide-react"
+import { Loader2, Briefcase } from "lucide-react"
 
 const ACCENT = "var(--accent, #7e85e1)"
 
-export default function LoginPage() {
+export default function EmployeeLoginPage() {
   const router = useRouter()
-  const [formData, setFormData] = useState({ email: "", password: "" })
+  const [formData, setFormData] = useState({ login: "", password: "" })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -20,8 +20,16 @@ export default function LoginPage() {
     setError("")
     setLoading(true)
     try {
-      const result = await signIn("credentials", { redirect: false, email: formData.email, password: formData.password })
-      if (result?.error) { setError("Неверный email или пароль"); setLoading(false); return }
+      const result = await signIn("employee-credentials", {
+        redirect: false,
+        login: formData.login,
+        password: formData.password,
+      })
+      if (result?.error) {
+        setError("Неверный логин или пароль")
+        setLoading(false)
+        return
+      }
       router.push("/")
     } catch {
       setError("Что-то пошло не так")
@@ -39,16 +47,18 @@ export default function LoginPage() {
         style={{ background: "rgba(23,27,38,0.7)", backdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 70px rgba(0,0,0,0.45)" }}
       >
         <div className="flex flex-col items-center mb-6">
-          <img src="/logo (1).ico" alt="Vortex" width={92} height={92} style={{ imageRendering: "crisp-edges" }} />
+          <div className="w-[92px] h-[92px] rounded-2xl flex items-center justify-center" style={{ background: `${ACCENT}22` }}>
+            <Briefcase size={40} color={ACCENT} />
+          </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-center text-white mb-1">С возвращением</h1>
-        <p className="text-center text-gray-400 text-sm mb-6">Войдите в свой аккаунт Vortex</p>
+        <h1 className="text-2xl font-bold text-center text-white mb-1">Вход для сотрудников</h1>
+        <p className="text-center text-gray-400 text-sm mb-6">Используйте логин и пароль, выданные вашей организацией</p>
 
         {error && <div className="bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-2.5 rounded-xl mb-5 text-sm">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Field label="Email" type="email" value={formData.email} onChange={v => setFormData({ ...formData, email: v })} placeholder="your@email.com" />
+          <Field label="Логин" type="text" value={formData.login} onChange={v => setFormData({ ...formData, login: v })} placeholder="ivanov" />
           <Field label="Пароль" type="password" value={formData.password} onChange={v => setFormData({ ...formData, password: v })} placeholder="••••••••" />
 
           <button type="submit" disabled={loading}
@@ -60,18 +70,8 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-gray-400 mt-6 text-sm">
-          Нет аккаунта? <Link href="/register" className="font-semibold hover:underline" style={{ color: ACCENT }}>Зарегистрироваться</Link>
+          Обычный пользователь? <Link href="/login" className="font-semibold hover:underline" style={{ color: ACCENT }}>Войти по email</Link>
         </p>
-
-        <div className="mt-4 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <Link
-            href="/employee-login"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm transition-all active:scale-[0.98]"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#c8cdd6" }}
-          >
-            Я сотрудник организации
-          </Link>
-        </div>
       </motion.div>
     </div>
   )

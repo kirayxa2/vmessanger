@@ -68,3 +68,9 @@ export const registerLimiter = new RateLimiter(5, 60 * 60_000)
 
 /** Messages: max 30 per user per minute */
 export const messageLimiter = new RateLimiter(30, 60_000)
+
+/** Admin login: max 5 attempts per key per 15 minutes (higher stakes than regular login) */
+export const adminLoginLimiter = new RateLimiter(5, 15 * 60_000)
+
+/** Employee login: max 10 attempts per key per 5 minutes */
+export const employeeLoginLimiter = new RateLimiter(10, 5 * 60_000)

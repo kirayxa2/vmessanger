@@ -2,7 +2,7 @@ import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
-import { loginLimiter } from "@/lib/rateLimiter"
+import { loginLimiter, employeeLoginLimiter } from "@/lib/rateLimiter"
 
 // Helper — sends security notification to user's Vortex chat
 async function sendSystemNotification(userId: number, message: string) {
@@ -33,6 +33,7 @@ async function sendSystemNotification(userId: number, message: string) {
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
+      id: "credentials",
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
@@ -77,6 +78,60 @@ export const authOptions: NextAuthOptions = {
           }
         } catch (error) {
           if (process.env.NODE_ENV === "development") console.error("Auth Error:", error)
+          return null
+        }
+      },
+    }),
+    CredentialsProvider({
+      id: "employee-credentials",
+      name: "Employee",
+      credentials: {
+        login: { label: "Логин", type: "text" },
+        password: { label: "Пароль", type: "password" },
+      },
+      async authorize(credentials, req) {
+        if (!credentials?.login || !credentials?.password) return null
+
+        const loginKey = `employee-login:${credentials.login.toLowerCase().trim()}`
+        const ipKey = `employee-login-ip:${(req?.headers?.["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? "unknown"}`
+
+        if (!employeeLoginLimiter.isAllowed(loginKey) || !employeeLoginLimiter.isAllowed(ipKey)) {
+          throw new Error("Слишком много попыток входа. Попробуйте позже.")
+        }
+
+        try {
+          const employee = await prisma.employee.findUnique({
+            where: { login: credentials.login.trim() },
+            include: { user: true },
+          })
+
+          const ip = (req?.headers?.["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? null
+          const userAgent = (req?.headers?.["user-agent"] as string) ?? null
+
+          if (!employee || !employee.isActive) return null
+
+          const isValid = await bcrypt.compare(credentials.password, employee.passwordHash)
+
+          await prisma.employeeLoginLog.create({
+            data: { employeeId: employee.id, success: isValid, ip, userAgent },
+          })
+
+          if (!isValid) return null
+
+          await prisma.employee.update({
+            where: { id: employee.id },
+            data: { lastLoginAt: new Date() },
+          })
+
+          const user = employee.user
+          return {
+            id: user.id.toString(),
+            email: user.email,
+            name: user.username,
+            image: user.avatar,
+          }
+        } catch (error) {
+          if (process.env.NODE_ENV === "development") console.error("Employee auth error:", error)
           return null
         }
       },

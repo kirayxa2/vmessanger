@@ -40,6 +40,7 @@ model User {
   botProfile        Bot?      @relation("BotIdentity")
   botSessions       BotSession[]
   botFatherSession  BotFatherSession?
+  employeeProfile   Employee?
 
   @@index([lastSeen])
   @@index([isBot])
@@ -318,4 +319,76 @@ model UserSession {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ══════════════════════════════════════════
+// ORGANIZATION ADMIN PANEL
+// ══════════════════════════════════════════
+
+// Администратор организации. Полностью отделён от User — отдельный вход,
+// отдельная сессия, не может быть скомпрометирован через обычный логин мессенджера.
+model Admin {
+  id           Int      @id @default(autoincrement())
+  login        String   @unique
+  passwordHash String
+  fullName     String?
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  employees       Employee[]        @relation("CreatedByAdmin")
+  adminLoginLogs  AdminLoginLog[]
+
+  @@index([login])
+}
+
+model AdminLoginLog {
+  id        Int      @id @default(autoincrement())
+  adminId   Int
+  success   Boolean
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([createdAt])
+}
+
+// Сотрудник организации. Создаётся администратором в /admin.
+// Логинится по login+password (не email), после входа получает обычную
+// User-сессию и пользуется полным интерфейсом мессенджера.
+model Employee {
+  id            Int       @id @default(autoincrement())
+  login         String    @unique
+  passwordHash  String
+  fullName      String
+  position      String?   // должность
+  isActive      Boolean   @default(true)
+  userId        Int       @unique // связанный аккаунт User (создаётся вместе с Employee)
+  createdById   Int
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdBy     Admin           @relation("CreatedByAdmin", fields: [createdById], references: [id])
+  loginLogs     EmployeeLoginLog[]
+
+  @@index([login])
+  @@index([createdById])
+}
+
+model EmployeeLoginLog {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  success    Boolean
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([createdAt])
 }

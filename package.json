@@ -12,6 +12,7 @@
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
     "lint": "next lint",
+    "seed:admin": "dotenv -e .env -- tsx prisma/seed-admin.ts",
     "electron": "electron .",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "electron-builder --win --x64"
@@ -114,6 +115,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "concurrently": "^9.2.1",
+    "tsx": "^4.19.2",
     "dotenv-cli": "^11.0.0",
     "electron": "^40.6.1",
     "electron-builder": "^24.13.3",
