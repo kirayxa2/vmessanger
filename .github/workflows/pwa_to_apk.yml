@@ -124,6 +124,8 @@ jobs:
               <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
               <application
                   android:label="@string/app_name"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
                   android:allowBackup="true">
                   <activity
                       android:name="com.vortexmessenger.app.MainActivity"
@@ -144,6 +146,7 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="colorPrimary">#1c242f</color>
+              <color name="ic_launcher_background">#1c242f</color>
           </resources>
           EOF
 
@@ -158,6 +161,18 @@ jobs:
               </string>
           </resources>
           EOF
+
+          # Adaptive icon XML (Android 8+) — ссылается на foreground/background,
+          # которые сгенерируем ниже из public/icon-512x512.png
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background" />
+              <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
 
           # MainActivity с WebView + полная поддержка file chooser
           cat > android/app/src/main/java/com/vortexmessenger/app/MainActivity.java << 'EOF'
@@ -410,6 +425,60 @@ jobs:
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
+
+      - name: Generate app icon from public/icon-512x512.png
+        run: |
+          set -e
+          python3 -m pip install --quiet Pillow
+          python3 << 'PYEOF'
+          from PIL import Image, ImageDraw
+          import os
+
+          src = Image.open('public/icon-512x512.png').convert('RGBA')
+
+          densities = {
+              'mdpi': 48,
+              'hdpi': 72,
+              'xhdpi': 96,
+              'xxhdpi': 144,
+              'xxxhdpi': 192,
+          }
+          adaptive_densities = {
+              'mdpi': 108,
+              'hdpi': 162,
+              'xhdpi': 216,
+              'xxhdpi': 324,
+              'xxxhdpi': 432,
+          }
+
+          base = 'android/app/src/main/res'
+
+          # Legacy square + round launcher icons (Android < 8 fallback)
+          for density, size in densities.items():
+              d = os.path.join(base, f'mipmap-{density}')
+              os.makedirs(d, exist_ok=True)
+              resized = src.resize((size, size), Image.LANCZOS)
+              resized.save(os.path.join(d, 'ic_launcher.png'))
+
+              mask = Image.new('L', (size, size), 0)
+              ImageDraw.Draw(mask).ellipse((0, 0, size, size), fill=255)
+              round_img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+              round_img.paste(resized, (0, 0), mask)
+              round_img.save(os.path.join(d, 'ic_launcher_round.png'))
+
+          # Adaptive icon foreground layer (Android 8+, background comes from colors.xml)
+          for density, size in adaptive_densities.items():
+              d = os.path.join(base, f'mipmap-{density}')
+              os.makedirs(d, exist_ok=True)
+              fg = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+              target = int(size * 0.55)  # safe zone — отступ от краёв, чтобы не обрезалось круглым лаунчером
+              icon_resized = src.resize((target, target), Image.LANCZOS)
+              offset = ((size - target) // 2, (size - target) // 2)
+              fg.paste(icon_resized, offset, icon_resized)
+              fg.save(os.path.join(d, 'ic_launcher_foreground.png'))
+
+          print("Icons generated")
+          PYEOF
 
       - name: Install Gradle 8.2
         uses: gradle/actions/setup-gradle@v3
