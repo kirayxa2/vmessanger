@@ -579,6 +579,24 @@ app.prepare().then(() => {
       socket.to(String(data.conversationId)).emit("user-stop-typing", data)
     })
 
+    // ── Draft handoff: черновик печатается на одном устройстве → подтягивается на всех других
+    // сессиях этого же пользователя (телефон ↔ десктоп). Сам текст не храним на сервере —
+    // это лёгкий realtime-relay, персистентное хранение черновика уже есть через /api/drafts.
+    socket.on("draft-sync", (data) => {
+      if (!data || !data.conversationId) return
+      const text = typeof data.text === "string" ? data.text.slice(0, 4096) : ""
+      const sockets = userSockets.get(currentUserId)
+      if (!sockets) return
+      sockets.forEach(sid => {
+        if (sid === socket.id) return // не шлём сами себе
+        io.to(sid).emit("draft-sync", {
+          conversationId: String(data.conversationId),
+          text,
+          updatedAt: Date.now(),
+        })
+      })
+    })
+
     // ── @mentions: notify mentioned users ──
     socket.on("mention", async (data) => {
       // data: { mentionedUserIds: number[], conversationId, messageId }

@@ -543,6 +543,35 @@ useEffect(() => {
     return () => clearTimeout(timer)
   }, [input, apiId])
 
+  // ── Draft handoff: печатаем на одном устройстве → черновик подтягивается на других сессиях (телефон ↔ десктоп) ──
+  const draftSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const receivingDraftRef = useRef(false) // чтобы не отправлять draft-sync в ответ на пришедший draft-sync
+  useEffect(() => {
+    if (isInitialLoad.current) return
+    if (!socket) return
+    if (receivingDraftRef.current) { receivingDraftRef.current = false; return }
+    if (draftSyncTimerRef.current) clearTimeout(draftSyncTimerRef.current)
+    draftSyncTimerRef.current = setTimeout(() => {
+      socket.emit("draft-sync", { conversationId: String(apiId), text: input })
+    }, 400)
+    return () => { if (draftSyncTimerRef.current) clearTimeout(draftSyncTimerRef.current) }
+  }, [input, apiId, socket])
+
+  // Входящий черновик с другого устройства — подставляем только если поле ввода сейчас не в фокусе
+  // (чтобы не перебивать активный ввод на этом устройстве) или если оно пусто
+  useEffect(() => {
+    if (!socket) return
+    const handleDraftSync = (data: { conversationId: string; text: string }) => {
+      if (String(data.conversationId) !== String(apiId)) return
+      const isInputFocused = document.activeElement === inputRef.current
+      if (isInputFocused && input.trim()) return // не перебиваем активный ввод
+      receivingDraftRef.current = true
+      setInput(data.text || "")
+    }
+    socket.on("draft-sync", handleDraftSync)
+    return () => { socket.off("draft-sync", handleDraftSync) }
+  }, [socket, apiId, input])
+
   // Socket listeners
   useEffect(() => {
     if (!socket) return
@@ -1633,7 +1662,10 @@ useEffect(() => {
               return items.map(item => {
                 if (item.kind === 'divider') {
                   return (
-                    <div key={item.key} className="flex justify-center my-3 pointer-events-none select-none">
+                    <div
+                      key={item.key}
+                      className="sticky top-0 z-20 flex justify-center my-3 pointer-events-none select-none"
+                    >
                       <motion.div
                         initial={{ opacity: 0, scale: 0.82, y: -6 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
