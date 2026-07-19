@@ -71,9 +71,11 @@ interface ChatWindowProps {
   initialMessages?: Message[]
   onNewMessage?: (message: Message) => void
   conversation?: any
+  zenMode?: boolean
+  onToggleZen?: () => void
 }
 
-export default function ChatWindow({ conversationId, realConversationId, onBack, onDeleteChat, initialMessages, onNewMessage, conversation }: ChatWindowProps) {
+export default function ChatWindow({ conversationId, realConversationId, onBack, onDeleteChat, initialMessages, onNewMessage, conversation, zenMode, onToggleZen }: ChatWindowProps) {
   const apiId = realConversationId ?? conversationId
   const { data: session } = useSession()
   const { t } = useTranslation()
@@ -102,6 +104,19 @@ export default function ChatWindow({ conversationId, realConversationId, onBack,
   
   // ── Kinetic scrolling ──
   useKineticScroll(scrollContainerRef, true)
+
+  // ── Дзен-режим: Ctrl/Cmd + . переключает режим фокуса в этом окне чата ──
+  useEffect(() => {
+    if (!onToggleZen) return
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === ".") {
+        e.preventDefault()
+        onToggleZen()
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [onToggleZen])
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
@@ -1449,6 +1464,8 @@ useEffect(() => {
           isOtherUserDev={isOtherUserDev}
           conversation={conversation}
           isMuted={!!conversation?._isMuted}
+          zenMode={zenMode}
+          onToggleZen={onToggleZen}
           onBack={onBack}
           onProfileClick={() => setShowProfile(p => !p)}
           onSearchClick={() => setShowSearch(true)}
@@ -1540,7 +1557,7 @@ useEffect(() => {
             </div>
           )}
           {loading && messages.length === 0 && <MessagesSkeleton />}
-          <div className="flex flex-col w-full max-w-[728px] mx-auto">
+          <div className={`flex flex-col w-full mx-auto transition-[max-width] duration-300 ${zenMode ? "max-w-[560px]" : "max-w-[728px]"}`}>
             {isSystemChat && messages.map((msg, idx) => (
               <motion.div key={msg.id.toString()} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.04, duration: 0.22 }} className="mb-3 mx-auto w-full max-w-[560px]">
@@ -1779,7 +1796,7 @@ useEffect(() => {
             </AnimatePresence>
 
             {/* Main input row */}
-            <div className="flex items-end gap-2 w-full max-w-[728px] mx-auto">
+            <div className={`flex items-end gap-2 w-full mx-auto transition-[max-width] duration-300 ${zenMode ? "max-w-[560px]" : "max-w-[728px]"}`}>
               {/* Paperclip */}
               <div
                 className="relative w-12 h-12 rounded-full shrink-0 flex items-center justify-center text-gray-400"

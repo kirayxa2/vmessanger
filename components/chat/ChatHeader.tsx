@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowLeft, Search, EllipsisVertical, Phone, Bookmark, BellOff, BellRing, Trash2, X } from "lucide-react"
+import { ArrowLeft, Search, EllipsisVertical, Phone, Bookmark, BellOff, BellRing, Trash2, X, Feather } from "lucide-react"
 import { VerifiedBadge } from "../VerifiedBadge"
 import TitleBadge from "../TitleBadge"
 
@@ -21,6 +21,8 @@ interface ChatHeaderProps {
   isOtherUserDev: boolean
   conversation: any
   isMuted?: boolean
+  zenMode?: boolean
+  onToggleZen?: () => void
   onBack?: () => void
   onProfileClick: () => void
   onSearchClick: () => void
@@ -73,7 +75,7 @@ function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCance
 export default function ChatHeader({
   chatTitle, isSavedChat, isSystemChat, isGroupChat, isSpecialChat,
   otherUser, otherUserAvatar, otherUserOnline, isOtherTyping, isOtherUserDev,
-  conversation, isMuted, onBack, onProfileClick, onSearchClick, onCallClick,
+  conversation, isMuted, zenMode, onToggleZen, onBack, onProfileClick, onSearchClick, onCallClick,
   onMute, onClearChat, onDeleteChat, t
 }: ChatHeaderProps) {
   const headerLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -85,6 +87,30 @@ export default function ChatHeader({
   const [clearForBoth, setClearForBoth] = useState(false)
 
   const otherName = otherUser?.displayName || otherUser?.username || chatTitle
+
+  // ── Дзен-режим: минималистичный хедер — только имя по центру ──
+  if (zenMode) {
+    return (
+      <div
+        className="flex items-center justify-center h-9 relative shrink-0"
+        style={{ backgroundColor: "transparent" }}
+      >
+        <span className="text-[12px] text-gray-500 truncate max-w-[60%] select-none">
+          {isSystemChat ? "Vortex" : isSavedChat ? t('saved_messages') : chatTitle}
+        </span>
+        {onToggleZen && (
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={onToggleZen}
+            title="Выйти из дзен-режима"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-300 transition-colors p-1"
+          >
+            <Feather size={14} />
+          </motion.button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -210,6 +236,17 @@ export default function ChatHeader({
           className="hidden sm:flex hover:text-white transition-colors p-2 rounded-full hover:bg-white/5">
           <Search size={20} />
         </motion.button>
+
+        {onToggleZen && (
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={onToggleZen}
+            title="Дзен-режим"
+            className="hidden md:flex hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
+          >
+            <Feather size={20} />
+          </motion.button>
+        )}
 
         {/* Three dots menu */}
         <div className="relative">

@@ -72,6 +72,10 @@ export default function HomePage({ conversationId }: { conversationId?: string }
 
   const [mobileTab, setMobileTab] = useState<"chats" | "settings" | "profile">("chats")
 
+  // ── Дзен-режим (только desktop): прячем сайдбар, сжимаем хедер чата ──
+  const [zenMode, setZenMode] = useState(false)
+  const toggleZenMode = useCallback(() => setZenMode(v => !v), [])
+
   // ── Sidebar resize state ────────────────────────────────────
   const MIN_SIDEBAR_WIDTH = 340
   const MAX_SIDEBAR_WIDTH = 520
@@ -451,20 +455,24 @@ export default function HomePage({ conversationId }: { conversationId?: string }
     return (
       <div className="flex h-[100dvh] w-full bg-[var(--background)] overflow-hidden fixed inset-0">
         <OfflineBanner />
-        <div 
+        <motion.div
           className="h-full flex flex-col shrink-0 overflow-hidden bg-[var(--sidebar-bg)] border-r border-white/5 relative"
-          style={{ width: `${sidebarWidth}px` }}
+          animate={{ width: zenMode ? 0 : sidebarWidth, opacity: zenMode ? 0 : 1 }}
+          transition={{ type: "spring", stiffness: 340, damping: 34 }}
+          style={{ pointerEvents: zenMode ? "none" : "auto" }}
         >
-          <TitleBar />
-          <ChatSidebar
-            currentUser={session?.user}
-            conversations={conversations}
-            selectedId={selectedId}
-            unreadCounts={unreadCounts}
-            onSelect={handleSelectConversation}
-            onConversationCreated={handleConversationCreated}
-          />
-          
+          <div style={{ width: `${sidebarWidth}px` }} className="h-full flex flex-col">
+            <TitleBar />
+            <ChatSidebar
+              currentUser={session?.user}
+              conversations={conversations}
+              selectedId={selectedId}
+              unreadCounts={unreadCounts}
+              onSelect={handleSelectConversation}
+              onConversationCreated={handleConversationCreated}
+            />
+          </div>
+
           {/* Resize handle */}
           <div 
             onMouseDown={handleResizeStart}
@@ -475,7 +483,7 @@ export default function HomePage({ conversationId }: { conversationId?: string }
           >
             <div className="absolute inset-y-0 -right-1 w-3" /> {/* Wider hit area */}
           </div>
-        </div>
+        </motion.div>
         
         <div className="flex-1 flex flex-col relative h-full overflow-hidden bg-[var(--background)]">
           {selectedId ? (
@@ -488,6 +496,8 @@ export default function HomePage({ conversationId }: { conversationId?: string }
               onDeleteChat={() => { setSelectedId(null) }}
               initialMessages={messagesCache[selectedId] || []}
               onNewMessage={() => {}}
+              zenMode={zenMode}
+              onToggleZen={toggleZenMode}
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-10 tg-bg">
