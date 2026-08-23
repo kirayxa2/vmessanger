@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { LogOut, Plus, Trash2, Pencil, Loader2, KeyRound, X, Users } from "lucide-react"
+import { LogOut, Plus, Trash2, Pencil, Loader2, KeyRound, X, Users, ShieldAlert } from "lucide-react"
 
 const ACCENT = "var(--accent, #7e85e1)"
 
@@ -25,6 +25,7 @@ export default function AdminDashboard({ adminName }: { adminName: string }) {
   const [error, setError] = useState("")
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Employee | null>(null)
+  const [deletingAll, setDeletingAll] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -50,6 +51,22 @@ export default function AdminDashboard({ adminName }: { adminName: string }) {
       setEmployees(prev => prev.filter(e => e.id !== id))
     } catch {
       alert("Не удалось удалить сотрудника")
+    }
+  }
+
+  const handleDeleteAll = async () => {
+    if (employees.length === 0) return
+    if (!confirm(`Удалить ВСЕХ сотрудников (${employees.length})? Это действие необратимо.`)) return
+    if (!confirm("Вы точно уверены? Все аккаунты сотрудников будут удалены безвозвратно.")) return
+    setDeletingAll(true)
+    try {
+      const res = await fetch("/api/admin/employees", { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      setEmployees([])
+    } catch {
+      alert("Не удалось удалить сотрудников")
+    } finally {
+      setDeletingAll(false)
     }
   }
 
@@ -102,6 +119,16 @@ export default function AdminDashboard({ adminName }: { adminName: string }) {
             style={{ background: ACCENT }}
           >
             <Plus size={16} /> Добавить
+          </button>
+          <button
+            onClick={handleDeleteAll}
+            disabled={deletingAll || employees.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm text-red-300 transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.25)" }}
+            title="Удалить всех сотрудников"
+          >
+            {deletingAll ? <Loader2 size={16} className="animate-spin" /> : <ShieldAlert size={16} />}
+            Удалить всех
           </button>
           <button
             onClick={handleSignOut}

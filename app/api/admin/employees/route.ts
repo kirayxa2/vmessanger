@@ -103,3 +103,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal error" }, { status: 500 })
   }
 }
+
+// DELETE — удалить ВСЕХ сотрудников организации (вместе со связанными User-аккаунтами)
+export async function DELETE() {
+  const session = await getAdminSession()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  try {
+    const employees = await prisma.employee.findMany({ select: { userId: true } })
+    const userIds = employees.map((e) => e.userId)
+
+    if (userIds.length > 0) {
+      // Каскад в схеме удалит Employee при удалении User (onDelete: Cascade на Employee.user)
+      await prisma.user.deleteMany({ where: { id: { in: userIds } } })
+    }
+
+    return NextResponse.json({ success: true, deleted: userIds.length })
+  } catch (error) {
+    console.error("Delete all employees error:", error)
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+  }
+}
