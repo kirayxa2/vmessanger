@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { LogOut, Plus, Trash2, Pencil, Loader2, KeyRound, X, Users, ShieldAlert } from "lucide-react"
+import { LogOut, Plus, Trash2, Pencil, Loader2, KeyRound, X, Users, ShieldAlert, Circle } from "lucide-react"
 
 const ACCENT = "var(--accent, #7e85e1)"
 
@@ -101,7 +101,8 @@ export default function AdminDashboard({ adminName }: { adminName: string }) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-10">
+    <div className="max-w-7xl mx-auto px-4 py-8 sm:py-10 grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
+    <div>
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `${ACCENT}22` }}>
@@ -216,6 +217,9 @@ export default function AdminDashboard({ adminName }: { adminName: string }) {
           />
         )}
       </AnimatePresence>
+    </div>
+
+    <LiveWidget />
     </div>
   )
 }
@@ -333,6 +337,123 @@ function Field({
         className={`w-full px-4 py-3 rounded-xl outline-none text-white text-[14px] transition-all placeholder-gray-600 focus:ring-2 focus:border-transparent ${mono ? "font-mono" : ""}`}
         style={{ background: "#0e1621", border: "1px solid rgba(255,255,255,0.1)", ...({ "--tw-ring-color": ACCENT } as any) }}
       />
+    </div>
+  )
+}
+
+type LiveEmployee = {
+  employeeId: number
+  userId: number
+  fullName: string
+  login: string
+  position: string | null
+  avatar: string | null
+  online: boolean
+  lastSeen: string | null
+  idleMinutes: number | null
+}
+
+function formatIdle(min: number | null) {
+  if (min === null) return "никогда не был на связи"
+  if (min < 1) return "только что был онлайн"
+  if (min < 60) return `${min} мин назад`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h} ч назад`
+  const d = Math.floor(h / 24)
+  return `${d} д назад`
+}
+
+function LiveWidget() {
+  const [data, setData] = useState<{ total: number; onlineCount: number; employees: LiveEmployee[] } | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/live-stats")
+      if (!res.ok) return
+      const json = await res.json()
+      setData(json)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    load()
+    const interval = setInterval(load, 5000)
+    return () => clearInterval(interval)
+  }, [load])
+
+  const online = data?.employees.filter(e => e.online) ?? []
+  const offline = data?.employees.filter(e => !e.online) ?? []
+
+  return (
+    <div
+      className="sticky top-8 rounded-2xl overflow-hidden"
+      style={{ background: "rgba(23,27,38,0.7)", border: "1px solid rgba(255,255,255,0.08)" }}
+    >
+      <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div>
+          <h2 className="text-sm font-semibold text-white">Сотрудники онлайн</h2>
+          <p className="text-[11px] text-gray-500">Обновляется автоматически</p>
+        </div>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: "rgba(74,222,128,0.12)" }}>
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#4ade80" }} />
+          <span className="text-xs font-semibold" style={{ color: "#4ade80" }}>
+            {data ? data.onlineCount : "—"}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4">
+        {!data ? (
+          <div className="flex items-center justify-center py-6"><Loader2 className="animate-spin text-gray-500" size={18} /></div>
+        ) : online.length === 0 ? (
+          <p className="text-xs text-gray-500 text-center py-3">Сейчас никто не в сети</p>
+        ) : (
+          <div className="space-y-2 mb-1">
+            <AnimatePresence>
+              {online.map(emp => (
+                <motion.div
+                  key={emp.userId}
+                  layout
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  className="flex items-center gap-2.5"
+                >
+                  <div className="relative shrink-0">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: ACCENT }}>
+                      {emp.fullName.slice(0, 1).toUpperCase()}
+                    </div>
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2" style={{ background: "#4ade80", borderColor: "#171b26" }} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-white truncate">{emp.fullName}</p>
+                    <p className="text-[10.5px] text-gray-500 truncate">{emp.position || emp.login}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {offline.length > 0 && (
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-[10.5px] font-medium text-gray-500 mb-2 flex items-center gap-1.5">
+              <Circle size={6} fill="currentColor" /> Не в сети
+            </p>
+            <div className="space-y-1.5">
+              {offline.slice(0, 6).map(emp => (
+                <div key={emp.userId} className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-400 truncate">{emp.fullName}</span>
+                  <span className="text-[10px] text-gray-600 shrink-0">{formatIdle(emp.idleMinutes)}</span>
+                </div>
+              ))}
+              {offline.length > 6 && (
+                <p className="text-[10.5px] text-gray-600">+{offline.length - 6} ещё</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
