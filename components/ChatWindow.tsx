@@ -2128,13 +2128,15 @@ useEffect(() => {
             />
           ) : (
             <UserProfilePanel
-              userId={otherUser?.id}
-              username={otherUser?.username}
-              avatar={otherUserAvatar || otherUser?.avatar}
+              userId={isSavedChat ? (session?.user?.id ?? null) : otherUser?.id}
+              username={isSavedChat ? (session?.user?.name || undefined) : otherUser?.username}
+              avatar={isSavedChat ? (session?.user?.image || undefined) : (otherUserAvatar || otherUser?.avatar)}
               isOnline={otherUserOnline}
               onClose={() => setShowProfile(false)}
               isMobile={typeof window !== "undefined" && window.innerWidth < 768}
               conversationId={apiId}
+              isSavedChat={isSavedChat}
+              isSystemChat={isSystemChat}
             />
           )
         )}

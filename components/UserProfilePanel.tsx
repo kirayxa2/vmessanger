@@ -6,6 +6,7 @@ import { ArrowLeft, AtSign, Info, MessageCircle, BellOff, Phone, Video, QrCode, 
 import { QRCodeSVG } from "qrcode.react"
 import { useTranslation } from "react-i18next"
 import { useRouter } from "next/navigation"
+import { VORTEX_FAKE_PHONE } from "@/lib/fakePhone"
 
 const ACCENT = "var(--accent, #7e85e1)"
 
@@ -18,6 +19,10 @@ interface UserProfilePanelProps {
   isMobile?: boolean
   /** If provided, clicking "Chat" navigates to this conversation */
   conversationId?: string | number
+  /** Избранное (сам себе) — без звонков, данные берутся из текущей сессии */
+  isSavedChat?: boolean
+  /** Системный чат Vortex — без звонков */
+  isSystemChat?: boolean
 }
 
 export default function UserProfilePanel({
@@ -28,6 +33,8 @@ export default function UserProfilePanel({
   onClose,
   isMobile,
   conversationId,
+  isSavedChat,
+  isSystemChat,
 }: UserProfilePanelProps) {
   const [profile, setProfile] = useState<{ bio?: string; createdAt?: string } | null>(null)
   const [loading, setLoading] = useState(false)
@@ -36,15 +43,17 @@ export default function UserProfilePanel({
   const { t } = useTranslation()
   const router = useRouter()
 
+  const isSpecialChat = !!(isSavedChat || isSystemChat)
+
   useEffect(() => {
-    if (!userId) return
+    if (!userId || isSpecialChat) return
     setLoading(true)
     fetch(`/api/users/profile?userId=${userId}`)
       .then(r => r.json())
       .then(d => setProfile(d))
       .catch(() => setProfile(null))
       .finally(() => setLoading(false))
-  }, [userId])
+  }, [userId, isSpecialChat])
 
   const handleChat = useCallback(() => {
     if (conversationId) {
@@ -53,21 +62,11 @@ export default function UserProfilePanel({
     }
   }, [conversationId, router, onClose])
 
-  const handleCall = useCallback(() => {
-    // Trigger audio call — same as ChatWindow's startCall("audio")
-    // Emit globally so ChatWindow can pick it up if open
-    window.dispatchEvent(new CustomEvent("vortex:start-call", { detail: { userId, type: "audio" } }))
-    onClose()
-  }, [userId, onClose])
-
-  const handleVideoCall = useCallback(() => {
-    window.dispatchEvent(new CustomEvent("vortex:start-call", { detail: { userId, type: "video" } }))
-    onClose()
-  }, [userId, onClose])
-
   const profileUrl = typeof window !== "undefined"
     ? `${window.location.origin}/${userId}`
     : `https://vortex.app/${userId}`
+
+  const displayName = isSavedChat ? t("saved_messages") : isSystemChat ? "Vortex" : username
 
   return (
     <motion.div
@@ -101,7 +100,7 @@ export default function UserProfilePanel({
             >
               {avatar
                 ? <img src={avatar} className="w-full h-full object-cover" alt="avatar" />
-                : username?.[0]?.toUpperCase()
+                : displayName?.[0]?.toUpperCase()
               }
             </div>
             {isOnline && (
@@ -112,10 +111,12 @@ export default function UserProfilePanel({
           {/* Name + username row with QR button */}
           <div className="flex items-center gap-2">
             <div className="text-center">
-              <h3 className="text-white font-bold text-[20px] leading-tight">{username}</h3>
-              <p className="text-[14px] mt-0.5" style={{ color: isOnline ? "#4ade80" : "#6b7280" }}>
-                {isOnline ? t("online") : t("offline")}
-              </p>
+              <h3 className="text-white font-bold text-[20px] leading-tight">{displayName}</h3>
+              {!isSpecialChat && (
+                <p className="text-[14px] mt-0.5" style={{ color: isOnline ? "#4ade80" : "#6b7280" }}>
+                  {isOnline ? t("online") : t("offline")}
+                </p>
+              )}
             </div>
             {/* QR mini-button */}
             <motion.button
@@ -128,7 +129,7 @@ export default function UserProfilePanel({
             </motion.button>
           </div>
 
-          {/* ── 4 action buttons (Telegram-style) ── */}
+          {/* ── Action buttons (Telegram-style) ── Звонки только для обычных юзеров, для Saved/System — только Chat + Mute ── */}
           <div className="flex gap-3 mt-3 w-full justify-center">
             {[
               {
@@ -143,16 +144,24 @@ export default function UserProfilePanel({
                 onClick: () => setMuted(p => !p),
                 active: muted,
               },
-              {
-                icon: <Phone size={22} />,
-                label: "Call",
-                onClick: handleCall,
-              },
-              {
-                icon: <Video size={22} />,
-                label: "Video",
-                onClick: handleVideoCall,
-              },
+              ...(!isSpecialChat ? [
+                {
+                  icon: <Phone size={22} />,
+                  label: "Call",
+                  onClick: () => {
+                    window.dispatchEvent(new CustomEvent("vortex:start-call", { detail: { userId, type: "audio" } }))
+                    onClose()
+                  },
+                },
+                {
+                  icon: <Video size={22} />,
+                  label: "Video",
+                  onClick: () => {
+                    window.dispatchEvent(new CustomEvent("vortex:start-call", { detail: { userId, type: "video" } }))
+                    onClose()
+                  },
+                },
+              ] : []),
             ].map(btn => (
               <motion.button
                 key={btn.label}
@@ -171,60 +180,51 @@ export default function UserProfilePanel({
           </div>
         </div>
 
-        {/* ── Bio + username — закруглённая карточка как в Telegram ── */}
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <div
-              className="w-5 h-5 border-2 rounded-full animate-spin"
-              style={{ borderColor: `${ACCENT} transparent transparent transparent` }}
-            />
-          </div>
-        ) : (
-          <div className="mx-4 my-4 rounded-2xl overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
-            {/* Username row */}
-            <div className="flex items-center gap-4 px-4 py-3.5 border-b border-white/5">
-              <AtSign size={18} style={{ color: ACCENT }} className="shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-white text-[15px] font-medium">@{username?.toLowerCase()}</p>
-                <p className="text-gray-500 text-[12px] mt-0.5">Username</p>
+        {/* ── Bio + username — закруглённая карточка как в Telegram (только для обычных юзеров) ── */}
+        {!isSpecialChat && (
+          loading ? (
+            <div className="flex justify-center py-8">
+              <div
+                className="w-5 h-5 border-2 rounded-full animate-spin"
+                style={{ borderColor: `${ACCENT} transparent transparent transparent` }}
+              />
+            </div>
+          ) : (
+            <div className="mx-4 my-4 rounded-2xl overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+              {/* Username row */}
+              <div className="flex items-center gap-4 px-4 py-3.5 border-b border-white/5">
+                <AtSign size={18} style={{ color: ACCENT }} className="shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-[15px] font-medium">@{username?.toLowerCase()}</p>
+                  <p className="text-gray-500 text-[12px] mt-0.5">Username</p>
+                </div>
+              </div>
+              {/* Bio row — всегда показываем, даже если пустой */}
+              <div className="flex items-start gap-4 px-4 py-3.5">
+                <Info size={18} style={{ color: ACCENT }} className="shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-[15px] leading-snug">
+                    {profile?.bio || <span className="text-gray-600 italic">No bio</span>}
+                  </p>
+                  <p className="text-gray-500 text-[12px] mt-0.5">Bio</p>
+                </div>
               </div>
             </div>
-            {/* Bio row — всегда показываем, даже если пустой */}
-            <div className="flex items-start gap-4 px-4 py-3.5">
-              <Info size={18} style={{ color: ACCENT }} className="shrink-0 mt-0.5" />
+          )
+        )}
+
+        {/* ── Фейковый номер для Vortex — просто для вида в профиле системного чата ── */}
+        {isSystemChat && (
+          <div className="mx-4 my-4 rounded-2xl overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+            <div className="flex items-center gap-4 px-4 py-3.5">
+              <Phone size={18} style={{ color: ACCENT }} className="shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-white text-[15px] leading-snug">
-                  {profile?.bio || <span className="text-gray-600 italic">No bio</span>}
-                </p>
-                <p className="text-gray-500 text-[12px] mt-0.5">Bio</p>
+                <p className="text-white text-[15px] font-medium">{VORTEX_FAKE_PHONE}</p>
+                <p className="text-gray-500 text-[12px] mt-0.5">Телефон</p>
               </div>
             </div>
           </div>
         )}
-
-        {/* ── Media tabs ── */}
-        <div className="flex border-b border-white/5">
-          {["Posts", "Media", "Files", "Links"].map((tab, i) => (
-            <button
-              key={tab}
-              className={`flex-1 py-3 text-[13px] font-medium transition-colors ${i === 0 ? "border-b-2" : ""}`}
-              style={i === 0 ? { color: ACCENT, borderColor: ACCENT } : { color: "#6b7280" }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-          <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mb-3">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
-          </div>
-          <p className="text-gray-600 text-[13px]">No media yet</p>
-        </div>
       </div>
 
       {/* ── QR modal overlay ── */}
@@ -260,7 +260,7 @@ export default function UserProfilePanel({
                 <div className="w-16 h-16 rounded-full border-4 border-white overflow-hidden shadow-lg bg-white flex items-center justify-center">
                   {avatar
                     ? <img src={avatar} className="w-full h-full object-cover" alt="avatar" />
-                    : <span className="text-2xl font-bold" style={{ color: ACCENT }}>{username?.[0]?.toUpperCase()}</span>
+                    : <span className="text-2xl font-bold" style={{ color: ACCENT }}>{displayName?.[0]?.toUpperCase()}</span>
                   }
                 </div>
 
@@ -279,13 +279,13 @@ export default function UserProfilePanel({
                     } : undefined}
                   />
                   <p className="mt-4 text-[15px] font-bold tracking-tight text-gray-800">
-                    @{username?.toUpperCase()}
+                    {displayName?.toUpperCase()}
                   </p>
                 </div>
               </div>
 
               <p className="text-gray-500 text-[13px] text-center leading-relaxed px-4">
-                Scan this code to open {username}&apos;s profile in Vortex
+                Scan this code to open {displayName}&apos;s profile in Vortex
               </p>
             </div>
           </motion.div>

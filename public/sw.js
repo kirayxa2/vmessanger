@@ -104,3 +104,52 @@ self.addEventListener("fetch", (event) => {
     return
   }
 })
+
+// ── Push-уведомления (Android/desktop — системный баннер, как в Telegram) ──
+self.addEventListener("push", (event) => {
+  if (!event.data) return
+
+  let payload = {}
+  try {
+    payload = event.data.json()
+  } catch (e) {
+    payload = { title: "Vortex", body: event.data.text() }
+  }
+
+  const title = payload.title || "Новое сообщение"
+  const options = {
+    body: payload.body || "",
+    icon: payload.icon || "/icon-192x192.png",
+    badge: "/icon-192x192.png",
+    image: payload.image || undefined,
+    tag: payload.tag || "vortex-message",
+    renotify: true,
+    vibrate: [100, 50, 100],
+    data: {
+      url: payload.url || "/",
+      conversationId: payload.conversationId || null,
+    },
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+// Клик по уведомлению — открываем/фокусируем нужный чат
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close()
+  const targetUrl = event.notification.data?.url || "/"
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) {
+          client.navigate(targetUrl)
+          return client.focus()
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl)
+      }
+    })
+  )
+})

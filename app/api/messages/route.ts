@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth/authOptions"
 import { messageLimiter } from "@/lib/rateLimiter"
+import { sendPushToUser } from "@/lib/push"
 
 const messageInclude = {
   sender: { select: { id: true, username: true, avatar: true } },
@@ -100,6 +101,39 @@ export async function POST(req: NextRequest) {
       },
       include: messageInclude
     })
+
+    // ── Push-уведомление остальным участникам чата (не отправителю, не в чатах с отложенной отправкой) ──
+    if (!scheduledAtDate) {
+      const otherParticipants = await prisma.conversationParticipant.findMany({
+        where: {
+          conversationId: Number(conversationId),
+          userId: { not: Number(session.user.id) },
+          isMuted: false,
+        },
+        select: { userId: true },
+      })
+
+      const previewText = hasText
+        ? content.slice(0, 120)
+        : hasVoice ? "🎤 Голосовое сообщение"
+        : hasFile ? `📎 ${fileName || "Файл"}`
+        : "Новое сообщение"
+
+      const senderName = message.sender?.username || "Vortex"
+
+      await Promise.all(
+        otherParticipants.map((p) =>
+          sendPushToUser(p.userId, {
+            title: senderName,
+            body: message.isEncrypted ? "🔒 Новое зашифрованное сообщение" : previewText,
+            icon: message.sender?.avatar || "/icon-192x192.png",
+            url: `/${conversationId}`,
+            conversationId: Number(conversationId),
+            tag: `conversation-${conversationId}`,
+          }).catch((err) => console.error("[push] failed for user", p.userId, err))
+        )
+      )
+    }
 
     return NextResponse.json({ ...message, conversationId: message.conversationId })
   } catch (error) {

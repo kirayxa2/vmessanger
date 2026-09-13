@@ -34,6 +34,67 @@ function SocketManager({ children, socket }: { children: React.ReactNode, socket
     }
   }, [socket, session?.user?.id]);
 
+  // Регистрация push-подписки (как в Telegram: системные уведомления о новых сообщениях)
+  useEffect(() => {
+    if (!session?.user?.id) return
+    if (typeof window === "undefined") return
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return
+
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+    if (!vapidPublicKey) return
+
+    let cancelled = false
+
+    function urlBase64ToUint8Array(base64String: string) {
+      const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+      const rawData = window.atob(base64)
+      const outputArray = new Uint8Array(rawData.length)
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i)
+      }
+      return outputArray
+    }
+
+    (async () => {
+      try {
+        // Запрашиваем разрешение на уведомления, если ещё не спросили
+        if (Notification.permission === "default") {
+          const permission = await Notification.requestPermission()
+          if (permission !== "granted") return
+        }
+        if (Notification.permission !== "granted") return
+
+        const registration = await navigator.serviceWorker.register("/sw.js")
+        await navigator.serviceWorker.ready
+        if (cancelled) return
+
+        let subscription = await registration.pushManager.getSubscription()
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+          })
+        }
+        if (cancelled) return
+
+        const subJson = subscription.toJSON()
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: subJson.endpoint,
+            keys: subJson.keys,
+          }),
+        })
+      } catch (err) {
+        console.error("[push] subscription failed:", err)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [session?.user?.id])
+
   return <>{children}</>;
 }
 
