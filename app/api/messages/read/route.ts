@@ -13,6 +13,16 @@ export async function POST(req: NextRequest) {
 
     const userId = Number(session.user.id)
 
+    // SECURITY: без этой проверки любой авторизованный пользователь мог подсунуть
+    // conversationId чужого чата и пометить его сообщения как прочитанные (порча read receipts
+    // и создание MessageRead записей от чужого имени).
+    const participant = await prisma.conversationParticipant.findUnique({
+      where: { userId_conversationId: { userId, conversationId: Number(conversationId) } }
+    })
+    if (!participant) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const unreadMessages = await prisma.message.findMany({
       where: {
         conversationId: Number(conversationId),

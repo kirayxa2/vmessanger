@@ -157,7 +157,7 @@ jobs:
               <string name="asset_statements">
                   [{"relation": ["delegate_permission/common.handle_all_urls"],
                   "target": {"namespace": "web",
-                  "site": "https://vmessanger-production.up.railway.app"}}]
+                  "site": "https://vmessanger.onrender.com"}}]
               </string>
           </resources>
           EOF
@@ -475,6 +475,32 @@ jobs:
               icon_resized = src.resize((target, target), Image.LANCZOS)
               offset = ((size - target) // 2, (size - target) // 2)
               fg.paste(icon_resized, offset, icon_resized)
+
+              # Небольшие декоративные точки по углам — оттенки фонового цвета (темнее/светлее), как градиент
+              draw = ImageDraw.Draw(fg)
+              dot_r = max(2, int(size * 0.02))
+              margin = int(size * 0.20)
+              # Базовый фон иконки #1c242f — берём его за основу градиента точек
+              base_r, base_g, base_b = 0x1c, 0x24, 0x2f
+
+              def shade(factor):
+                  # factor < 1 — темнее фона, factor > 1 — светлее фона
+                  r = max(0, min(255, int(base_r * factor)))
+                  g = max(0, min(255, int(base_g * factor)))
+                  b = max(0, min(255, int(base_b * factor)))
+                  return (r, g, b, 130)
+
+              dot_specs = [
+                  ((margin, margin), shade(0.55)),                # темнее фона
+                  ((size - margin, margin), shade(1.9)),          # светлее фона
+                  ((margin, size - margin), shade(1.25)),         # чуть светлее фона
+              ]
+              for (cx, cy), color in dot_specs:
+                  draw.ellipse(
+                      (cx - dot_r, cy - dot_r, cx + dot_r, cy + dot_r),
+                      fill=color,
+                  )
+
               fg.save(os.path.join(d, 'ic_launcher_foreground.png'))
 
           print("Icons generated")

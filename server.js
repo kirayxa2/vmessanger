@@ -325,10 +325,21 @@ app.prepare().then(() => {
           // Confirm to sender: replace temp with real message
           socket.emit("message-confirmed", { tempId: data.tempId, message: saved })
 
+          // SECURITY: participantIds больше НЕ берём из data (данные клиента) — только из БД.
+          // Раньше сервер рассылал new-message по data.participantIds, присланному клиентом,
+          // без проверки — это позволяло любому пользователю указать чужой userId и получить
+          // чужие сообщения в реальном времени. Теперь список получателей — только реальные
+          // участники этого разговора согласно базе данных.
+          const realParticipants = await prisma.conversationParticipant.findMany({
+            where: { conversationId: Number(data.conversationId) },
+            select: { userId: true },
+          })
+          const realParticipantIds = realParticipants.map(p => String(p.userId))
+
           // Получаем полный объект conversation один раз — пригодится для new-conversation
           // (на случай если у получателя чата ещё нет в sidebar)
           let fullConversation = null
-          if (Array.isArray(data.participantIds) && data.participantIds.length > 0) {
+          if (realParticipantIds.length > 0) {
             try {
               fullConversation = await prisma.conversation.findUnique({
                 where: { id: Number(data.conversationId) },
@@ -346,28 +357,26 @@ app.prepare().then(() => {
 
           // Deliver to other participants — also ensure they join the room
           socket.to(roomId).emit("new-message", saved)
-          if (Array.isArray(data.participantIds)) {
-            data.participantIds.forEach(uid => {
-              if (String(uid) !== currentUserId) {
-                // Add their sockets to the room so future broadcasts work
-                const theirSockets = userSockets.get(String(uid))
-                if (theirSockets) {
-                  theirSockets.forEach(sid => {
-                    const s = io.sockets.sockets.get(sid)
-                    if (s) s.join(roomId)
-                  })
-                }
-                // Гарантируем что чат появится у получателя в sidebar — даже если
-                // он первый раз слышит о нём (handleNewConversation в page.tsx
-                // защищён от дубликатов).
-                if (fullConversation) {
-                  emitToUser(uid, "new-conversation", fullConversation)
-                }
-                emitToUser(uid, "new-message", saved)
-                emitToUser(uid, "conversation-updated", { conversationId: roomId, lastMessage: saved })
+          realParticipantIds.forEach(uid => {
+            if (uid !== currentUserId) {
+              // Add their sockets to the room so future broadcasts work
+              const theirSockets = userSockets.get(uid)
+              if (theirSockets) {
+                theirSockets.forEach(sid => {
+                  const s = io.sockets.sockets.get(sid)
+                  if (s) s.join(roomId)
+                })
               }
-            })
-          }
+              // Гарантируем что чат появится у получателя в sidebar — даже если
+              // он первый раз слышит о нём (handleNewConversation в page.tsx
+              // защищён от дубликатов).
+              if (fullConversation) {
+                emitToUser(uid, "new-conversation", fullConversation)
+              }
+              emitToUser(uid, "new-message", saved)
+              emitToUser(uid, "conversation-updated", { conversationId: roomId, lastMessage: saved })
+            }
+          })
           // Notify sender sidebar too
           socket.emit("conversation-updated", { conversationId: roomId, lastMessage: saved })
 
@@ -457,22 +466,28 @@ app.prepare().then(() => {
       }
 
       // ── Legacy path: message already saved via HTTP POST, just broadcast ──
+      // SECURITY: как и выше, получателей берём из БД, а не из данных клиента.
+      // Сообщение уже сохранено через HTTP POST /api/messages, где senderId проверяется
+      // через сессию — здесь нужно лишь безопасно разослать его реальным участникам.
       const payload = { ...data, conversationId: roomId }
       socket.to(roomId).emit("new-message", payload)
-      if (Array.isArray(data.participantIds)) {
-        data.participantIds.forEach(uid => {
-          if (String(uid) !== currentUserId) {
+      try {
+        const legacyParticipants = await prisma.conversationParticipant.findMany({
+          where: { conversationId: Number(data.conversationId) },
+          select: { userId: true },
+        })
+        legacyParticipants.forEach(p => {
+          const uid = String(p.userId)
+          if (uid !== currentUserId) {
             emitToUser(uid, "new-message", payload)
+            emitToUser(uid, "conversation-updated", {
+              conversationId: roomId,
+              lastMessage: payload,
+            })
           }
         })
-      }
-      if (Array.isArray(data.participantIds)) {
-        data.participantIds.forEach(uid => {
-          emitToUser(uid, "conversation-updated", {
-            conversationId: roomId,
-            lastMessage: payload,
-          })
-        })
+      } catch (err) {
+        console.error("[send-message legacy] participants lookup error:", err)
       }
     })
 
@@ -598,18 +613,30 @@ app.prepare().then(() => {
     })
 
     // ── @mentions: notify mentioned users ──
+    // SECURITY: проверяем что mentionedUserIds — действительно участники этого
+    // чата согласно БД, а не произвольный список от клиента.
     socket.on("mention", async (data) => {
       // data: { mentionedUserIds: number[], conversationId, messageId }
       if (!Array.isArray(data.mentionedUserIds)) return
-      data.mentionedUserIds.forEach(uid => {
-        if (String(uid) !== currentUserId) {
-          emitToUser(String(uid), "you-were-mentioned", {
-            conversationId: String(data.conversationId),
-            messageId: data.messageId,
-            byUserId: currentUserId,
-          })
-        }
-      })
+      try {
+        const convParticipants = await prisma.conversationParticipant.findMany({
+          where: { conversationId: Number(data.conversationId) },
+          select: { userId: true },
+        })
+        const validIds = new Set(convParticipants.map(p => String(p.userId)))
+        data.mentionedUserIds.forEach(uid => {
+          const suid = String(uid)
+          if (suid !== currentUserId && validIds.has(suid)) {
+            emitToUser(suid, "you-were-mentioned", {
+              conversationId: String(data.conversationId),
+              messageId: data.messageId,
+              byUserId: currentUserId,
+            })
+          }
+        })
+      } catch (err) {
+        console.error("[mention] error:", err)
+      }
     })
 
     socket.on("avatar-update", (data) => {
@@ -633,14 +660,27 @@ app.prepare().then(() => {
     })
 
     // ── Read receipts ──────────────────────────────────────────
-    socket.on("messages-read", (data) => {
-      socket.to(String(data.conversationId)).emit("messages-read", data)
-      if (Array.isArray(data.participantIds)) {
-        data.participantIds.forEach(uid => {
-          if (String(uid) !== currentUserId) {
-            emitToUser(uid, "messages-read", data)
-          }
+    socket.on("messages-read", async (data) => {
+      // SECURITY: проверяем что currentUserId действительно участник чата, а список
+      // получателей берём из БД, а не из присланного клиентом participantIds
+      try {
+        const isParticipant = await prisma.conversationParticipant.findFirst({
+          where: { conversationId: Number(data.conversationId), userId: Number(currentUserId) }
         })
+        if (!isParticipant) return
+
+        socket.to(String(data.conversationId)).emit("messages-read", data)
+
+        const readParticipants = await prisma.conversationParticipant.findMany({
+          where: { conversationId: Number(data.conversationId) },
+          select: { userId: true },
+        })
+        readParticipants.forEach(p => {
+          const uid = String(p.userId)
+          if (uid !== currentUserId) emitToUser(uid, "messages-read", data)
+        })
+      } catch (err) {
+        console.error("[messages-read] error:", err)
       }
     })
 

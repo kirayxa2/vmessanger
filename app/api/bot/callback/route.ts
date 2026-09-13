@@ -16,6 +16,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "messageId, botId, callbackData required" }, { status: 400 })
   }
 
+  // SECURITY: без этой проверки любой авторизованный пользователь мог передать чужой
+  // conversationId/messageId и создать сообщение/callback в чужом разговоре, что раскрывает
+  // его структуру/ID через webhook бота. Проверяем что вызывающий — реальный
+  // участник этого conversationId (если он передан).
+  if (conversationId != null) {
+    const participant = await prisma.conversationParticipant.findFirst({
+      where: { conversationId: Number(conversationId), userId },
+    })
+    if (!participant) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+  }
+
+  // Дополнительно: если messageId передан, проверяем что оно действительно принадлежит этому
+  // conversationId — чтобы нельзя было сослаться на чужой messageId из другого чата.
+  if (conversationId != null && Number(botId) !== 0) {
+    const msg = await prisma.message.findFirst({
+      where: { id: Number(messageId), conversationId: Number(conversationId) },
+      select: { id: true },
+    })
+    if (!msg) {
+      return NextResponse.json({ error: "Message not found in this conversation" }, { status: 404 })
+    }
+  }
+
   const g = global as unknown as {
     __emitToUser?: (userId: number, event: string, data: unknown) => void
     __io?: { to: (r: string) => { emit: (e: string, d: unknown) => void } }
