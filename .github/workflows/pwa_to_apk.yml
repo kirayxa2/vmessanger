@@ -431,7 +431,7 @@ jobs:
           set -e
           python3 -m pip install --quiet Pillow
           python3 << 'PYEOF'
-          from PIL import Image, ImageDraw
+          from PIL import Image, ImageDraw, ImageFilter
           import os
 
           src = Image.open('public/icon-512x512.png').convert('RGBA')
@@ -476,30 +476,33 @@ jobs:
               offset = ((size - target) // 2, (size - target) // 2)
               fg.paste(icon_resized, offset, icon_resized)
 
-              # Небольшие декоративные точки по углам — оттенки фонового цвета (темнее/светлее), как градиент
-              draw = ImageDraw.Draw(fg)
-              dot_r = max(2, int(size * 0.02))
-              margin = int(size * 0.20)
-              # Базовый фон иконки #1c242f — берём его за основу градиента точек
-              base_r, base_g, base_b = 0x1c, 0x24, 0x2f
+              # Мягкое размытое цветное свечение (glow) по углам — как на референсной иконке:
+              # большие пятна разных цветов, сильно размытые, плавно переходящие друг в друга.
+              # Рисуем на холсте больше canvas, чтобы blur не обрезался по краям, потом crop обратно к size.
+              pad = int(size * 0.5)
+              glow_canvas = Image.new('RGBA', (size + pad * 2, size + pad * 2), (0, 0, 0, 0))
+              glow_draw = ImageDraw.Draw(glow_canvas)
 
-              def shade(factor):
-                  # factor < 1 — темнее фона, factor > 1 — светлее фона
-                  r = max(0, min(255, int(base_r * factor)))
-                  g = max(0, min(255, int(base_g * factor)))
-                  b = max(0, min(255, int(base_b * factor)))
-                  return (r, g, b, 130)
-
-              dot_specs = [
-                  ((margin, margin), shade(0.55)),                # темнее фона
-                  ((size - margin, margin), shade(1.9)),          # светлее фона
-                  ((margin, size - margin), shade(1.25)),         # чуть светлее фона
+              glow_r = int(size * 0.42)  # радиус каждого пятна свечения
+              glow_specs = [
+                  (pad + 0,      pad + 0,      (124, 58, 237, 200)),   # верхний левый угол — фиолетовый
+                  (pad + size,   pad + 0,      (56, 189, 248, 200)),   # верхний правый угол — голубой
+                  (pad + 0,      pad + size,   (99, 102, 241, 200)),   # нижний левый угол — индиго
+                  (pad + size,   pad + size,   (147, 51, 234, 200)),   # нижний правый угол — фиолетовый
               ]
-              for (cx, cy), color in dot_specs:
-                  draw.ellipse(
-                      (cx - dot_r, cy - dot_r, cx + dot_r, cy + dot_r),
+              for cx, cy, color in glow_specs:
+                  glow_draw.ellipse(
+                      (cx - glow_r, cy - glow_r, cx + glow_r, cy + glow_r),
                       fill=color,
                   )
+
+              # Сильный blur для мягкого, без чётких границ, перетекания
+              glow_canvas = glow_canvas.filter(ImageFilter.GaussianBlur(radius=size * 0.10))
+              glow_layer = glow_canvas.crop((pad, pad, pad + size, pad + size))
+
+              # Накладываем glow под иконку (на фоновый слой, под icon_resized)
+              fg = Image.alpha_composite(fg, glow_layer)
+              fg.paste(icon_resized, offset, icon_resized)
 
               fg.save(os.path.join(d, 'ic_launcher_foreground.png'))
 

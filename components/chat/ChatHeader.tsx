@@ -271,12 +271,11 @@ export default function ChatHeader({
           </motion.button>
 
           {showMenu && menuPos && createPortal(
-            <AnimatePresence>
+            <>
               <div className="fixed inset-0 z-[90]" onClick={() => setShowMenu(false)} />
               <motion.div
                 initial={{ opacity: 0, scale: 0.92, y: -8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.92, y: -8 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
                 className="fixed w-52 rounded-2xl shadow-2xl overflow-hidden z-[100] py-1"
                 style={{ backgroundColor: "#1e2d40", top: menuPos.top, right: menuPos.right }}
@@ -324,7 +323,7 @@ export default function ChatHeader({
                     </button>
                   )}
               </motion.div>
-            </AnimatePresence>,
+            </>,
             document.body
           )}
         </div>
