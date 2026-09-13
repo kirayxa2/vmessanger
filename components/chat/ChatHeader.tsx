@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft, Search, EllipsisVertical, Phone, Bookmark, BellOff, BellRing, Trash2, X, Feather } from "lucide-react"
 import { VerifiedBadge } from "../VerifiedBadge"
@@ -81,7 +82,9 @@ export default function ChatHeader({
   const headerLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const touchStartX = useRef<number>(0)
   const touchStartY = useRef<number>(0)
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
   const [showMenu, setShowMenu] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const [showClearModal, setShowClearModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [clearForBoth, setClearForBoth] = useState(false)
@@ -250,24 +253,34 @@ export default function ChatHeader({
 
         {/* Three dots menu */}
         <div className="relative">
-          <motion.button whileTap={{ scale: 0.88 }}
-            onClick={() => setShowMenu(v => !v)}
+          <motion.button
+            ref={menuBtnRef}
+            whileTap={{ scale: 0.88 }}
+            onClick={() => {
+              if (!showMenu && menuBtnRef.current) {
+                const rect = menuBtnRef.current.getBoundingClientRect()
+                setMenuPos({
+                  top: rect.bottom + 4,
+                  right: window.innerWidth - rect.right
+                })
+              }
+              setShowMenu(v => !v)
+            }}
             className="hover:text-white transition-colors p-2 rounded-full hover:bg-white/5">
             <EllipsisVertical size={20} />
           </motion.button>
 
-          <AnimatePresence>
-            {showMenu && (
-              <>
-                <div className="fixed inset-0 z-[90]" onClick={() => setShowMenu(false)} />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.92, y: -8 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.92, y: -8 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                  className="absolute right-0 top-full mt-1 w-52 rounded-2xl shadow-2xl overflow-hidden z-[100] py-1"
-                  style={{ backgroundColor: "#1e2d40" }}
-                >
+          {showMenu && menuPos && createPortal(
+            <AnimatePresence>
+              <div className="fixed inset-0 z-[90]" onClick={() => setShowMenu(false)} />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92, y: -8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: -8 }}
+                transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                className="fixed w-52 rounded-2xl shadow-2xl overflow-hidden z-[100] py-1"
+                style={{ backgroundColor: "#1e2d40", top: menuPos.top, right: menuPos.right }}
+              >
                   {/* Уведомления */}
                   {!isSpecialChat && onMute && (
                     <button
@@ -310,10 +323,10 @@ export default function ChatHeader({
                       <span className="text-red-400 text-[14px]">Удалить чат</span>
                     </button>
                   )}
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
+              </motion.div>
+            </AnimatePresence>,
+            document.body
+          )}
         </div>
       </div>
 
