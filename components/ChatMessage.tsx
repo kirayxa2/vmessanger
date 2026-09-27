@@ -593,7 +593,7 @@ const ChatMessage = React.memo(function ChatMessage({
             ) : (
               <div className="flex items-end gap-x-2 flex-wrap">
                 <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                  {renderRichText(displayContent, onMentionClick)}
+                  {renderRichText(displayContent, onMentionClick, undefined, isSender)}
                 </span>
                 <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">{timeStr}<ReadIndicator /></span>
               </div>
@@ -753,13 +753,22 @@ function MenuItem({ icon, label, color = "text-white", onClick }: { icon: React.
 // span всё равно навешивался — отсюда «невидимое, но кликабельное» сообщение с @упоминанием.
 // Теперь <Linkify> получает только чистые текстовые куски (без вложенных элементов),
 // поэтому cloneElement его вообще не трогает.
-function renderWithMentions(text: string, onMentionClick?: (username: string) => void, linkifyOptions?: any): React.ReactNode[] {
+function renderWithMentions(text: string, onMentionClick?: (username: string) => void, linkifyOptions?: any, isSender?: boolean): React.ReactNode[] {
   const parts = text.split(/(@\w+)/g)
+  // FIX: на пузыре отправителя фон красится через --sender-bubble (#5b67ea), который
+  // почти совпадает по яркости с --accent (#7e85e1) — обычный цвет mention на нём
+  // визуально сливается с фоном (низкий контраст), из-за чего @mention выглядит
+  // «невидимым», хотя в DOM текст реально есть (клик по нему работает).
+  // На своих сообщениях используем подчёркивание + чуть более светлый/контрастный
+  // оттенок, чтобы mention всегда читался независимо от темы/яркости экрана.
+  const mentionStyle: React.CSSProperties = isSender
+    ? { color: '#ffffff', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.55)', textUnderlineOffset: '2px' }
+    : { color: 'var(--accent, #7e85e1)', fontWeight: 600, cursor: 'pointer' }
   return parts.map((part, i) =>
     /^@\w+$/.test(part)
       ? <span
           key={i}
-          style={{ color: 'var(--accent, #7e85e1)', fontWeight: 600, cursor: 'pointer' }}
+          style={mentionStyle}
           onClick={e => { e.stopPropagation(); onMentionClick?.(part.slice(1)) }}
         >{part}</span>
       : part
@@ -843,7 +852,7 @@ function Spoiler({ children }: { children: React.ReactNode }) {
   )
 }
 
-function renderRich(text: string, onMentionClick: ((u: string) => void) | undefined, c: { n: number }, linkifyOptions?: any): React.ReactNode[] {
+function renderRich(text: string, onMentionClick: ((u: string) => void) | undefined, c: { n: number }, linkifyOptions?: any, isSender?: boolean): React.ReactNode[] {
   if (!text) return []
   let best: { idx: number; len: number; type: string; g1: string; g2?: string } | null = null
   for (const p of FORMAT_PATTERNS) {
@@ -853,12 +862,12 @@ function renderRich(text: string, onMentionClick: ((u: string) => void) | undefi
     }
   }
   if (!best) {
-    return [<React.Fragment key={`t${c.n++}`}>{renderWithMentions(text, onMentionClick, linkifyOptions)}</React.Fragment>]
+    return [<React.Fragment key={`t${c.n++}`}>{renderWithMentions(text, onMentionClick, linkifyOptions, isSender)}</React.Fragment>]
   }
   const before = text.slice(0, best.idx)
   const after = text.slice(best.idx + best.len)
   const out: React.ReactNode[] = []
-  if (before) out.push(...renderRich(before, onMentionClick, c, linkifyOptions))
+  if (before) out.push(...renderRich(before, onMentionClick, c, linkifyOptions, isSender))
   const key = `f${c.n++}`
   switch (best.type) {
     case "pre":
@@ -868,22 +877,22 @@ function renderRich(text: string, onMentionClick: ((u: string) => void) | undefi
       out.push(<code key={key} style={{ fontFamily: MONO_FONT, fontSize: "0.92em", background: "rgba(0,0,0,0.25)", padding: "1px 5px", borderRadius: 4 }}>{best.g1}</code>)
       break
     case "bold":
-      out.push(<strong key={key} style={{ fontWeight: 700 }}>{renderRich(best.g1, onMentionClick, c, linkifyOptions)}</strong>)
+      out.push(<strong key={key} style={{ fontWeight: 700 }}>{renderRich(best.g1, onMentionClick, c, linkifyOptions, isSender)}</strong>)
       break
     case "italic":
-      out.push(<em key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions)}</em>)
+      out.push(<em key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions, isSender)}</em>)
       break
     case "strike":
-      out.push(<s key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions)}</s>)
+      out.push(<s key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions, isSender)}</s>)
       break
     case "spoiler":
-      out.push(<Spoiler key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions)}</Spoiler>)
+      out.push(<Spoiler key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions, isSender)}</Spoiler>)
       break
     case "link":
       out.push(<a key={key} href={best.g2} target="_blank" rel="noopener noreferrer" className="underline opacity-90 hover:opacity-100" onClick={e => e.stopPropagation()}>{best.g1}</a>)
       break
   }
-  if (after) out.push(...renderRich(after, onMentionClick, c, linkifyOptions))
+  if (after) out.push(...renderRich(after, onMentionClick, c, linkifyOptions, isSender))
   return out
 }
 
@@ -891,8 +900,8 @@ function renderRich(text: string, onMentionClick: ((u: string) => void) | undefi
 const DEFAULT_LINKIFY_OPTIONS = { target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100", ignoreTags: ["a", "code", "pre"] }
 
 // Точка входа: разметка + @упоминания, ссылки автолинкуются точечно на уровне чистых строк
-function renderRichText(text: string, onMentionClick?: (username: string) => void, linkifyOptions: any = DEFAULT_LINKIFY_OPTIONS): React.ReactNode {
-  return renderRich(text, onMentionClick, { n: 0 }, linkifyOptions)
+function renderRichText(text: string, onMentionClick?: (username: string) => void, linkifyOptions: any = DEFAULT_LINKIFY_OPTIONS, isSender?: boolean): React.ReactNode {
+  return renderRich(text, onMentionClick, { n: 0 }, linkifyOptions, isSender)
 }
 
 function WrappedText({ text }: { text: string }) {
