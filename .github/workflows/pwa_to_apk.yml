@@ -605,7 +605,22 @@ jobs:
           set -e
           mkdir -p release-package
           cp android/app/build/outputs/apk/release/app-release.apk release-package/vortex-messenger.apk
-          cp public/icon-512x512.png release-package/icon.png
+
+          # Собираем реальную иконку приложения (adaptive: background + foreground),
+          # композиченную так же, как её рисует Android на устройстве —
+          # а не голый исходник public/icon-512x512.png.
+          python3 - << 'PYEOF'
+          from PIL import Image
+
+          size = 432  # xxxhdpi adaptive size
+          bg_color = (28, 36, 47, 255)  # #1c242f — colorPrimary/ic_launcher_background
+
+          fg = Image.open('android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png').convert('RGBA')
+          bg = Image.new('RGBA', fg.size, bg_color)
+          composite = Image.alpha_composite(bg, fg)
+          composite.convert('RGB').save('release-package/icon.png')
+          PYEOF
+
           cd release-package
           zip -j vortex-messenger-release.zip vortex-messenger.apk icon.png
 
