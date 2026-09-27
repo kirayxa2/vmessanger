@@ -2266,26 +2266,53 @@ useEffect(() => {
   )
 }
 
-// Компонент: поиск пользователя по username и показ профиля
+// Компонент: поиск пользователя по username, создание/поиск реального чата с ним и показ профиля.
+// Если пользователь не найден — показываем тряску и плашку «не существует» (как в Telegram),
+// а не тихо закрываемся: раньше здесь просто был `return null`, из-за чего клик по несуществующему
+// @username не давал пользователю никакой обратной связи.
 function MentionProfilePanel({ username, onClose, isMobile }: { username: string; onClose: () => void; isMobile: boolean }) {
   const [userId, setUserId] = useState<string | null>(null)
   const [userAvatar, setUserAvatar] = useState<string | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
+    setNotFound(false)
     fetch(`/api/users/search?query=${encodeURIComponent(username)}`)
       .then(r => r.json())
-      .then(data => {
+      .then(async data => {
         const users = Array.isArray(data) ? data : []
         const match = users.find((u: any) => u.username?.toLowerCase() === username.toLowerCase())
-        if (match) {
-          setUserId(String(match.id))
-          setUserAvatar(match.avatar || null)
+        if (!match) {
+          if (!cancelled) setNotFound(true)
+          return
         }
+        if (cancelled) return
+        setUserId(String(match.id))
+        setUserAvatar(match.avatar || null)
+
+        // КРИТИЧНО: находим/создаём РЕАЛЬНЫЙ приватный чат именно с этим пользователем.
+        // Раньше conversationId сюда вообще не передавался, из-за чего UserProfilePanel
+        // либо не мог открыть чат, либо (при повторном использовании чужого apiId) кнопка
+        // «Chat» уводила в текущий открытый чат (например в системный) вместо чата с @username.
+        try {
+          const convRes = await fetch("/api/conversations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: match.id }),
+          })
+          if (!cancelled && convRes.ok) {
+            const conv = await convRes.json()
+            if (conv?.id != null) setConversationId(String(conv.id))
+          }
+        } catch {}
       })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+      .catch(() => { if (!cancelled) setNotFound(true) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [username])
 
   if (loading) return (
@@ -2294,7 +2321,9 @@ function MentionProfilePanel({ username, onClose, isMobile }: { username: string
     </div>
   )
 
-  if (!userId) return null
+  if (notFound || !userId) {
+    return <UserNotFoundToast username={username} onClose={onClose} />
+  }
 
   return (
     <UserProfilePanel
@@ -2304,7 +2333,32 @@ function MentionProfilePanel({ username, onClose, isMobile }: { username: string
       isOnline={false}
       onClose={onClose}
       isMobile={isMobile}
+      conversationId={conversationId || undefined}
     />
+  )
+}
+
+// Тряска + плашка «Пользователь не существует» — поведение как в Telegram при клике
+// по @упоминанию несуществующего пользователя.
+function UserNotFoundToast({ username, onClose }: { username: string; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 1800)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <motion.div
+      className="fixed inset-x-0 top-[70px] z-[300] flex justify-center px-4 pointer-events-none"
+      initial={{ opacity: 0, y: -12 }}
+      animate={{ opacity: 1, y: 0, x: [0, -8, 8, -6, 6, -3, 3, 0] }}
+      exit={{ opacity: 0, y: -12 }}
+      transition={{ y: { type: "spring", stiffness: 420, damping: 28 }, x: { duration: 0.4, ease: "easeInOut" } }}
+    >
+      <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-2xl" style={{ backgroundColor: "#2b2b33", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[12px] font-bold text-white" style={{ backgroundColor: "#e53935" }}>!</span>
+        <span className="text-white text-[14px]">Пользователь @{username} не существует</span>
+      </div>
+    </motion.div>
   )
 }
 
