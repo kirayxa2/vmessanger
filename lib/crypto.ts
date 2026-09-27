@@ -308,3 +308,97 @@ export async function decryptMessageFromSelf(encryptedBase64: string): Promise<s
     return null
   }
 }
+
+// ── Group E2E (общий симметричный ключ на группу) ──────────────────────────────
+//
+// Схема: при создании группы (или добавлении участника) генерируется один случайный
+// AES-256 ключ группы. Он шифруется ECDH-парой ОТДЕЛЬНО для каждого участника
+// (как self-encryption, но с publicKey этого участника) и хранится на сервере
+// в таблице GroupKey как { conversationId, userId, encryptedKey }. Сервер видит
+// только шифротекст ключа — расшифровать его может только владелец приватного
+// ключа соответствующего участника. Сами сообщения группы шифруются этим общим
+// AES-ключом напрямую (без ECDH на каждое сообщение — быстрее для больших групп).
+
+/**
+ * Сгенерировать новый случайный AES-256-GCM ключ для группы.
+ * Возвращает как raw CryptoKey (для немедленного использования),
+ * так и base64 сырых байт (чтобы зашифровать эту копию под каждого участника).
+ */
+export async function generateGroupKey(): Promise<{ key: CryptoKey; rawBase64: string }> {
+  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"])
+  const raw = await crypto.subtle.exportKey("raw", key)
+  const rawBase64 = btoa(String.fromCharCode(...new Uint8Array(raw)))
+  return { key, rawBase64 }
+}
+
+/**
+ * Импортировать AES group-key из сырых base64-байт обратно в CryptoKey.
+ */
+async function importGroupKeyRaw(rawBase64: string): Promise<CryptoKey> {
+  const raw = Uint8Array.from(atob(rawBase64), c => c.charCodeAt(0))
+  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"])
+}
+
+/**
+ * Зашифровать сырые байты group-key (base64) для конкретного участника —
+ * используем тот же ECDH-механизм, что и encryptMessage, просто "сообщением"
+ * здесь выступает сам ключ группы. Результат кладём в GroupKey.encryptedKey.
+ */
+export async function encryptGroupKeyFor(groupKeyRawBase64: string, memberPublicKeyBase64: string): Promise<string | null> {
+  return encryptMessage(groupKeyRawBase64, memberPublicKeyBase64)
+}
+
+/**
+ * Расшифровать свою копию group-key, полученную с сервера (GroupKey.encryptedKey
+ * для текущего пользователя). Копия была зашифрована через ECDH:
+ * (приватный ключ создателя копии + публичный ключ этого участника), поэтому
+ * для расшифровки нужен publicKey ТОГО, КТО СОЗДАЛ и зашифровал эту конкретную
+ * копию (обычно — тот, кто создал группу/добавил участника), а НЕ свой собственный.
+ * ECDH симметричен: (myPriv + creatorPub) у участника даёт тот же shared secret,
+ * что (creatorPriv + myPub) у создателя при шифровании — это и есть ECDH.
+ */
+export async function decryptOwnGroupKey(encryptedKeyBase64: string, creatorPublicKeyBase64: string): Promise<CryptoKey | null> {
+  try {
+    const rawBase64 = await decryptMessage(encryptedKeyBase64, creatorPublicKeyBase64)
+    if (!rawBase64) return null
+    return importGroupKeyRaw(rawBase64)
+  } catch (err) {
+    console.error("[E2E] Group key decryption failed:", err)
+    return null
+  }
+}
+
+/**
+ * Зашифровать сообщение общим AES group-key группы.
+ * Формат совпадает с encryptMessage: base64(IV(12) + ciphertext).
+ */
+export async function encryptWithGroupKey(plaintext: string, groupKey: CryptoKey): Promise<string | null> {
+  try {
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const encoded = new TextEncoder().encode(plaintext)
+    const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, groupKey, encoded)
+    const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength)
+    combined.set(iv, 0)
+    combined.set(new Uint8Array(ciphertext), iv.byteLength)
+    return btoa(String.fromCharCode(...combined))
+  } catch (err) {
+    console.error("[E2E] Group encryption failed:", err)
+    return null
+  }
+}
+
+/**
+ * Расшифровать сообщение общим AES group-key группы.
+ */
+export async function decryptWithGroupKey(encryptedBase64: string, groupKey: CryptoKey): Promise<string | null> {
+  try {
+    const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0))
+    const iv = combined.slice(0, 12)
+    const ciphertext = combined.slice(12)
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, groupKey, ciphertext)
+    return new TextDecoder().decode(decrypted)
+  } catch (err) {
+    console.error("[E2E] Group decryption failed:", err)
+    return null
+  }
+}

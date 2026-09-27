@@ -41,6 +41,7 @@ model User {
   botSessions       BotSession[]
   botFatherSession  BotFatherSession?
   employeeProfile   Employee?
+  groupKeys         GroupKey[]
 
   @@index([lastSeen])
   @@index([isBot])
@@ -78,6 +79,26 @@ model Conversation {
   messages        Message[]
   drafts          Draft[]
   calls           Call[]
+  groupKeys       GroupKey[]
+}
+
+// E2E для групп: один общий симметричный ключ на группу (AES-256-GCM),
+// зашифрованный отдельно для КАЖДОГО участника его ECDH-ключом (как в приватных чатах).
+// Сервер хранит только зашифрованные копии ключа, не сам ключ — расшифровать его
+// может только владелец соответствующего приватного ключа участника.
+model GroupKey {
+  id                Int          @id @default(autoincrement())
+  conversationId    Int
+  userId            Int          // для кого эта копия (чью приватным ключом расшифровывается)
+  encryptedByUserId Int          // чьим publicKey была зашифрована эта копия (ECDH симметричен, нужен для расшифровки)
+  encryptedKey      String       // group AES key зашифрован через ECDH (encryptedByUserId priv + userId pub)
+  createdAt         DateTime     @default(now())
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
 }
 
 model ConversationParticipant {
