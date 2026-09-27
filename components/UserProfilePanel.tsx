@@ -129,15 +129,19 @@ export default function UserProfilePanel({
             </motion.button>
           </div>
 
-          {/* ── Action buttons (Telegram-style) ── Звонки только для обычных юзеров, для Saved/System — только Chat + Mute ── */}
+          {/* ── Action buttons (Telegram-style) ── Звонки и Chat — только для обычных юзеров.
+              Для Saved/System кнопка Chat не имеет смысла и ведёт обратно в тот же чат,
+              в котором ты и так находишься (conversationId === apiId текущего чата) —
+              визуально выглядит как «пишу от их имени». В Telegram у Этих двух карточек
+              кнопки «Написать» вообще нет. ── */}
           <div className="flex gap-3 mt-3 w-full justify-center">
             {[
-              {
+              ...(!isSpecialChat ? [{
                 icon: <MessageCircle size={22} />,
                 label: "Chat",
                 onClick: handleChat,
                 disabled: !conversationId,
-              },
+              }] : []),
               {
                 icon: muted ? <BellOff size={22} /> : <Bell size={22} />,
                 label: muted ? "Unmute" : "Mute",
