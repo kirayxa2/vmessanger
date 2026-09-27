@@ -114,8 +114,21 @@ jobs:
                   versionCode 1
                   versionName "1.0.0"
               }
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("HOME") + "/.android/debug.keystore")
+                      storePassword "android"
+                      keyAlias "androiddebugkey"
+                      keyPassword "android"
+                  }
+              }
               buildTypes {
                   debug { debuggable true }
+                  release {
+                      debuggable false
+                      minifyEnabled false
+                      signingConfig signingConfigs.release
+                  }
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
@@ -583,13 +596,22 @@ jobs:
             -storepass android \
             -keypass android 2>/dev/null | grep -A1 "SHA256"
 
-      - name: Build debug APK
+      - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
 
-      - name: Upload APK
+      - name: Package APK + icon into zip
+        run: |
+          set -e
+          mkdir -p release-package
+          cp android/app/build/outputs/apk/release/app-release.apk release-package/vortex-messenger.apk
+          cp public/icon-512x512.png release-package/icon.png
+          cd release-package
+          zip -j vortex-messenger-release.zip vortex-messenger.apk icon.png
+
+      - name: Upload APK + icon zip
         uses: actions/upload-artifact@v4
         with:
-          name: vortex-messenger-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: vortex-messenger-release
+          path: release-package/vortex-messenger-release.zip
           if-no-files-found: error

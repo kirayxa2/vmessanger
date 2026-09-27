@@ -593,9 +593,7 @@ const ChatMessage = React.memo(function ChatMessage({
             ) : (
               <div className="flex items-end gap-x-2 flex-wrap">
                 <span className="leading-[1.4] text-[15px] flex-1" style={{ wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                  <Linkify options={{ target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100", ignoreTags: ["a", "code", "pre"] }}>
-                    {renderRichText(displayContent, onMentionClick)}
-                  </Linkify>
+                  {renderRichText(displayContent, onMentionClick)}
                 </span>
                 <span className="text-[10px] opacity-60 whitespace-nowrap select-none flex items-center gap-0.5 self-end">{timeStr}<ReadIndicator /></span>
               </div>
@@ -743,8 +741,19 @@ function MenuItem({ icon, label, color = "text-white", onClick }: { icon: React.
   );
 }
 
-// Парсим @упоминания — подсвечиваем и делаем кликабельными
-function renderWithMentions(text: string, onMentionClick?: (username: string) => void): React.ReactNode[] {
+// Парсим @упоминания — подсвечиваем и делаем кликабельными.
+// ВАЖНО: линкуем URL-ы внутри обычного текста ЗДЕСЬ, на уровне чистых строк —
+// НЕ оборачиваем весь результат (включая наши <span> для mentions) в <Linkify> снаружи.
+// Раньше <Linkify> из linkify-react рекурсивно обходил ЛЮБОЙ вложенный React-элемент
+// (linkifyReactElement идёт внутрь всех тегов, которых нет в ignoreTags, включая наш
+// кастомный <span onClick=...> для @mention) и клонировал его через cloneElement с
+// автогенерируемыми ключами (__linkify-el-N). Эти ключи нестабильны между рендерами —
+// из-за этого при гидратации (SSR → клиент) React иногда не мог сопоставить дерево,
+// молча гасил показ текстового узла (оставляя пустой DOM), но обработчик клика на
+// span всё равно навешивался — отсюда «невидимое, но кликабельное» сообщение с @упоминанием.
+// Теперь <Linkify> получает только чистые текстовые куски (без вложенных элементов),
+// поэтому cloneElement его вообще не трогает.
+function renderWithMentions(text: string, onMentionClick?: (username: string) => void, linkifyOptions?: any): React.ReactNode[] {
   const parts = text.split(/(@\w+)/g)
   return parts.map((part, i) =>
     /^@\w+$/.test(part)
@@ -753,7 +762,9 @@ function renderWithMentions(text: string, onMentionClick?: (username: string) =>
           style={{ color: 'var(--accent, #7e85e1)', fontWeight: 600, cursor: 'pointer' }}
           onClick={e => { e.stopPropagation(); onMentionClick?.(part.slice(1)) }}
         >{part}</span>
-      : <span key={i}>{part}</span>
+      : part
+        ? <Linkify key={i} options={linkifyOptions}>{part}</Linkify>
+        : null
   )
 }
 
@@ -832,7 +843,7 @@ function Spoiler({ children }: { children: React.ReactNode }) {
   )
 }
 
-function renderRich(text: string, onMentionClick: ((u: string) => void) | undefined, c: { n: number }): React.ReactNode[] {
+function renderRich(text: string, onMentionClick: ((u: string) => void) | undefined, c: { n: number }, linkifyOptions?: any): React.ReactNode[] {
   if (!text) return []
   let best: { idx: number; len: number; type: string; g1: string; g2?: string } | null = null
   for (const p of FORMAT_PATTERNS) {
@@ -842,12 +853,12 @@ function renderRich(text: string, onMentionClick: ((u: string) => void) | undefi
     }
   }
   if (!best) {
-    return [<React.Fragment key={`t${c.n++}`}>{renderWithMentions(text, onMentionClick)}</React.Fragment>]
+    return [<React.Fragment key={`t${c.n++}`}>{renderWithMentions(text, onMentionClick, linkifyOptions)}</React.Fragment>]
   }
   const before = text.slice(0, best.idx)
   const after = text.slice(best.idx + best.len)
   const out: React.ReactNode[] = []
-  if (before) out.push(...renderRich(before, onMentionClick, c))
+  if (before) out.push(...renderRich(before, onMentionClick, c, linkifyOptions))
   const key = `f${c.n++}`
   switch (best.type) {
     case "pre":
@@ -857,28 +868,31 @@ function renderRich(text: string, onMentionClick: ((u: string) => void) | undefi
       out.push(<code key={key} style={{ fontFamily: MONO_FONT, fontSize: "0.92em", background: "rgba(0,0,0,0.25)", padding: "1px 5px", borderRadius: 4 }}>{best.g1}</code>)
       break
     case "bold":
-      out.push(<strong key={key} style={{ fontWeight: 700 }}>{renderRich(best.g1, onMentionClick, c)}</strong>)
+      out.push(<strong key={key} style={{ fontWeight: 700 }}>{renderRich(best.g1, onMentionClick, c, linkifyOptions)}</strong>)
       break
     case "italic":
-      out.push(<em key={key}>{renderRich(best.g1, onMentionClick, c)}</em>)
+      out.push(<em key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions)}</em>)
       break
     case "strike":
-      out.push(<s key={key}>{renderRich(best.g1, onMentionClick, c)}</s>)
+      out.push(<s key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions)}</s>)
       break
     case "spoiler":
-      out.push(<Spoiler key={key}>{renderRich(best.g1, onMentionClick, c)}</Spoiler>)
+      out.push(<Spoiler key={key}>{renderRich(best.g1, onMentionClick, c, linkifyOptions)}</Spoiler>)
       break
     case "link":
       out.push(<a key={key} href={best.g2} target="_blank" rel="noopener noreferrer" className="underline opacity-90 hover:opacity-100" onClick={e => e.stopPropagation()}>{best.g1}</a>)
       break
   }
-  if (after) out.push(...renderRich(after, onMentionClick, c))
+  if (after) out.push(...renderRich(after, onMentionClick, c, linkifyOptions))
   return out
 }
 
-// Точка входа: разметка + @упоминания, ссылки автолинкуются обёрткой <Linkify>
-function renderRichText(text: string, onMentionClick?: (username: string) => void): React.ReactNode {
-  return renderRich(text, onMentionClick, { n: 0 })
+// Дефолтные опции Linkify для обычных URL внутри текста сообщений
+const DEFAULT_LINKIFY_OPTIONS = { target: "_blank", rel: "noopener noreferrer", className: "underline opacity-90 hover:opacity-100", ignoreTags: ["a", "code", "pre"] }
+
+// Точка входа: разметка + @упоминания, ссылки автолинкуются точечно на уровне чистых строк
+function renderRichText(text: string, onMentionClick?: (username: string) => void, linkifyOptions: any = DEFAULT_LINKIFY_OPTIONS): React.ReactNode {
+  return renderRich(text, onMentionClick, { n: 0 }, linkifyOptions)
 }
 
 function WrappedText({ text }: { text: string }) {
