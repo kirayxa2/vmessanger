@@ -36,6 +36,8 @@ model User {
   isBot             Boolean   @default(false) // системный аккаунт бота
   showLastSeen      Boolean   @default(true)  // показывать ли время последнего визита
   showOnlineStatus  Boolean   @default(true)  // показывать ли статус онлайн
+  phone             String?   // номер телефона (виден только владельцу профиля)
+  birthday          DateTime? @db.Date // день рождения
   ownedBots         Bot[]     @relation("BotOwner")
   botProfile        Bot?      @relation("BotIdentity")
   botSessions       BotSession[]

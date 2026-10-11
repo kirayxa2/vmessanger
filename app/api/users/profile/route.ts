@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       where: { id: Number(userId) },
       select: { id: true, username: true, displayName: true, avatar: true, bio: true, createdAt: true,
         // настройки приватности — только своему профилю
-        ...(String(userId) === session.user.id ? { showLastSeen: true, showOnlineStatus: true } : {})
+        ...(String(userId) === session.user.id ? { showLastSeen: true, showOnlineStatus: true, phone: true, birthday: true } : {})
       }
     })
 
@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json()
-    const { username, bio, displayName, showLastSeen, showOnlineStatus } = body
+    const { username, bio, displayName, showLastSeen, showOnlineStatus, phone, birthday } = body
 
     // ── Input validation ──
     if (username !== undefined) {
@@ -53,6 +53,25 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Bio must be under 500 characters" }, { status: 400 })
     }
 
+    if (phone !== undefined && phone !== null && phone !== "" &&
+      (typeof phone !== "string" || !/^\+?[0-9\s\-()]{7,20}$/.test(phone))) {
+      return NextResponse.json({ error: "Некорректный номер телефона" }, { status: 400 })
+    }
+    let birthdayDate: Date | null | undefined = undefined
+    if (birthday !== undefined) {
+      if (birthday === null || birthday === "") {
+        birthdayDate = null
+      } else if (typeof birthday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(birthday)) {
+        const d = new Date(`${birthday}T00:00:00.000Z`)
+        if (isNaN(d.getTime()) || d.getTime() > Date.now() || d.getUTCFullYear() < 1900) {
+          return NextResponse.json({ error: "Некорректная дата рождения" }, { status: 400 })
+        }
+        birthdayDate = d
+      } else {
+        return NextResponse.json({ error: "Некорректная дата рождения" }, { status: 400 })
+      }
+    }
+
     // Проверяем уникальность username если он меняется
     if (username && username !== session.user.name) {
       const existing = await prisma.user.findUnique({ where: { username } })
@@ -67,10 +86,12 @@ export async function PATCH(req: NextRequest) {
         ...(username ? { username } : {}),
         ...(displayName !== undefined ? { displayName: displayName || null } : {}),
         ...(bio !== undefined ? { bio } : {}),
+        ...(phone !== undefined ? { phone: phone ? String(phone).trim() : null } : {}),
+        ...(birthdayDate !== undefined ? { birthday: birthdayDate } : {}),
         ...(showLastSeen !== undefined ? { showLastSeen: Boolean(showLastSeen) } : {}),
         ...(showOnlineStatus !== undefined ? { showOnlineStatus: Boolean(showOnlineStatus) } : {}),
       },
-      select: { id: true, username: true, displayName: true, avatar: true, bio: true, showLastSeen: true, showOnlineStatus: true }
+      select: { id: true, username: true, displayName: true, avatar: true, bio: true, phone: true, birthday: true, showLastSeen: true, showOnlineStatus: true }
     })
 
     return NextResponse.json(updated)

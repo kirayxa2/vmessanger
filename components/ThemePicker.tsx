@@ -1,9 +1,91 @@
 "use client"
 
-import { motion } from "framer-motion"
-import { ArrowLeft, Check, Pipette } from "lucide-react"
-import { useRef } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Check, Pipette, CheckCheck } from "lucide-react"
+import { useRef, useState, useEffect } from "react"
 import { useTheme, ACCENT_PRESETS, THEMES, WALLPAPERS, type ThemeId } from "@/lib/theme"
+import { ScreenShell, MUTED } from "./settings/ui"
+
+// Сценарий живого превью: кто пишет, текст, реакция (необязательно)
+const DEMO: { me: boolean; text: string; time: string; reaction?: string }[] = [
+  { me: false, text: "Привет! Как тебе новая тема? 🎨", time: "12:41" },
+  { me: true, text: "Огонь! Меняется прямо на лету ✨", time: "12:41", reaction: "🔥" },
+  { me: false, text: "А обои и цвет пузырей можно менять?", time: "12:42" },
+  { me: true, text: "Конечно, выбирай ниже 👇", time: "12:42" },
+]
+
+function LivePreview() {
+  const [step, setStep] = useState(0)   // сколько сообщений показано
+  const [typing, setTyping] = useState(false)
+  const [round, setRound] = useState(0)
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = []
+    setStep(0); setTyping(false)
+    let t = 500
+    DEMO.forEach((m, i) => {
+      if (!m.me) { timers.push(setTimeout(() => setTyping(true), t)); t += 900 }
+      timers.push(setTimeout(() => { setTyping(false); setStep(i + 1) }, t))
+      t += 1100
+    })
+    timers.push(setTimeout(() => setRound(r => r + 1), t + 3500)) // повтор цикла
+    return () => timers.forEach(clearTimeout)
+  }, [round])
+
+  return (
+    <div className="mx-3 mt-4 rounded-2xl overflow-hidden" style={{ backgroundColor: "var(--chat-bg)", border: "1px solid var(--border-subtle, rgba(127,127,127,0.2))" }}>
+      {/* Шапка чата */}
+      <div className="flex items-center gap-2.5 px-3 py-2.5" style={{ backgroundColor: "var(--input-bg)" }}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[13px] font-bold" style={{ backgroundColor: "var(--accent)" }}>В</div>
+        <div className="leading-tight">
+          <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary, #fff)" }}>Вортекс</p>
+          <p className="text-[11px]" style={{ color: typing ? "var(--accent)" : MUTED }}>{typing ? "печатает…" : "в сети"}</p>
+        </div>
+      </div>
+
+      {/* Сообщения */}
+      <div className="tg-bg px-3 py-3 flex flex-col gap-1.5" style={{ minHeight: 210 }}>
+        <AnimatePresence initial={false}>
+          {DEMO.slice(0, step).map((m, i) => (
+            <motion.div key={`${round}-${i}`}
+              initial={{ opacity: 0, y: 14, scale: 0.92 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ type: "spring", stiffness: 420, damping: 28 }}
+              className={`relative max-w-[78%] px-3 py-1.5 text-[14px] shadow ${m.me ? "self-end rounded-2xl rounded-br-md text-white" : "self-start rounded-2xl rounded-bl-md"}`}
+              style={m.me ? { backgroundColor: "var(--accent)" } : { backgroundColor: "var(--recipient-bubble)", color: "var(--recipient-text)" }}>
+              {m.text}
+              <span className="inline-flex items-center gap-0.5 ml-2 text-[10px] align-bottom opacity-70">
+                {m.time}{m.me && <CheckCheck size={12} />}
+              </span>
+              {m.reaction && (
+                <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: "spring", stiffness: 500, damping: 18 }}
+                  className="absolute -bottom-3 left-2 text-[12px] px-1.5 rounded-full shadow"
+                  style={{ backgroundColor: "var(--recipient-bubble)", color: "var(--recipient-text)" }}>{m.reaction} 1</motion.span>
+              )}
+            </motion.div>
+          ))}
+          {typing && (
+            <motion.div key="typing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="self-start flex gap-1 px-3 py-2.5 rounded-2xl rounded-bl-md shadow"
+              style={{ backgroundColor: "var(--recipient-bubble)" }}>
+              {[0, 1, 2].map(d => (
+                <motion.span key={d} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: MUTED }}
+                  animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 0.7, delay: d * 0.15 }} />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Поле ввода */}
+      <div className="flex items-center gap-2 p-2.5" style={{ backgroundColor: "var(--input-bg)" }}>
+        <div className="flex-1 h-9 rounded-full flex items-center px-3 text-[13px]" style={{ backgroundColor: "rgba(127,127,127,0.15)", color: MUTED }}>Сообщение…</div>
+        <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: "var(--accent)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" /></svg>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function ThemePicker({ onBack }: { onBack: () => void }) {
   const { theme, accent, wallpaper, setTheme, setAccent, setWallpaper } = useTheme()
@@ -12,41 +94,10 @@ export default function ThemePicker({ onBack }: { onBack: () => void }) {
   const isPreset = ACCENT_PRESETS.some(c => c.toLowerCase() === accent.toLowerCase())
 
   return (
-    <motion.div
-      className="absolute inset-0 z-[100] flex flex-col"
-      style={{ backgroundColor: "var(--sidebar-bg, #1c242f)" }}
-      initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
-      transition={{ type: "spring", stiffness: 380, damping: 32 }}
-    >
-      {/* Header */}
-      <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
-        <motion.button onClick={onBack} whileTap={{ scale: 0.9 }}
-          className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
-          <ArrowLeft size={22} />
-        </motion.button>
-        <h2 className="text-[18px] font-bold text-white flex-1">Внешний вид</h2>
-      </div>
+    <ScreenShell title="Внешний вид" onBack={onBack}>
+      <LivePreview />
 
-      <div className="flex-1 overflow-y-auto hide-scrollbar p-5">
-        {/* ── Живое превью (реагирует на тему + обои + акцент) ── */}
-        <div className="rounded-2xl overflow-hidden mb-6 border border-white/8" style={{ backgroundColor: "var(--chat-bg)" }}>
-          <div className="tg-bg p-4 flex flex-col gap-2" style={{ minHeight: 120 }}>
-            <div className="self-start max-w-[75%] px-3 py-2 rounded-2xl rounded-bl-md text-[14px] shadow"
-              style={{ backgroundColor: "var(--recipient-bubble)", color: "var(--recipient-text)" }}>
-              Привет! Как тебе тема? 🎨
-            </div>
-            <div className="self-end max-w-[75%] px-3 py-2 rounded-2xl rounded-br-md text-[14px] text-white shadow"
-              style={{ backgroundColor: "var(--accent)" }}>
-              Огонь! Меняется везде ✨
-            </div>
-          </div>
-          <div className="flex items-center gap-2 p-3 border-t border-white/5" style={{ backgroundColor: "var(--input-bg)" }}>
-            <div className="flex-1 h-9 rounded-full bg-black/20 flex items-center px-3 text-gray-500 text-[13px]">Сообщение…</div>
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: "var(--accent)" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z" /></svg>
-            </div>
-          </div>
-        </div>
+      <div className="p-5 pt-2">
 
         {/* ── Тема ── */}
         <p className="text-[12px] font-semibold uppercase tracking-wider text-gray-500 mb-3">Тема</p>
@@ -102,9 +153,9 @@ export default function ThemePicker({ onBack }: { onBack: () => void }) {
               className="absolute inset-0 opacity-0 cursor-pointer" tabIndex={-1} />
           </motion.button>
         </div>
-        <p className="text-[12px] text-gray-500 mt-3">Тема, обои и акцент применяются ко всему мессенджеру и сохраняются на этом устройстве.</p>
+        <p className="text-[12px] mt-3" style={{ color: MUTED }}>Тема, обои и акцент применяются ко всему мессенджеру и сохраняются на этом устройстве.</p>
       </div>
-    </motion.div>
+    </ScreenShell>
   )
 }
 

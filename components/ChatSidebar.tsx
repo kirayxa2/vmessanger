@@ -6,7 +6,7 @@ import {
   Search, Menu, LogOut, Moon, Globe, Bookmark,
   ArrowLeft, Camera, Loader2, Check, X, AtSign, Info,
   Bell, Shield, Folder, Monitor, ChevronRight, Edit3, User, ShieldAlert, Users, Plus, Sun, Lock, QrCode,
-  Archive, BellOff, Trash2, BellRing, Palette
+  Archive, BellOff, Trash2, BellRing, Palette, Clock, Phone
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { useSocket } from "@/app/ClientProviders"
@@ -24,6 +24,7 @@ import QRCodeSidebar from "./QRCodeSidebar"
 import ThemePicker from "./ThemePicker"
 import StoriesRow from "./StoriesRow"
 import { useTheme } from "@/lib/theme"
+import { ScreenShell, SectionLabel, Card, Footnote, Row, ToggleRow, Field, PrimaryButton, MUTED, TEXT } from "./settings/ui"
 import { Virtuoso } from "react-virtuoso"
 
 const ACCENT = "var(--accent, #7e85e1)"
@@ -284,78 +285,37 @@ function NotificationsScreen({ onBack }: { onBack: () => void }) {
   const sounds = Object.keys(SOUND_LABELS) as SoundType[]
 
   return (
-    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]"
-      initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
-      transition={{ type: "spring", stiffness: 380, damping: 32 }}>
-
-      <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
-        <motion.button onClick={onBack} whileTap={{ scale: 0.9 }}
-          className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
-          <ArrowLeft size={22} />
-        </motion.button>
-        <h2 className="text-[18px] font-bold text-white flex-1">Уведомления</h2>
-      </div>
-
-      <div className="flex-1 overflow-y-auto hide-scrollbar">
-        <div className="pt-5 pb-1 px-5">
-          <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
-            Звук сообщений
-          </p>
-        </div>
-
-        <div className="mx-3 rounded-2xl overflow-hidden" style={{ backgroundColor: "#1a2332" }}>
-          {sounds.map((type, i) => (
-            <motion.div
-              key={type}
-              onClick={() => { setSoundType(type); preview(type) }}
-              whileTap={{ scale: 0.98 }}
-              className={`px-4 py-3.5 flex items-center gap-4 cursor-pointer transition-colors ${i < sounds.length - 1 ? "border-b border-white/5" : ""
-                } hover:bg-white/5`}
-            >
-              {/* Иконка звука */}
-              <motion.div
-                className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                animate={{ backgroundColor: soundType === type ? ACCENT : "rgba(255,255,255,0.08)" }}
-                transition={{ duration: 0.2 }}
-              >
+    <ScreenShell title="Уведомления" onBack={onBack}>
+      <SectionLabel>Звук сообщений</SectionLabel>
+      <Card>
+        {sounds.map(type => (
+          <Row key={type}
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
                 {type === "none" ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                  <>
                     <line x1="1" y1="1" x2="23" y2="23" />
                     <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
                     <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
                     <line x1="12" y1="19" x2="12" y2="23" />
                     <line x1="8" y1="23" x2="16" y2="23" />
-                  </svg>
+                  </>
                 ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                  <>
                     <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
                     <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-                  </svg>
+                  </>
                 )}
-              </motion.div>
-
-              <span className="flex-1 text-[15px] text-white">{SOUND_LABELS[type]}</span>
-
-              {/* Чекбокс */}
-              <AnimatePresence>
-                {soundType === type && (
-                  <motion.div
-                    initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                  >
-                    <Check size={20} style={{ color: ACCENT }} strokeWidth={2.5} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
-        </div>
-
-        <p className="px-5 pt-3 text-[12px] text-gray-600 leading-relaxed">
-          Нажмите на вариант чтобы прослушать. Выбранный звук будет воспроизводиться при каждом входящем сообщении.
-        </p>
-      </div>
-    </motion.div>
+              </svg>
+            }
+            color={soundType === type ? ACCENT : "rgba(127,127,127,0.45)"}
+            title={SOUND_LABELS[type]}
+            onClick={() => { setSoundType(type); preview(type) }}
+            right={soundType === type ? <Check size={20} style={{ color: ACCENT }} strokeWidth={2.5} /> : <span />} />
+        ))}
+      </Card>
+      <Footnote>Нажмите на вариант, чтобы прослушать. Выбранный звук будет воспроизводиться при каждом входящем сообщении.</Footnote>
+    </ScreenShell>
   )
 }
 
@@ -364,12 +324,13 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation()
   const { enabled, toggle } = useProfanityFilter()
   const { data: session } = useSession()
+  const { sessionId } = useDeviceSession()
 
   const [showLastSeen, setShowLastSeen] = useState(true)
   const [showOnlineStatus, setShowOnlineStatus] = useState(true)
-  const [privacyLoading, setPrivacyLoading] = useState(true)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showDevicesInner, setShowDevicesInner] = useState(false)
 
-  // Загружаем текущие настройки
   useEffect(() => {
     if (!session?.user?.id) return
     fetch(`/api/users/profile?userId=${session.user.id}`)
@@ -378,7 +339,7 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
         if (data.showLastSeen !== undefined) setShowLastSeen(data.showLastSeen)
         if (data.showOnlineStatus !== undefined) setShowOnlineStatus(data.showOnlineStatus)
       })
-      .finally(() => setPrivacyLoading(false))
+      .catch(() => { })
   }, [session?.user?.id])
 
   const updatePrivacy = async (field: "showLastSeen" | "showOnlineStatus", value: boolean) => {
@@ -386,147 +347,149 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [field]: value }),
-    })
+    }).catch(() => { })
   }
 
   return (
-    <motion.div className="absolute inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]"
-      initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
-      transition={{ type: "spring", stiffness: 380, damping: 32 }}>
+    <ScreenShell title={t("privacy")} onBack={onBack}>
+      <SectionLabel>Статус</SectionLabel>
+      <Card>
+        <ToggleRow icon={<Globe size={18} />} color="#3a8a6e" title="Статус онлайн" subtitle="Показывать контактам, когда вы в сети"
+          enabled={showOnlineStatus}
+          onToggle={() => { const v = !showOnlineStatus; setShowOnlineStatus(v); updatePrivacy("showOnlineStatus", v) }} />
+        <ToggleRow icon={<Clock size={18} />} color="#5B9BD5" title="Время последнего визита" subtitle="Показывать, когда вы были в сети"
+          enabled={showLastSeen}
+          onToggle={() => { const v = !showLastSeen; setShowLastSeen(v); updatePrivacy("showLastSeen", v) }} />
+      </Card>
+      <Footnote>Если отключить статус онлайн, другие не будут видеть, когда вы в сети. И вы тоже не будете видеть статусы других.</Footnote>
 
-      {/* Header */}
-      <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
-        <motion.button onClick={onBack} whileTap={{ scale: 0.9 }}
-          className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
-          <ArrowLeft size={22} />
-        </motion.button>
-        <h2 className="text-[18px] font-bold text-white flex-1">{t("privacy")}</h2>
-      </div>
+      <SectionLabel>Безопасность</SectionLabel>
+      <Card>
+        <Row icon={<Lock size={18} />} color="#d45555" title="Сменить пароль" subtitle="Рекомендуем менять пароль раз в несколько месяцев"
+          onClick={() => setShowPassword(true)} />
+        <Row icon={<Monitor size={18} />} color="#e08a3c" title={t("devices")} subtitle="Активные сеансы и завершение входа на других устройствах"
+          onClick={() => setShowDevicesInner(true)} />
+      </Card>
 
-      <div className="flex-1 overflow-y-auto hide-scrollbar">
+      <SectionLabel>{t("content_filter")}</SectionLabel>
+      <Card>
+        <ToggleRow icon={<ShieldAlert size={18} />} color={ACCENT} title={t("anti_profanity")} subtitle={t("anti_profanity_hint")}
+          enabled={enabled} onToggle={toggle} />
+      </Card>
+      <AnimatePresence>
+        {enabled && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div className="mx-3 mt-2 px-3 py-2.5 rounded-xl" style={{ backgroundColor: "rgba(126,133,225,0.1)", border: "1px solid rgba(126,133,225,0.2)" }}>
+              <p className="text-[12px] mb-1 font-medium" style={{ color: MUTED }}>{t("example")}:</p>
+              <div className="flex items-center gap-2 flex-wrap text-[13px]" style={{ color: MUTED }}>
+                <span>«блять»</span><span>→</span><span className="font-mono" style={{ color: ACCENT }}>«*****»</span>
+                <span>·</span>
+                <span>«fuck»</span><span>→</span><span className="font-mono" style={{ color: ACCENT }}>«****»</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <Footnote>{t("anti_profanity_desc")}</Footnote>
 
-        {/* Секция: Контент */}
-        <div className="pt-5 pb-1 px-5">
-          <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
-            {t("content_filter")}
+      <AnimatePresence>
+        {showPassword && <PasswordScreen onBack={() => setShowPassword(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showDevicesInner && <DevicesScreen onBack={() => setShowDevicesInner(false)} currentSessionId={sessionId} />}
+      </AnimatePresence>
+    </ScreenShell>
+  )
+}
+
+// ── Смена пароля (подэкран «Конфиденциальности») ──
+function passwordStrength(p: string): { score: number; label: string; color: string } {
+  let s = 0
+  if (p.length >= 8) s++
+  if (p.length >= 12) s++
+  if (/[a-z]/.test(p) && /[A-Z]/.test(p)) s++
+  if (/\d/.test(p) && /[^A-Za-z0-9]/.test(p)) s++
+  const levels = [
+    { label: "Слишком простой", color: "#f87171" },
+    { label: "Слабый", color: "#f87171" },
+    { label: "Средний", color: "#fbbf24" },
+    { label: "Хороший", color: "#4ade80" },
+    { label: "Отличный", color: "#22c55e" },
+  ]
+  return { score: s, ...levels[s] }
+}
+
+function PasswordScreen({ onBack }: { onBack: () => void }) {
+  const [current, setCurrent] = useState("")
+  const [next, setNext] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const strength = passwordStrength(next)
+  const mismatch = confirm.length > 0 && next !== confirm
+
+  const submit = async () => {
+    setError("")
+    if (next.length < 8) { setError("Минимум 8 символов"); return }
+    if (next !== confirm) { setError("Пароли не совпадают"); return }
+    setSaving(true)
+    try {
+      const res = await fetch("/api/users/password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Ошибка") }
+      setSuccess(true); setCurrent(""); setNext(""); setConfirm("")
+      setTimeout(onBack, 1500)
+    } catch (e: any) { setError(e.message || "Ошибка") }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <ScreenShell title="Смена пароля" onBack={onBack}>
+      <div className="px-5 pt-6 flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-2 pb-2">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: ACCENT }}>
+            <Lock size={28} />
+          </div>
+          <p className="text-[13px] text-center max-w-[260px]" style={{ color: MUTED }}>
+            Придумайте надёжный пароль, который вы не используете на других сайтах
           </p>
         </div>
 
-        {/* Антимат */}
-        <div className="mx-3 rounded-2xl overflow-hidden" style={{ backgroundColor: "#1a2332" }}>
-          <div className="px-4 py-4 flex items-center gap-4">
-            {/* Иконка */}
-            <motion.div
-              className="w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0"
-              animate={{ backgroundColor: enabled ? ACCENT : "#2d3f57" }}
-              transition={{ duration: 0.3 }}
-            >
-              <ShieldAlert size={20} color="white" />
-            </motion.div>
-
-            {/* Текст */}
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] text-white font-semibold leading-tight">{t("anti_profanity")}</p>
-              <p className="text-[12px] text-gray-500 mt-0.5 leading-snug">{t("anti_profanity_hint")}</p>
+        <Field label="Текущий пароль" type="password" value={current} onChange={setCurrent} autoComplete="current-password" />
+        <div className="flex flex-col gap-2">
+          <Field label="Новый пароль" type="password" value={next} onChange={setNext} autoComplete="new-password" />
+          {next.length > 0 && (
+            <div className="px-1">
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-1 flex-1 rounded-full transition-colors"
+                    style={{ backgroundColor: i <= strength.score ? strength.color : "rgba(127,127,127,0.25)" }} />
+                ))}
+              </div>
+              <p className="text-[12px] mt-1" style={{ color: strength.color }}>{strength.label}</p>
             </div>
-
-            {/* Переключатель */}
-            <ToggleSwitch enabled={enabled} onToggle={toggle} />
-          </div>
-
-          {/* Пример — показывается только когда включено */}
-          <AnimatePresence>
-            {enabled && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="mx-4 mb-4 px-3 py-2.5 rounded-xl" style={{ backgroundColor: "rgba(126,133,225,0.1)", border: "1px solid rgba(126,133,225,0.2)" }}>
-                  <p className="text-[12px] text-gray-400 mb-1 font-medium">{t("example")}:</p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] text-gray-300">«блять»</span>
-                    <span className="text-gray-600">→</span>
-                    <span className="text-[13px] font-mono" style={{ color: ACCENT }}>«*****»</span>
-                    <span className="mx-1 text-gray-700">·</span>
-                    <span className="text-[13px] text-gray-300">«fuck»</span>
-                    <span className="text-gray-600">→</span>
-                    <span className="text-[13px] font-mono" style={{ color: ACCENT }}>«****»</span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          )}
         </div>
+        <Field label="Повторите новый пароль" type="password" value={confirm} onChange={setConfirm}
+          autoComplete="new-password" error={mismatch ? "Пароли не совпадают" : undefined}
+          hint="Минимум 8 символов: буквы, цифры и символы делают пароль надёжнее" />
 
-        <p className="px-5 pt-2 pb-5 text-[12px] text-gray-600 leading-relaxed">
-          {t("anti_profanity_desc")}
-        </p>
-
-        {/* Секция: Кто видит мой статус */}
-        <div className="pt-2 pb-1 px-5">
-          <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
-            Конфиденциальность
-          </p>
-        </div>
-
-        <div className="mx-3 rounded-2xl overflow-hidden" style={{ backgroundColor: "#1a2332" }}>
-          {/* Онлайн-статус */}
-          <div className="px-4 py-4 flex items-center gap-4">
-            <motion.div
-              className="w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0"
-              animate={{ backgroundColor: showOnlineStatus ? ACCENT : "#2d3f57" }}
-              transition={{ duration: 0.3 }}
-            >
-              <Globe size={20} color="white" />
-            </motion.div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] text-white font-semibold leading-tight">Статус онлайн</p>
-              <p className="text-[12px] text-gray-500 mt-0.5 leading-snug">Показывать контактам когда ты в сети</p>
-            </div>
-            <ToggleSwitch
-              enabled={showOnlineStatus}
-              onToggle={() => {
-                const next = !showOnlineStatus
-                setShowOnlineStatus(next)
-                updatePrivacy("showOnlineStatus", next)
-              }}
-            />
-          </div>
-
-          <div className="mx-4 h-px bg-white/5" />
-
-          {/* Последний визит */}
-          <div className="px-4 py-4 flex items-center gap-4">
-            <motion.div
-              className="w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0"
-              animate={{ backgroundColor: showLastSeen ? ACCENT : "#2d3f57" }}
-              transition={{ duration: 0.3 }}
-            >
-              <Bell size={20} color="white" />
-            </motion.div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] text-white font-semibold leading-tight">Время последнего визита</p>
-              <p className="text-[12px] text-gray-500 mt-0.5 leading-snug">Показывать контактам когда ты был в сети</p>
-            </div>
-            <ToggleSwitch
-              enabled={showLastSeen}
-              onToggle={() => {
-                const next = !showLastSeen
-                setShowLastSeen(next)
-                updatePrivacy("showLastSeen", next)
-              }}
-            />
-          </div>
-        </div>
-
-        <p className="px-5 pt-2 pb-5 text-[12px] text-gray-600 leading-relaxed">
-          Если отключить статус онлайн — другие не будут видеть когда ты в сети. И ты тоже не будешь видеть статусы других.
-        </p>
-
+        {error && <p className="text-[13px] px-1" style={{ color: "#f87171" }}>{error}</p>}
+        {success && (
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-green-500 text-[13px] flex items-center gap-2 px-1">
+            <Check size={14} /> Пароль изменён
+          </motion.p>
+        )}
+        <PrimaryButton onClick={submit} loading={saving} disabled={!current || !next || !confirm || success}>
+          Сменить пароль
+        </PrimaryButton>
       </div>
-    </motion.div>
+    </ScreenShell>
   )
 }
 
@@ -564,15 +527,6 @@ export default function ChatSidebar({
   const [showEditProfile, setShowEditProfile] = useState(mobileInitialView === "profile")
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [showPasswordChange, setShowPasswordChange] = useState(false)
-  const [showDevices, setShowDevices] = useState(false)
-  const { sessionId } = useDeviceSession()
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [passwordError, setPasswordError] = useState("")
-  const [passwordSuccess, setPasswordSuccess] = useState(false)
-  const [passwordSaving, setPasswordSaving] = useState(false)
   const [showQRCode, setShowQRCode] = useState(false)
   const [showAppearance, setShowAppearance] = useState(false)
 
@@ -734,24 +688,6 @@ export default function ChatSidebar({
     setShowEditProfile(false)
   }, [update])
 
-  const handlePasswordChange = useCallback(async () => {
-    setPasswordError(""); setPasswordSuccess(false)
-    if (newPassword.length < 8) { setPasswordError("Минимум 8 символов"); return }
-    if (newPassword !== confirmPassword) { setPasswordError("Пароли не совпадают"); return }
-    setPasswordSaving(true)
-    try {
-      const res = await fetch("/api/users/password", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      })
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Ошибка") }
-      setPasswordSuccess(true); setCurrentPassword(""); setNewPassword(""); setConfirmPassword("")
-      setTimeout(() => { setPasswordSuccess(false); setShowPasswordChange(false) }, 2000)
-    } catch (e: any) { setPasswordError(e.message || "Ошибка") }
-    finally { setPasswordSaving(false) }
-  }, [currentPassword, newPassword, confirmPassword])
-
   useEffect(() => { setLocalConversations(conversations) }, [conversations])
 
   useEffect(() => {
@@ -896,19 +832,20 @@ export default function ChatSidebar({
           <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
 
           {/* Header */}
-          <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
+          <div className="px-4 h-[63px] flex items-center gap-3 shrink-0" style={{ borderBottom: "1px solid var(--border-subtle, rgba(255,255,255,0.06))" }}>
             <motion.button onClick={() => { setView("chats"); setShowEditProfile(false); setShowPrivacy(false) }}
-              whileTap={{ scale: 0.9 }} className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
+              whileTap={{ scale: 0.9 }} aria-label="Назад"
+              className="p-2 -ml-2 rounded-full transition-colors hover:bg-[rgba(127,127,127,0.15)]" style={{ color: MUTED }}>
               <ArrowLeft size={22} />
             </motion.button>
-            <h2 className="text-[18px] font-bold text-white flex-1">{t("settings")}</h2>
+            <h2 className="text-[18px] font-bold flex-1" style={{ color: TEXT }}>{t("settings")}</h2>
             <div className="flex items-center gap-1">
-              <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowQRCode(true)}
-                className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+              <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowQRCode(true)} aria-label="QR-код"
+                className="p-2 rounded-full transition-colors hover:bg-[rgba(127,127,127,0.15)]" style={{ color: MUTED }}>
                 <QrCode size={19} />
               </motion.button>
-              <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowEditProfile(true)}
-                className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors">
+              <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowEditProfile(true)} aria-label="Редактировать профиль"
+                className="p-2 rounded-full transition-colors hover:bg-[rgba(127,127,127,0.15)]" style={{ color: MUTED }}>
                 <Edit3 size={19} />
               </motion.button>
             </div>
@@ -916,7 +853,7 @@ export default function ChatSidebar({
 
           <div className="flex-1 overflow-y-auto hide-scrollbar">
             {/* Profile card */}
-            <div className="pt-6 pb-4 flex flex-col items-center gap-3 border-b border-white/5">
+            <div className="pt-6 pb-2 flex flex-col items-center gap-3">
               <div className="relative w-[90px] h-[90px] rounded-full overflow-hidden shadow-xl flex items-center justify-center text-3xl font-bold text-white"
                 style={{ backgroundColor: ACCENT }}>
                 {session?.user?.image
@@ -924,67 +861,54 @@ export default function ChatSidebar({
                   : <span>{displayName[0]?.toUpperCase()}</span>}
               </div>
               <div className="text-center">
-                <h3 className="text-[22px] font-bold text-white leading-tight">{displayName}</h3>
+                <h3 className="text-[22px] font-bold leading-tight" style={{ color: TEXT }}>{displayName}</h3>
                 <p className="text-[13px] mt-0.5" style={{ color: ACCENT }}>{t("online")}</p>
               </div>
             </div>
 
-            {/* Info rows */}
-            <div className="py-2 border-b border-white/5">
-              <InfoRow icon={<AtSign size={18} />} value={`@${displayName}`} label="Username" />
-              <InfoRow icon={<Info size={18} />} value={displayBio} label="Bio" />
-            </div>
+            {/* Аккаунт */}
+            <SectionLabel>Аккаунт</SectionLabel>
+            <Card>
+              <Row icon={<AtSign size={18} />} color="#5B9BD5" title={`@${displayName}`} subtitle="Username" />
+              <Row icon={<Info size={18} />} color="#3a8a6e" title={displayBio || "Не указано"} subtitle="О себе" />
+              <Row icon={<User size={18} />} color={ACCENT} title="Изменить профиль" onClick={() => setShowEditProfile(true)} />
+            </Card>
 
             {/* Settings rows */}
-            <div className="py-2 border-b border-white/5">
-              <SettingsRow icon={<Bell size={17} />} iconColor="#5B9BD5" label={t("notifications")} onClick={() => setShowNotifications(true)} />
-              <SettingsRow
-                icon={<Shield size={17} />}
-                iconColor={profanityEnabled ? ACCENT : "#3a8a6e"}
-                label={t("privacy")}
-                badge={profanityEnabled ? t("anti_profanity_on") : undefined}
-                onClick={() => setShowPrivacy(true)}
-              />
-              <SettingsRow
-                icon={theme !== "light" ? <Moon size={17} /> : <Sun size={17} />}
-                iconColor="#e0a83c"
-                label={theme !== "light" ? "Тёмная тема" : "Светлая тема"}
-                rightEl={
-                  <ToggleSwitch enabled={theme !== "light"} onToggle={toggleTheme} />
-                }
-                onClick={toggleTheme}
-              />
-              <SettingsRow icon={<Palette size={17} />} iconColor={ACCENT} label="Внешний вид" badge="тема и цвет" onClick={() => setShowAppearance(true)} />
-              <SettingsRow icon={<Lock size={17} />} iconColor="#d45555" label="Сменить пароль" onClick={() => setShowPasswordChange(true)} />
-              <SettingsRow icon={<Monitor size={17} />} iconColor="#e08a3c" label={t("devices")} onClick={() => setShowDevices(true)} />
-              <SettingsRow icon={<Folder size={17} />} iconColor="#8b6fd6" label={t("chat_folders")} />
-            </div>
+            <SectionLabel>Настройки</SectionLabel>
+            <Card>
+              <Row icon={<Bell size={18} />} color="#5B9BD5" title={t("notifications")} onClick={() => setShowNotifications(true)} />
+              <Row icon={<Shield size={18} />} color={profanityEnabled ? ACCENT : "#3a8a6e"} title={t("privacy")}
+                subtitle="Статус, пароль, устройства, антимат"
+                value={profanityEnabled ? t("anti_profanity_on") : undefined}
+                onClick={() => setShowPrivacy(true)} />
+              <Row icon={<Folder size={18} />} color="#8b6fd6" title={t("chat_folders")} />
+            </Card>
 
-            {/* Language */}
-            <div className="py-2 border-b border-white/5">
-              <p className="px-5 pb-1.5 text-[12px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>
-                Language
-              </p>
-              {[{ code: "en", label: "English" }, { code: "ru", label: "Русский" }].map(lang => (
-                <button key={lang.code} onClick={() => i18n.changeLanguage(lang.code)}
-                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/5 transition-colors"
-                  style={i18n.language.startsWith(lang.code) ? { color: ACCENT } : { color: "white" }}>
-                  <div className="flex items-center gap-3">
-                    <Globe size={18} className="text-gray-500" />
-                    <span className="text-[15px]">{lang.label}</span>
-                  </div>
-                  {i18n.language.startsWith(lang.code) && <Check size={16} style={{ color: ACCENT }} />}
-                </button>
-              ))}
-            </div>
+            <SectionLabel>Оформление</SectionLabel>
+            <Card>
+              <ToggleRow icon={theme !== "light" ? <Moon size={18} /> : <Sun size={18} />} color="#e0a83c"
+                title={theme !== "light" ? "Тёмная тема" : "Светлая тема"}
+                enabled={theme !== "light"} onToggle={toggleTheme} />
+              <Row icon={<Palette size={18} />} color={ACCENT} title="Внешний вид" value="тема и цвет" onClick={() => setShowAppearance(true)} />
+            </Card>
 
-            {/* Logout */}
-            <div className="py-2">
-              <button onClick={() => signOut()}
-                className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-red-400 hover:text-red-300">
-                <LogOut size={18} />
-                <span className="text-[15px]">Log Out</span>
-              </button>
+            <SectionLabel>Language</SectionLabel>
+            <Card>
+              {[{ code: "en", label: "English" }, { code: "ru", label: "Русский" }].map(lang => {
+                const active = i18n.language.startsWith(lang.code)
+                return (
+                  <Row key={lang.code} icon={<Globe size={18} />} color={active ? ACCENT : "rgba(127,127,127,0.45)"} title={lang.label}
+                    onClick={() => i18n.changeLanguage(lang.code)}
+                    right={active ? <Check size={18} style={{ color: ACCENT }} /> : <span />} />
+                )
+              })}
+            </Card>
+
+            <div className="mt-6">
+              <Card>
+                <Row icon={<LogOut size={18} />} color="#d45555" title="Log Out" danger chevron={false} onClick={() => signOut()} />
+              </Card>
             </div>
             <div className="h-6" />
           </div>
@@ -1009,54 +933,9 @@ export default function ChatSidebar({
             {showPrivacy && <PrivacyScreen onBack={() => setShowPrivacy(false)} />}
           </AnimatePresence>
 
-          {/* Devices overlay */}
-          <AnimatePresence>
-            {showDevices && (
-              <DevicesScreen
-                onBack={() => setShowDevices(false)}
-                currentSessionId={sessionId}
-              />
-            )}
-          </AnimatePresence>
-
           {/* Appearance / theme picker overlay */}
           <AnimatePresence>
             {showAppearance && <ThemePicker onBack={() => setShowAppearance(false)} />}
-          </AnimatePresence>
-
-          {/* Password change overlay */}
-          <AnimatePresence>
-            {showPasswordChange && (
-              <motion.div className="absolute inset-0 z-50 flex flex-col bg-[var(--sidebar-bg)]"
-                initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 60 }}
-                transition={{ type: "spring", stiffness: 380, damping: 32 }}>
-                <div className="px-4 h-[63px] flex items-center gap-3 border-b border-white/5 shrink-0">
-                  <motion.button onClick={() => { setShowPasswordChange(false); setPasswordError(""); setPasswordSuccess(false) }}
-                    whileTap={{ scale: 0.9 }} className="p-2 -ml-2 hover:bg-white/10 rounded-full text-gray-400 transition-colors">
-                    <ArrowLeft size={22} />
-                  </motion.button>
-                  <h2 className="text-[18px] font-bold text-white flex-1">Смена пароля</h2>
-                </div>
-                <div className="flex-1 overflow-y-auto hide-scrollbar p-5 flex flex-col gap-4">
-                  <FloatInput label="Текущий пароль" value={currentPassword} onChange={setCurrentPassword} type="password" />
-                  <FloatInput label="Новый пароль" value={newPassword} onChange={setNewPassword} type="password" />
-                  <FloatInput label="Подтвердите пароль" value={confirmPassword} onChange={setConfirmPassword} type="password" />
-                  {passwordError && <p className="text-red-400 text-[13px]">{passwordError}</p>}
-                  {passwordSuccess && (
-                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                      className="text-green-400 text-[13px] flex items-center gap-2">
-                      <Check size={14} /> Пароль изменён
-                    </motion.p>
-                  )}
-                  <motion.button onClick={handlePasswordChange} disabled={passwordSaving}
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    className="mt-2 w-full py-3 rounded-xl text-white font-semibold text-[15px] shadow-lg"
-                    style={{ backgroundColor: ACCENT }}>
-                    {passwordSaving ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Сменить пароль"}
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
           </AnimatePresence>
 
           {/* QR Code overlay */}
