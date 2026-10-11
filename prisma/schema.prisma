@@ -335,6 +335,7 @@ model UserSession {
   id           String   @id @default(cuid())
   userId       Int
   deviceType   String   @default("desktop") // "mobile" | "tablet" | "desktop"
+  deviceName   String?  // название устройства для экрана «Устройства», напр. "Samsung SM-S918B · Chrome"
   lastActive   DateTime @default(now())
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)

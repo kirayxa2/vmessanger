@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowLeft, Monitor, Smartphone, Tablet, Loader2, LogOut, Trash2, Wifi } from "lucide-react"
+import { ArrowLeft, Monitor, Smartphone, Tablet, Loader2, LogOut } from "lucide-react"
 import { useSocket } from "@/app/ClientProviders"
 import { useSession } from "next-auth/react"
 
@@ -10,13 +10,18 @@ const ACCENT = "var(--accent, #7e85e1)"
 
 interface SessionData {
   id: string
-  deviceName: string
+  deviceName?: string | null
   deviceType: string
-  os?: string
-  browser?: string
-  ip?: string
   lastActive: string
   createdAt: string
+}
+
+// Для старых записей без названия показываем тип устройства
+function deviceLabel(s: SessionData) {
+  if (s.deviceName) return s.deviceName
+  if (s.deviceType === "mobile") return "Телефон"
+  if (s.deviceType === "tablet") return "Планшет"
+  return "Компьютер"
 }
 
 function DeviceIcon({ type }: { type: string }) {
@@ -148,16 +153,11 @@ export default function DevicesScreen({ onBack, currentSessionId }: DevicesScree
                       <DeviceIcon type={currentSession.deviceType} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-[15px] font-semibold truncate">{currentSession.deviceName}</p>
+                      <p className="text-white text-[15px] font-semibold truncate">{deviceLabel(currentSession)}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <div className="w-2 h-2 rounded-full bg-green-400" />
                         <span className="text-[12px] text-green-400">Онлайн сейчас</span>
                       </div>
-                      {currentSession.ip && (
-                        <p className="text-[11px] text-gray-600 mt-0.5 flex items-center gap-1">
-                          <Wifi size={10} /> {currentSession.ip}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -185,13 +185,8 @@ export default function DevicesScreen({ onBack, currentSessionId }: DevicesScree
                           <DeviceIcon type={s.deviceType} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-white text-[15px] font-medium truncate">{s.deviceName}</p>
+                          <p className="text-white text-[15px] font-medium truncate">{deviceLabel(s)}</p>
                           <p className="text-[12px] text-gray-500 mt-0.5">{formatLastActive(s.lastActive)}</p>
-                          {s.ip && (
-                            <p className="text-[11px] text-gray-600 mt-0.5 flex items-center gap-1">
-                              <Wifi size={10} /> {s.ip}
-                            </p>
-                          )}
                         </div>
                         <motion.button
                           onClick={() => terminate(s.id)}

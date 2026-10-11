@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { signIn } from "next-auth/react"
@@ -15,9 +15,27 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState({ email: "", username: "", password: "" })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [agreed, setAgreed] = useState(false)
+
+  // Возвращаясь со страницы политики, не теряем введённые email и username (пароль не сохраняем)
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("register-draft")
+      if (saved) {
+        const { email = "", username = "", agreed: a = false } = JSON.parse(saved)
+        setFormData(f => ({ ...f, email, username }))
+        setAgreed(!!a)
+      }
+    } catch {}
+  }, [])
+
+  const saveDraft = () => {
+    try { sessionStorage.setItem("register-draft", JSON.stringify({ email: formData.email, username: formData.username, agreed })) } catch {}
+  }
 
   const submitRegister = async (e?: React.FormEvent) => {
     e?.preventDefault()
+    if (!agreed) { setError("Примите политику конфиденциальности, чтобы продолжить"); return }
     setError("")
     setLoading(true)
     try {
@@ -29,6 +47,7 @@ export default function RegisterPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Не удалось зарегистрироваться"); setLoading(false); return }
+      try { sessionStorage.removeItem("register-draft") } catch {}
       // Авто-вход после регистрации
       const result = await signIn("credentials", { redirect: false, email: formData.email, password: formData.password })
       if (result?.error) { router.push("/login") } else { router.push("/") }
@@ -62,7 +81,24 @@ export default function RegisterPage() {
           <Field label="Имя пользователя" type="text" value={formData.username} onChange={v => setFormData({ ...formData, username: v })} placeholder="username" />
           <Field label="Пароль" type="password" value={formData.password} onChange={v => setFormData({ ...formData, password: v })} placeholder="Минимум 8 символов" />
 
-          <button type="submit" disabled={loading}
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={e => setAgreed(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded"
+              style={{ accentColor: "#7e85e1" }}
+            />
+            <span className="text-[13px] leading-snug text-gray-400">
+              Я согласен(на) с{" "}
+              <Link href="/privacy" onClick={saveDraft} className="underline underline-offset-2" style={{ color: "#4ea4f6" }}>
+                Политикой конфиденциальности
+              </Link>{" "}
+              и даю согласие на обработку моих персональных данных
+            </span>
+          </label>
+
+          <button type="submit" disabled={loading || !agreed}
             className="w-full text-white py-3.5 rounded-xl font-semibold transition-all disabled:opacity-60 active:scale-[0.98] flex items-center justify-center gap-2"
             style={{ background: ACCENT }}>
             {loading ? <Loader2 size={18} className="animate-spin" /> : null}

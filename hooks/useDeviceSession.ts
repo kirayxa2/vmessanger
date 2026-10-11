@@ -28,14 +28,27 @@ export function useDeviceSession() {
     if (!session?.user?.id || registeredRef.current || !sessionId) return
     registeredRef.current = true
 
-    fetch("/api/users/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        userAgent: navigator.userAgent,
-      }),
-    }).catch(() => {})
+    // Модель устройства отдаёт только Chromium на Android (userAgentData). У iPhone/Safari точной модели нет.
+    ;(async () => {
+      let deviceModel = ""
+      try {
+        const uad = (navigator as any).userAgentData
+        if (uad?.getHighEntropyValues) {
+          const v = await uad.getHighEntropyValues(["model"])
+          deviceModel = v?.model || ""
+        }
+      } catch {}
+
+      fetch("/api/users/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          userAgent: navigator.userAgent,
+          deviceModel,
+        }),
+      }).catch(() => {})
+    })()
   }, [session?.user?.id, sessionId])
 
   // Listen for force-logout
